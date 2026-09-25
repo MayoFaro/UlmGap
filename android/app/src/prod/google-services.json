@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1009736891924",
+    "project_id": "ulmgap-prod",
+    "storage_bucket": "ulmgap-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1009736891924:android:c7b327e3214103798ef101",
+        "android_client_info": {
+          "package_name": "com.ulmgap.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTs0grtLAbxCi7fmTfWlIe5R90OBqH1Do"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
