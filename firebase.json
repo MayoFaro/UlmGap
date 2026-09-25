@@ -1,11 +1,1 @@
-{
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "firestore": {
-    "database": "(default)",
-    "location": "eur3",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  }
-}
+{"storage":{"rules":"storage.rules"},"firestore":{"database":"(default)","location":"eur3","rules":"firestore.rules","indexes":"firestore.indexes.json"},"flutter":{"platforms":{"android":{"buildConfigurations":{"src/dev":{"projectId":"ulmgap-dev","appId":"1:237446007254:android:40657246512ecc24da7c77","fileOutput":"android/app/src/dev/google-services.json"},"src/prod":{"projectId":"ulmgap-prod","appId":"1:1009736891924:android:c7b327e3214103798ef101","fileOutput":"android/app/src/prod/google-services.json"}}},"dart":{"lib/firebase_options_dev.dart":{"projectId":"ulmgap-dev","configurations":{"android":"1:237446007254:android:40657246512ecc24da7c77","ios":"1:237446007254:ios:0883add2f39dc8fcda7c77","web":"1:237446007254:web:db899714f2670c76da7c77"}},"lib/firebase_options_prod.dart":{"projectId":"ulmgap-prod","configurations":{"android":"1:1009736891924:android:c7b327e3214103798ef101","ios":"1:1009736891924:ios:17f36785c749078b8ef101","web":"1:1009736891924:web:f08fa7d090f8cf338ef101"}}}}}}

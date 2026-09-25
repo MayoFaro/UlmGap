@@ -87,3 +87,6 @@ functions/lib/
 functions/.env
 *.jks
 *.keystore
+
+# Journal d’exécution des plans (local)
+.superpowers/
