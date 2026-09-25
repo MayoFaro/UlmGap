@@ -21,3 +21,15 @@ Le pont AppGAP (`syncUlmFlights`) lit la collection `flights` de
 `passengers` (noms), `status` (`demande`/`valide`/`refuse`), `isClosed`,
 `actualFlightMinutes`, `deleted` (suppression logique uniquement),
 `updatedAt` (horodatage serveur à chaque écriture). Voir la spec §2.5 et §8.
+
+## Tests des Functions
+
+```bash
+cd functions
+npm test                 # tests unitaires
+npm run test:int         # émulateurs Auth + Firestore (nécessite Java 21)
+```
+
+Les émulateurs de `firebase-tools` 15 exigent Java 21. Sur cette machine,
+utiliser le JDK d'Android Studio :
+`JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH npm run test:int`.
