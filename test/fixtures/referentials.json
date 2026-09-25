@@ -1,0 +1,4 @@
+{
+  "profiles": ["instructeur", "lache_toute_mission", "lache_solo", "eleve"],
+  "categories": ["GAP", "GR", "MIL", "EXT"]
+}
