@@ -158,6 +158,41 @@ void main() {
     expect(find.byTooltip('Mettre en premier'), findsOneWidget);
   });
 
+  testWidgets(
+      'retirer : un instructeur peut se retirer lui-même du vol qu\'il crée',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester
+        .pumpWidget(host(a, testUser(uid: 'ins', profile: 'instructeur', shortName: 'INS')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'lac');
+    expect(find.text('INS'), findsWidgets);
+    // Deux lignes affichent « Retirer » (instructeur : droit élargi à sa
+    // propre ligne) ; la première est celle de l'instructeur lui-même.
+    expect(find.byTooltip('Retirer'), findsNWidgets(2));
+    await tester.tap(find.byTooltip('Retirer').first);
+    await tester.pumpAndSettle();
+    expect(find.text('INS'), findsNothing); // sa ligne a disparu
+
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await save(tester);
+    expect(a.created.single['crew'], ['lac']); // l'équipage envoyé ne le contient plus
+  });
+
+  testWidgets('retirer : absent sur sa propre ligne pour un lâché (ni instructeur ni admin)',
+      (tester) async {
+    _useTallView(tester);
+    await tester.pumpWidget(host(api(), testUser(uid: 'u1', profile: 'lache_toute_mission')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'ins');
+    // Une seule ligne affiche « Retirer » : celle de l'équipier ajouté, pas
+    // la sienne (spec §1 du context.md : hors instructeur/admin, le créateur
+    // reste obligatoirement le compte débité en première position).
+    expect(find.byTooltip('Retirer'), findsOneWidget);
+  });
+
   testWidgets('passager sans compte : ajouté, jamais compte débité', (tester) async {
     _useTallView(tester);
     final a = api();
