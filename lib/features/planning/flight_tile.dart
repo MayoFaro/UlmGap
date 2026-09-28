@@ -12,12 +12,16 @@ class FlightTile extends StatelessWidget {
     required this.flight,
     required this.dir,
     required this.now,
+    this.mine = false,
     this.onTap,
   });
 
   final Flight flight;
   final Map<String, CrewMember> dir;
   final DateTime now;
+
+  /// Vrai quand l'utilisateur courant fait partie de l'équipage du vol.
+  final bool mine;
   final VoidCallback? onTap;
 
   @override
@@ -25,7 +29,7 @@ class FlightTile extends StatelessWidget {
     final f = flight;
     final status = f.effectiveStatus(now);
     final color = statusColor(status);
-    return ListTile(
+    final tile = ListTile(
       onTap: onTap,
       leading: Icon(Icons.circle, size: 14, color: color),
       title: Text('${formatRange(f.start, f.end)} · ${f.aircraft}'),
@@ -42,6 +46,16 @@ class FlightTile extends StatelessWidget {
         label: Text(statusLabel(status), style: TextStyle(color: color)),
         side: BorderSide(color: color),
       ),
+    );
+    if (!mine) return tile;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: highlightFill,
+        border: Border.all(color: highlightBorder, width: 2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: tile,
     );
   }
 }

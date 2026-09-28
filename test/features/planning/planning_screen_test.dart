@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/services.dart';
+import 'package:ulmgap/features/flight/flight_texts.dart';
 import 'package:ulmgap/features/planning/planning_screen.dart';
 
 import '../../support/fakes.dart';
@@ -23,6 +24,17 @@ FakeFlightApi api() => FakeFlightApi()
     Aircraft.fromMap('a2', {'registration': 'F-JXYZ', 'label': 'ULM 2', 'active': true}),
   ];
 
+bool _hasHighlightAncestor(Finder textFinder) => find
+    .ancestor(
+      of: textFinder,
+      matching: find.byWidgetPredicate((w) =>
+          w is Container &&
+          w.decoration is BoxDecoration &&
+          (w.decoration as BoxDecoration).color == highlightFill),
+    )
+    .evaluate()
+    .isNotEmpty;
+
 void main() {
   testWidgets('vols groupés par jour, statut, équipage ; annulés masqués', (tester) async {
     final a = api()
@@ -36,7 +48,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('lundi 12 octobre'), findsOneWidget);
     expect(find.text('mardi 13 octobre'), findsOneWidget);
-    expect(find.textContaining('09:00–10:00 · F-JABC'), findsOneWidget);
+    expect(find.text('ULM 1 (F-JABC)'), findsOneWidget);
+    expect(find.text('ULM 2 (F-JXYZ)'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('col-a1')),
+        matching: find.textContaining('09:00–10:00'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Validé'), findsOneWidget);
     expect(find.textContaining('JDU/INS'), findsWidgets);
     expect(find.textContaining('F-DEL'), findsNothing);
@@ -71,21 +91,68 @@ void main() {
     expect(find.text('Refusé'), findsOneWidget);
   });
 
-  testWidgets('filtre par appareil', (tester) async {
+  testWidgets('grille par appareil : chaque colonne ne contient que ses propres vols', (tester) async {
     final a = api()
       ..flights = [
-        testFlight(id: 'v1', start: DateTime(2026, 10, 12, 9)),
+        testFlight(id: 'v1', start: DateTime(2026, 10, 12, 9), aircraftId: 'a1', aircraft: 'F-JABC'),
         testFlight(id: 'v2', start: DateTime(2026, 10, 12, 11), aircraftId: 'a2', aircraft: 'F-JXYZ'),
       ];
     await tester.pumpWidget(host(a, testUser()));
     await tester.pumpAndSettle();
-    expect(find.textContaining('F-JXYZ'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('aircraft-filter')));
+
+    final v2Card = find.textContaining('11:00–12:00');
+    expect(
+      find.descendant(of: find.byKey(const Key('col-a2')), matching: v2Card),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const Key('col-a1')), matching: v2Card),
+      findsNothing,
+    );
+  });
+
+  testWidgets('trois appareils : défilement horizontal, sans débordement', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final a = FakeFlightApi()
+      ..directory = [member('u1', 'JDU', 'eleve')]
+      ..aircraft = [
+        Aircraft.fromMap('a1', {'registration': 'F-AAA', 'label': 'A1', 'active': true}),
+        Aircraft.fromMap('a2', {'registration': 'F-BBB', 'label': 'A2', 'active': true}),
+        Aircraft.fromMap('a3', {'registration': 'F-CCC', 'label': 'A3', 'active': true}),
+      ]
+      ..flights = [
+        testFlight(id: 'v3', start: DateTime(2026, 10, 12, 9),
+            aircraftId: 'a3', aircraft: 'F-CCC', crew: ['u1']),
+      ];
+    await tester.pumpWidget(host(a, testUser()));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ULM 1 (F-JABC)').last);
+    expect(tester.takeException(), isNull);
+
+    expect(find.byKey(const Key('col-a3')).hitTestable(), findsNothing);
+
+    await tester.drag(find.byType(SingleChildScrollView).first, const Offset(-400, 0));
     await tester.pumpAndSettle();
-    expect(find.textContaining('F-JXYZ'), findsNothing);
-    expect(find.textContaining('09:00–10:00 · F-JABC'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    expect(find.byKey(const Key('col-a3')).hitTestable(), findsWidgets);
+  });
+
+  testWidgets('mise en évidence des vols où l\'utilisateur est dans l\'équipage', (tester) async {
+    final a = api()
+      ..flights = [
+        testFlight(id: 'mine', start: DateTime(2026, 10, 12, 9), crew: ['u1', 'ins']),
+        testFlight(id: 'other', start: DateTime(2026, 10, 12, 11),
+            crew: ['ins'], aircraftId: 'a2', aircraft: 'F-JXYZ'),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1')));
+    await tester.pumpAndSettle();
+
+    expect(_hasHighlightAncestor(find.textContaining('09:00–10:00')), isTrue);
+    expect(_hasHighlightAncestor(find.textContaining('11:00–12:00')), isFalse);
   });
 
   testWidgets('vide et erreur', (tester) async {
