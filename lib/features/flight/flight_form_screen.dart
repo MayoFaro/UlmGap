@@ -165,13 +165,19 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
   // --- saisie ---
 
   Future<void> _pickDate() async {
+    // Un admin peut saisir un vol oublié (jusqu'à un an en arrière).
+    final computedFirst = _me.isAdmin && widget.mode == FlightFormMode.create
+        ? dayOf(widget.now()).subtract(const Duration(days: 365))
+        : dayOf(widget.now());
+    // En édition/validation, le vol existant peut déjà commencer avant cette
+    // borne (ex. vol de la veille) : showDatePicker exige
+    // !initialDate.isBefore(firstDate), donc on élargit la borne au besoin.
+    final startDay = dayOf(_start);
+    final firstDate = startDay.isBefore(computedFirst) ? startDay : computedFirst;
     final d = await showDatePicker(
       context: context,
       initialDate: _start,
-      // Un admin peut saisir un vol oublié (jusqu'à un an en arrière).
-      firstDate: _me.isAdmin && widget.mode == FlightFormMode.create
-          ? dayOf(widget.now()).subtract(const Duration(days: 365))
-          : dayOf(widget.now()),
+      firstDate: firstDate,
       lastDate: widget.now().add(const Duration(days: 365)),
     );
     if (d == null) return;

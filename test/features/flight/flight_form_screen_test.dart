@@ -192,4 +192,23 @@ void main() {
     expect(a.validated['d']!['start'], DateTime(2026, 10, 13, 9).millisecondsSinceEpoch);
     expect(a.validated['d']!['destination'], 'Lomé');
   });
+
+  testWidgets(
+      'modification : vol commencé la veille, ouverture du sélecteur de date sans exception',
+      (tester) async {
+    final a = api();
+    final f = testFlight(id: 'e', start: DateTime(2026, 10, 11, 9), crew: ['u1']);
+    await tester.pumpWidget(
+        host(a, testUser(uid: 'u1'), flight: f, mode: FlightFormMode.edit));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Date'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    // L'app ne configure pas de localisation FR pour les dialogues Material
+    // standard (DatePickerDialog) : le bouton est donc « Cancel », pas
+    // « Annuler ».
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
 }
