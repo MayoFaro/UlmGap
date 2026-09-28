@@ -20,18 +20,18 @@ export interface UserInput {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SHORT_RE = /^[A-Z0-9]{2,4}$/;
 
-function obj(data: unknown): Record<string, unknown> {
+export function obj(data: unknown): Record<string, unknown> {
   if (!data || typeof data !== "object") throw new ValidationError("Données manquantes.");
   return data as Record<string, unknown>;
 }
 
-function text(v: unknown, field: string, max: number): string {
+export function text(v: unknown, field: string, max: number): string {
   const s = typeof v === "string" ? v.trim() : "";
   if (!s || s.length > max) throw new ValidationError(`${field} invalide.`);
   return s;
 }
 
-function bool(v: unknown, field: string, dflt: boolean): boolean {
+export function bool(v: unknown, field: string, dflt: boolean): boolean {
   if (v === undefined) return dflt;
   if (typeof v !== "boolean") throw new ValidationError(`${field} invalide.`);
   return v;
@@ -91,8 +91,13 @@ export function validateAircraft(data: unknown): {
   id?: string; registration: string; label: string; active: boolean;
 } {
   const d = obj(data);
+  const registration = text(d.registration, "Immatriculation", 12).toUpperCase();
+  // Sert d'identifiant de document (aircraftRegistrations) : pas de « / ».
+  if (!/^[A-Z0-9-]+$/.test(registration)) {
+    throw new ValidationError("Immatriculation invalide (lettres, chiffres et tirets).");
+  }
   const out: { id?: string; registration: string; label: string; active: boolean } = {
-    registration: text(d.registration, "Immatriculation", 12).toUpperCase(),
+    registration,
     label: text(d.label, "Libellé", 40),
     active: bool(d.active, "Actif", true),
   };

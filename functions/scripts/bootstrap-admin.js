@@ -17,22 +17,11 @@ if (!projectId || !email || !/^[A-Z0-9]{2,4}$/.test(short)) {
 }
 
 admin.initializeApp({ projectId });
+// Module compilé : lancer `npm run build` avant ce script.
+const { bootstrapAdmin } = require("../lib/admin/bootstrap");
 (async () => {
-  let rec;
-  try {
-    rec = await admin.auth().getUserByEmail(email);
-  } catch {
-    rec = await admin.auth().createUser({ email, displayName: name });
-  }
-  const db = admin.firestore();
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  await db.collection("users").doc(rec.uid).set({
-    email, displayName: name, shortName: short, profile: null, category: "GAP",
-    isAdmin: true, active: true, balance: 0, fcmToken: null, createdAt: now, updatedAt: now,
-  }, { merge: true });
-  await db.collection("profiles").doc(rec.uid).set(
-    { displayName: name, shortName: short, profile: null, active: true }, { merge: true });
+  const uid = await bootstrapAdmin(admin.auth(), admin.firestore(), { email, name, short });
   const link = await admin.auth().generatePasswordResetLink(email);
-  console.log(`Admin prêt : ${email} (uid ${rec.uid}).`);
+  console.log(`Admin prêt : ${email} (uid ${uid}).`);
   console.log(`Lien pour définir le mot de passe : ${link}`);
 })().catch((e) => { console.error(e.message); process.exit(1); });

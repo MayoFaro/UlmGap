@@ -8,6 +8,7 @@ if (admin.apps.length === 0) {
 }
 import { createUser, updateUser } from "./users";
 import { upsertAircraft } from "./aircraft";
+import { bootstrapAdmin } from "./bootstrap";
 import type { Caller } from "../auth/guards";
 
 const db = admin.firestore();
@@ -113,4 +114,88 @@ test("I2 : compte Auth orphelin (sans users) : repris au lieu de bloquer", async
   assert.equal((await db.collection("users").doc(uid).get()).get("shortName"), "JDU");
   assert.equal((await db.collection("profiles").doc(uid).get()).get("active"), true);
   assert.equal((await admin.auth().getUser(uid)).displayName, "Jean Dupont");
+});
+
+test("M3 : si Auth échoue, Firestore reste inchangé", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  // Document users sans compte Auth : admin.auth().updateUser échoue.
+  const uid = `ghost-${uniq()}`;
+  await db.collection("users").doc(uid).set({
+    displayName: "Fantôme", shortName: "FAN", profile: null, category: "GAP",
+    isAdmin: false, active: true, email: "f@x.fr", balance: 0,
+  });
+  await assert.rejects(updateUser(me, { uid, active: false }));
+  assert.equal((await db.collection("users").doc(uid).get()).get("active"), true);
+});
+
+test("M3 : réactivation : Auth et Firestore réactivés", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const { uid } = await createUser(me, newUser());
+  await updateUser(me, { uid, active: false });
+  await updateUser(me, { uid, active: true });
+  assert.equal((await admin.auth().getUser(uid)).disabled, false);
+  assert.equal((await db.collection("users").doc(uid).get()).get("active"), true);
+  assert.equal((await db.collection("profiles").doc(uid).get()).get("active"), true);
+});
+
+test("M4 : compte sans profiles : le document créé est complet", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const rec = await admin.auth().createUser({ email: `old-${uniq()}@club.fr` });
+  await db.collection("users").doc(rec.uid).set({
+    displayName: "Ancien", shortName: "ANC", profile: "eleve", category: "EXT",
+    isAdmin: false, active: true, email: rec.email, balance: 0,
+  });
+  await updateUser(me, { uid: rec.uid, category: "GR" });
+  assert.deepEqual((await db.collection("profiles").doc(rec.uid).get()).data(),
+    { displayName: "Ancien", shortName: "ANC", profile: "eleve", active: true });
+});
+
+test("M7 : deux créations simultanées de la même immatriculation : une seule passe", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const reg = `F-${uniq().toUpperCase().slice(0, 4)}`;
+  const r = await Promise.allSettled([
+    upsertAircraft(me, { registration: reg, label: "A" }),
+    upsertAircraft(me, { registration: reg, label: "B" }),
+  ]);
+  assert.equal(r.filter((x) => x.status === "fulfilled").length, 1);
+  assert.equal((await db.collection("aircraft").where("registration", "==", reg).get()).size, 1);
+});
+
+test("M7 : changer d'immatriculation libère l'ancienne", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const a = `F-${uniq().toUpperCase().slice(0, 4)}`;
+  const b = `F-${uniq().toUpperCase().slice(0, 4)}`;
+  const { id } = await upsertAircraft(me, { registration: a, label: "ULM" });
+  await upsertAircraft(me, { id, registration: b, label: "ULM" });
+  await upsertAircraft(me, { registration: a, label: "Autre" }); // ne lève pas
+  assert.equal((await db.collection("aircraftRegistrations").doc(b).get()).get("aircraftId"), id);
+});
+
+test("M8 : bootstrap sur un admin existant : ni solde, ni catégorie, ni createdAt écrasés", async () => {
+  const email = `boot-${uniq()}@club.fr`;
+  const rec = await admin.auth().createUser({ email });
+  const createdAt = admin.firestore.Timestamp.fromMillis(1_700_000_000_000);
+  await db.collection("users").doc(rec.uid).set({
+    email, displayName: "Chef", shortName: "CHF", profile: "instructeur", category: "MIL",
+    isAdmin: false, active: true, balance: 5000, createdAt,
+  });
+  const uid = await bootstrapAdmin(admin.auth(), db, { email, name: "Autre", short: "XYZ" });
+  const u = (await db.collection("users").doc(uid).get()).data()!;
+  assert.equal(uid, rec.uid);
+  assert.equal(u.isAdmin, true);
+  assert.equal(u.balance, 5000);
+  assert.equal(u.category, "MIL");
+  assert.equal(u.shortName, "CHF");
+  assert.ok((u.createdAt as admin.firestore.Timestamp).isEqual(createdAt));
+});
+
+test("M8 : bootstrap d'un nouvel admin : users et profiles complets", async () => {
+  const email = `boot-${uniq()}@club.fr`;
+  const uid = await bootstrapAdmin(admin.auth(), db, { email, name: "Neuf", short: "NEU" });
+  const u = (await db.collection("users").doc(uid).get()).data()!;
+  assert.equal(u.isAdmin, true);
+  assert.equal(u.balance, 0);
+  assert.ok(u.createdAt);
+  assert.deepEqual((await db.collection("profiles").doc(uid).get()).data(),
+    { displayName: "Neuf", shortName: "NEU", profile: null, active: true });
 });

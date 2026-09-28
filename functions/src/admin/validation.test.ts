@@ -62,3 +62,8 @@ test("validateAircraft : normalise, défauts, rejets", () => {
   assert.throws(() => validateAircraft({ registration: "", label: "x" }), ValidationError);
   assert.throws(() => validateAircraft({ registration: "F-JABC", label: "" }), ValidationError);
 });
+
+test("validateAircraft : immatriculation limitée aux lettres, chiffres et tirets", () => {
+  assert.throws(() => validateAircraft({ registration: "F/JABC", label: "x" }), ValidationError);
+  assert.throws(() => validateAircraft({ registration: "F JABC", label: "x" }), ValidationError);
+});

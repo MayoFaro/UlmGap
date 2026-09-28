@@ -1,16 +1,8 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Caller, requireAdmin } from "../auth/guards";
-import { ValidationError, validateNewUser, validateUserPatch } from "./validation";
-
-function asInvalid<T>(fn: () => T): T {
-  try {
-    return fn();
-  } catch (e) {
-    if (e instanceof ValidationError) throw new HttpsError("invalid-argument", e.message);
-    throw e;
-  }
-}
+import { asInvalid } from "../common/errors";
+import { validateNewUser, validateUserPatch } from "./validation";
 
 export async function createUser(caller: Caller | undefined, data: unknown): Promise<{ uid: string }> {
   const db = admin.firestore();
@@ -70,21 +62,28 @@ export async function updateUser(caller: Caller | undefined, data: unknown): Pro
       "Vous ne pouvez pas retirer vos propres droits d'admin ni désactiver votre compte.");
   }
   const ref = db.collection("users").doc(uid);
-  if (!(await ref.get()).exists) throw new HttpsError("not-found", "Compte introuvable.");
+  const current = await ref.get();
+  if (!current.exists) throw new HttpsError("not-found", "Compte introuvable.");
 
-  const batch = db.batch();
-  batch.update(ref, { ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-  const pub: Record<string, unknown> = {};
-  for (const k of ["displayName", "shortName", "profile", "active"] as const) {
-    if (k in patch) pub[k] = patch[k];
-  }
-  if (Object.keys(pub).length > 0) batch.set(db.collection("profiles").doc(uid), pub, { merge: true });
-  await batch.commit();
-
+  // Auth d'abord : s'il échoue, rien n'est écrit et l'admin peut relancer.
+  // Si Firestore échoue ensuite, l'écart reste sans danger : les règles
+  // lisent users.active, et un compte Auth désactivé ne se connecte plus.
   const authPatch: admin.auth.UpdateRequest = {};
   if (patch.active !== undefined) authPatch.disabled = !patch.active;
   if (patch.displayName !== undefined) authPatch.displayName = patch.displayName;
   if (Object.keys(authPatch).length > 0) await admin.auth().updateUser(uid, authPatch);
+
+  const merged = { ...current.data(), ...patch };
+  const batch = db.batch();
+  batch.update(ref, { ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  // Toujours complet : un ancien compte sans profiles en obtient un entier.
+  batch.set(db.collection("profiles").doc(uid), {
+    displayName: merged.displayName ?? "",
+    shortName: merged.shortName ?? "",
+    profile: merged.profile ?? null,
+    active: merged.active === true,
+  });
+  await batch.commit();
 }
 
 export const adminCreateUser = onCall((req) =>
