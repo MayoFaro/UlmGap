@@ -16,6 +16,7 @@ const verified = AuthSnapshot(uid: 'u1', email: 'a@b.fr', emailVerified: true);
 Widget host(FakeAuthService auth, FakeUserRepository users) => AppServices(
       auth: auth,
       users: users,
+      flights: FakeFlightApi(),
       child: const MaterialApp(home: AppGate()),
     );
 
