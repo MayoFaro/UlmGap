@@ -8,6 +8,7 @@ doivent jamais accéder à AppGAP.
 
 - Spec (autorité) : `docs/superpowers/specs/2026-09-25-ulmgap-app-design.md`
 - Plan 1, le socle (terminé) : `docs/superpowers/plans/2026-09-25-ulmgap-01-socle.md`
+- Plan 2, vols et matrice de droits (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02-vols.md`
 - Découpage prévu des plans suivants :
   2. vols et matrice de droits ;
   3. finances (forfaits, crédit FCFA, relevé) ;
@@ -48,34 +49,38 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-09-28
 
-- Plan 1 terminé sur la branche `feature/socle`.
-- En dev : Authentication activé, règles et Functions déployées, premier admin
-  créé (DPS).
+- Plans 1 et 2 terminés. `feature/socle` est fusionnée dans `main` ; le plan 2
+  est sur la branche `feature/vols` (non fusionnée).
+- Points mineurs M1 à M9 du plan 1 soldés au plan 2.
+- En dev : Authentication activé, premier admin créé (DPS), règles et
+  Functions du plan 2 déployées (`createFlight`, `updateFlight`,
+  `validateFlight`, `refuseFlight`, `cancelFlight` et les fonctions admin).
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Premier admin à
-  créer ensuite (`functions/scripts/bootstrap-admin.js`), et Authentication à
+  créer ensuite (`cd functions && npm run build && node
+  scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
   activer (e-mail et mot de passe, création de compte par l'utilisateur
   désactivée).
-- Fichier non suivi `android/android/app/build.gradle.kts` apparu hors plan :
-  à clarifier avec l'utilisateur avant d'y toucher.
+- Android : toujours passer `--flavor` et `--dart-define=ENV` ensemble ; une
+  discordance bloque l'app au démarrage.
 
-### Points mineurs reportés, à traiter au début du plan 2
+### À reprendre au plan 3
 
-- M1 : un bref écran « pas d'accès » peut apparaître juste après « J'ai vérifié
-  mon e-mail » (course sur le jeton).
-- M3 : `updateUser` n'est pas atomique entre Firestore et Auth (une
-  réactivation peut laisser Auth désactivé).
-- M4 : `updateUser` peut créer un document `profiles` partiel pour un ancien
-  compte qui n'en avait pas.
-- M5 : règles Firestore, type et taille de `fcmToken` non vérifiés.
-- M6 : listes admin vides sans message en cas d'erreur ou de chargement.
-- M7 : l'unicité de l'immatriculation n'est pas garantie en cas de créations
-  simultanées.
-- M8 : `bootstrap-admin.js` traite toute erreur de `getUserByEmail` comme
-  « compte inexistant » (cela a masqué « Authentication non activé ») et
-  écrase `createdAt` à chaque relance.
-- M9 : `--flavor` et `ENV` sont indépendants, donc une app au package prod
-  pourrait parler à dev.
+- `pricingSnapshot` vaut `null` sur les vols validés pendant le plan 2 :
+  prévoir un repli sur les tarifs courants.
+- `MIN_PLANNED_MINUTES` (serveur) et `minPlannedMinutes` (Dart) sont codés en
+  dur à 45 : les lire dans `settings/pricing`. La durée prévue maximale
+  (12 h) et l'horizon de réservation (366 jours) sont aussi en dur.
+- Aperçu du formulaire : ajouter le coût estimé et le crédit disponible du
+  payeur ; contrôle du crédit à la validation (§4.4).
+- `adminUpdateFlight` : correction d'un vol passé ou déjà commencé (un admin
+  peut déjà créer après coup un vol passé via `createFlight`).
+- Une demande expirée reste `demande` en base (statut calculé côté app) : le
+  pont AppGAP ne copie que les vols `valide`, donc aucun impact.
+- Questions ouvertes pour l'utilisateur : consentement du payeur (le créateur
+  choisit `crew[0]`, qui paiera) ; faut-il garder « carburant seulement »
+  quand un non-instructeur modifie un vol entre GAP (aujourd'hui il repasse
+  en standard et le vol redevient une demande s'il y a un instructeur).
 
 ### Rappel côté AppGAP (plan 6)
 
