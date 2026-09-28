@@ -12,34 +12,50 @@ import '../../support/fakes.dart';
 
 final now = DateTime(2026, 10, 12, 8, 20);
 
-Widget host(FakeFlightApi api, AppUser me, {Flight? flight}) => AppServices(
-      auth: FakeAuthService(),
-      users: FakeUserRepository(),
-      flights: api,
-      child: MaterialApp(home: FlightScreen(me: me, flight: flight, now: () => now)),
-    );
+/// Un vol existant passé à l'écran doit aussi être « connu » du serveur
+/// simulé (watchFlight le sert depuis `api.flights`, Task 3 retours de
+/// recette) : sinon la première émission du flux (introuvable) écraserait
+/// aussitôt l'état initial et l'écran afficherait « Vol introuvable. ».
+void _seedFlight(FakeFlightApi api, Flight? flight) {
+  if (flight != null && !api.flights.any((f) => f.id == flight.id)) {
+    api.flights = [...api.flights, flight];
+  }
+}
+
+Widget host(FakeFlightApi api, AppUser me, {Flight? flight}) {
+  _seedFlight(api, flight);
+  return AppServices(
+    auth: FakeAuthService(),
+    users: FakeUserRepository(),
+    flights: api,
+    child: MaterialApp(home: FlightScreen(me: me, flight: flight, now: () => now)),
+  );
+}
 
 /// Héberge l'écran derrière un planning minimal, pour vérifier qu'une action
 /// referme l'écran et ramène au planning (brief Task 3, Step 1).
-Widget pushHost(FakeFlightApi api, AppUser me, {Flight? flight}) => AppServices(
-      auth: FakeAuthService(),
-      users: FakeUserRepository(),
-      flights: api,
-      child: MaterialApp(
-        home: Builder(
-          builder: (c) => Scaffold(
-            body: const Text('planning'),
-            floatingActionButton: FloatingActionButton(
-              onPressed: () => Navigator.push(
-                c,
-                MaterialPageRoute(
-                    builder: (_) => FlightScreen(me: me, flight: flight, now: () => now)),
-              ),
+Widget pushHost(FakeFlightApi api, AppUser me, {Flight? flight}) {
+  _seedFlight(api, flight);
+  return AppServices(
+    auth: FakeAuthService(),
+    users: FakeUserRepository(),
+    flights: api,
+    child: MaterialApp(
+      home: Builder(
+        builder: (c) => Scaffold(
+          body: const Text('planning'),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => Navigator.push(
+              c,
+              MaterialPageRoute(
+                  builder: (_) => FlightScreen(me: me, flight: flight, now: () => now)),
             ),
           ),
         ),
       ),
-    );
+    ),
+  );
+}
 
 FakeFlightApi api() => FakeFlightApi()
   ..directory = [
@@ -440,5 +456,116 @@ void main() {
     expect(find.text('Refusé (non validée avant le départ)'), findsOneWidget);
     expect(find.text('Valider'), findsNothing);
     expect(find.text('Refuser'), findsNothing);
+    expect(find.text('Enregistrer'), findsNothing);
+    expect(find.text('Annuler le vol'), findsNothing);
+  });
+
+  // --- Fix 1 (retours de recette) : aperçu du mode de tarification en édition ---
+
+  testWidgets(
+      'non-instructeur : retirer le passager d\'un vol GAP en carburant seulement '
+      '→ aperçu Standard', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'e', start: DateTime(2026, 10, 13, 9), crew: ['u1'],
+        passengers: const ['Paul'], pricingMode: 'fuel_only', createdBy: 'u1');
+    await tester.pumpWidget(host(
+        api(), testUser(uid: 'u1', profile: 'lache_toute_mission', category: 'GAP'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Retirer le passager'));
+    await tester.pumpAndSettle();
+    expect(preview(tester), contains('Mode : Standard'));
+  });
+
+  testWidgets(
+      'non-instructeur : mode carburant seulement conservé quand seule la destination '
+      'change (équipage et passager inchangés)', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'e', start: DateTime(2026, 10, 13, 9), crew: ['u1', 'lac'],
+        pricingMode: 'fuel_only', createdBy: 'u1');
+    await tester.pumpWidget(
+        host(api(), testUser(uid: 'u1', profile: 'lache_toute_mission'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Cotonou');
+    await tester.pumpAndSettle();
+    expect(preview(tester), contains('Mode : Carburant seulement'));
+  });
+
+  // --- Fix 3 (retours de recette) : reflet des changements serveur en direct ---
+
+  testWidgets(
+      'mise à jour en direct : une demande validée ailleurs fait disparaître Valider',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    final f = testFlight(
+        id: 'd', start: DateTime(2026, 10, 13, 9), status: 'demande',
+        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
+    a.flights = [f];
+    await tester.pumpWidget(
+        host(a, testUser(uid: 'ins', profile: 'instructeur', shortName: 'INS'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Valider'), findsOneWidget);
+    expect(find.text('Demande'), findsOneWidget);
+
+    a.flightsCtrl.add([testFlight(
+        id: 'd', start: DateTime(2026, 10, 13, 9), status: 'valide',
+        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins')]);
+    await tester.pumpAndSettle();
+    expect(find.text('Valider'), findsNothing);
+    expect(find.text('Validé'), findsOneWidget);
+  });
+
+  testWidgets('mise à jour en direct : vol supprimé pendant la consultation → Vol introuvable',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    final f = testFlight(id: 'd', start: DateTime(2026, 10, 13, 9), crew: ['u1']);
+    a.flights = [f];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Enregistrer'), findsOneWidget);
+
+    a.flightsCtrl.add([testFlight(
+        id: 'd', start: DateTime(2026, 10, 13, 9), crew: ['u1'], deleted: true)]);
+    await tester.pumpAndSettle();
+    expect(find.text('Vol introuvable.'), findsOneWidget);
+    expect(find.text('Enregistrer'), findsNothing);
+  });
+
+  // --- Fix 4 (retours de recette) : Enregistrer ramène au planning ---
+
+  testWidgets('édition réussie : Enregistrer appelle api.update et revient au planning',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    final f = testFlight(id: 'e', start: DateTime(2026, 10, 13, 9), crew: ['u1']);
+    await tester.pumpWidget(
+        pushHost(a, testUser(uid: 'u1', profile: 'lache_toute_mission'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Cotonou');
+    await save(tester);
+    expect(a.updated['e']!['destination'], 'Cotonou');
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets('création réussie : Enregistrer appelle api.create et revient au planning',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(pushHost(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await save(tester);
+    expect(a.created.single['destination'], 'Lomé');
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.byType(FlightScreen), findsNothing);
   });
 }

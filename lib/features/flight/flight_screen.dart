@@ -48,6 +48,12 @@ class _FlightScreenState extends State<FlightScreen> {
   bool _saving = false;
 
   final _subs = <StreamSubscription<Object?>>[];
+  /// Version « live » d'un vol existant (Task 3, retours de recette) : mise à
+  /// jour par [FlightApi.watchFlight] pendant la consultation, pour refléter
+  /// une validation/un refus/une annulation faits ailleurs. Les champs
+  /// modifiables (_start, _crew, ...) restent sur la saisie en cours : seuls
+  /// le statut, l'en-tête et les boutons se recalculent à partir d'elle.
+  Flight? _current;
   Map<String, CrewMember> _dir = {};
   List<Aircraft> _aircraft = [];
   Map<String, UserCategory> _categories = {};
@@ -57,8 +63,10 @@ class _FlightScreenState extends State<FlightScreen> {
 
   AppUser get _me => widget.me;
 
-  Set<FlightAction> get _actions =>
-      widget.flight == null ? const {} : flightActions(widget.flight!, _me, widget.now());
+  Set<FlightAction> get _actions {
+    final f = _current;
+    return f == null ? const {} : flightActions(f, _me, widget.now());
+  }
 
   _Mode get _mode {
     if (widget.flight == null) return _Mode.create;
@@ -77,6 +85,7 @@ class _FlightScreenState extends State<FlightScreen> {
   void initState() {
     super.initState();
     final f = widget.flight;
+    _current = f;
     if (f != null) {
       _start = f.start;
       _end = f.end;
@@ -115,6 +124,11 @@ class _FlightScreenState extends State<FlightScreen> {
       }
     });
     listen(api.watchFrom(dayOf(widget.now())), (l) => _flights = l);
+    // Task 3 (retours de recette) : un vol existant reste écouté pour refléter
+    // en direct une validation/un refus/une annulation faits ailleurs.
+    if (widget.flight != null) {
+      listen(api.watchFlight(widget.flight!.id), (v) => _current = v);
+    }
     if (_mayChoose) listen(api.watchCategories(), (m) => _categories = m);
     api.recentDestinations().then((d) {
       if (mounted) setState(() => _destinations = d);
@@ -141,7 +155,7 @@ class _FlightScreenState extends State<FlightScreen> {
   bool get _showFuelChoice => _mayChoose && _allGap && _passenger == null;
 
   Decision get _decision => _validating
-      ? Decision.ok('valide', widget.flight!.instructorUid)
+      ? Decision.ok('valide', _current!.instructorUid)
       : decideStatus(
           creatorUid: _me.uid,
           creatorProfile: _me.profile?.code,
@@ -150,13 +164,43 @@ class _FlightScreenState extends State<FlightScreen> {
           passengers: _passenger == null ? 0 : 1,
         );
 
-  String get _pricingMode => resolvePricingMode(
-        allGap: _allGap,
-        hasPassenger: _passenger != null,
-        mayChoose: _mayChoose,
-        requested: _showFuelChoice ? (_fuelOnly ? 'fuel_only' : 'standard') : null,
-        previous: widget.flight?.pricingMode,
-      );
+  /// Aperçu du mode de tarification (Task 1, retours de recette). Miroir de
+  /// resolvePricingMode côté serveur (functions/src/flights/edit.ts) :
+  /// - le mode précédent n'est repris que si le vol ENREGISTRÉ (tel qu'ouvert,
+  ///   pas une mise à jour live) n'avait pas de passager sans compte, sinon
+  ///   un « carburant seulement » imposé par ce passager survivrait à son
+  ///   retrait sans qu'aucun instructeur ne l'ait choisi ;
+  /// - un non-instructeur n'écoute pas watchCategories (_mayChoose == false),
+  ///   donc _categories est vide pour les autres membres : calculer allGap
+  ///   sur un équipage avec d'autres personnes reviendrait à traiter leur
+  ///   catégorie inconnue comme « non GAP » et ferait retomber le mode en
+  ///   Standard sans décision d'instructeur. Si l'équipage et la présence
+  ///   d'un passager n'ont pas changé depuis le vol enregistré, on réutilise
+  ///   donc simplement son mode stocké ; sinon (la situation a changé : par
+  ///   ex. le passager a été retiré), on retombe sur le calcul habituel, qui
+  ///   reste correct tant que seule SA propre catégorie (toujours connue)
+  ///   entre en jeu.
+  String get _pricingMode {
+    final stored = widget.flight;
+    final storedHadNoPassenger = stored == null || stored.passengers.isEmpty;
+    final previous = storedHadNoPassenger ? stored?.pricingMode : null;
+
+    if (stored != null && !_mayChoose) {
+      final sameCrew = _crew.length == stored.crew.length &&
+          _crew.toSet().containsAll(stored.crew) &&
+          stored.crew.toSet().containsAll(_crew);
+      final samePassengerSituation = (_passenger != null) == stored.passengers.isNotEmpty;
+      if (sameCrew && samePassengerSituation) return stored.pricingMode;
+    }
+
+    return resolvePricingMode(
+      allGap: _allGap,
+      hasPassenger: _passenger != null,
+      mayChoose: _mayChoose,
+      requested: _showFuelChoice ? (_fuelOnly ? 'fuel_only' : 'standard') : null,
+      previous: previous,
+    );
+  }
 
   ({RuleFlight candidate, Flight other})? get _conflict {
     if (_aircraftId == null) return null;
@@ -379,10 +423,22 @@ class _FlightScreenState extends State<FlightScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Task 3 (retours de recette) : un vol existant supprimé ou devenu
+    // introuvable pendant la consultation (annulé/effacé ailleurs) n'affiche
+    // plus la fiche (champs alors obsolètes) ni aucun bouton.
+    if (widget.flight != null && (_current == null || _current!.deleted)) {
+      return Scaffold(
+        appBar: AppBar(title: Text(formatDay(_start))),
+        body: const Center(child: Text('Vol introuvable.')),
+      );
+    }
     final decision = _decision;
     final conflict = decision.status == 'valide' ? _conflict : null;
+    // Calculé une seule fois (au lieu de deux fois dans le libellé ci-dessous).
+    final conflictKind =
+        conflict == null ? null : conflictCause(conflict.candidate, conflict.other.toRule());
     final aboard = _crew.length + (_passenger == null ? 0 : 1);
-    final f = widget.flight;
+    final f = _current;
     final now = widget.now();
     final title = f == null ? 'Nouveau vol' : formatDay(_start);
     final canReorder = _me.isAdmin || _me.isInstructor;
@@ -558,8 +614,8 @@ class _FlightScreenState extends State<FlightScreen> {
                           aircraft: conflict.other.aircraft,
                           crew: conflict.other.crew,
                           passengers: conflict.other.passengers,
-                          kind: conflictCause(conflict.candidate, conflict.other.toRule()).kind,
-                          members: conflictCause(conflict.candidate, conflict.other.toRule()).members,
+                          kind: conflictKind!.kind,
+                          members: conflictKind.members,
                         ),
                         _dir,
                       ),
