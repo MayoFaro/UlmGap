@@ -41,8 +41,16 @@ class FakeAuthService implements AuthService {
 
 class FakeUserRepository implements UserRepository {
   final users = <String, AppUser>{};
+  int watchCalls = 0;
+
+  /// Si défini, watchUser renvoie ce flux (pour simuler erreurs et mises à jour).
+  StreamController<AppUser?>? live;
+
   @override
-  Stream<AppUser?> watchUser(String uid) => Stream.value(users[uid]);
+  Stream<AppUser?> watchUser(String uid) {
+    watchCalls++;
+    return live?.stream ?? Stream.value(users[uid]);
+  }
 }
 
 AppUser testUser({

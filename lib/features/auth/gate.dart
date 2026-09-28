@@ -17,14 +17,39 @@ GateState gateFor(AuthSnapshot? auth, AppUser? user) {
   return GateState.ready;
 }
 
-class AppGate extends StatelessWidget {
+class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
   @override
+  State<AppGate> createState() => _AppGateState();
+}
+
+class _AppGateState extends State<AppGate> {
+  Stream<AuthSnapshot?>? _authStream;
+  // Écoute du document users mise en cache par uid : un événement Auth pour le
+  // même utilisateur (rafraîchissement horaire du jeton…) ne la recrée pas, sinon
+  // l'accueil repasserait par l'attente et perdrait son état.
+  String? _uid;
+  Stream<AppUser?>? _userStream;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _authStream ??= AppServices.of(context).auth.changes();
+  }
+
+  Stream<AppUser?> _userStreamFor(String uid) {
+    if (uid != _uid || _userStream == null) {
+      _uid = uid;
+      _userStream = AppServices.of(context).users.watchUser(uid);
+    }
+    return _userStream!;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final s = AppServices.of(context);
     return StreamBuilder<AuthSnapshot?>(
-      stream: s.auth.changes(),
+      stream: _authStream,
       builder: (context, authSnap) {
         if (authSnap.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -33,12 +58,12 @@ class AppGate extends StatelessWidget {
         if (auth == null) return const LoginScreen();
         if (!auth.emailVerified) return VerifyEmailScreen(email: auth.email);
         return StreamBuilder<AppUser?>(
-          stream: s.users.watchUser(auth.uid),
+          stream: _userStreamFor(auth.uid),
           builder: (context, userSnap) {
             if (userSnap.connectionState == ConnectionState.waiting) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
-            final user = userSnap.data;
+            final user = userSnap.hasError ? null : userSnap.data;
             return gateFor(auth, user) == GateState.ready
                 ? HomeShell(user: user!)
                 : const NoAccessScreen();
