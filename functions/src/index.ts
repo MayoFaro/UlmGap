@@ -9,3 +9,8 @@ setGlobalOptions({ region: "europe-west1" });
 export { adminCreateUser, adminUpdateUser } from "./admin/users";
 export { adminUpsertAircraft } from "./admin/aircraft";
 export { createFlightFn as createFlight, updateFlightFn as updateFlight } from "./flights/edit";
+export {
+  validateFlightFn as validateFlight,
+  refuseFlightFn as refuseFlight,
+  cancelFlightFn as cancelFlight,
+} from "./flights/actions";
