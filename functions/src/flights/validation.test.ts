@@ -2,7 +2,8 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { ValidationError } from "../admin/validation";
 import {
-  validateFlightId, validateFlightInput, validateRefusal, validateReviewChanges,
+  MAX_ADVANCE_DAYS, checkHorizon, validateFlightId, validateFlightInput, validateRefusal,
+  validateReviewChanges,
 } from "./validation";
 
 const T0 = 1_900_000_000_000;
@@ -43,6 +44,28 @@ test("validateFlightInput : rejets", () => {
   ]) {
     assert.throws(() => validateFlightInput(bad), ValidationError, JSON.stringify(bad));
   }
+});
+
+test("validateFlightInput : durée prévue maximale 12 h", () => {
+  assert.equal(validateFlightInput({ ...ok, end: T0 + 12 * 60 * MIN }).end, T0 + 12 * 60 * MIN);
+  assert.throws(() => validateFlightInput({ ...ok, end: T0 + 12 * 60 * MIN + MIN }), ValidationError);
+});
+
+test("checkHorizon : 366 jours acceptés, au-delà rejeté", () => {
+  const now = Date.now();
+  const day = 24 * 60 * MIN;
+  assert.doesNotThrow(() => checkHorizon(now + MAX_ADVANCE_DAYS * day, now));
+  assert.throws(() => checkHorizon(now + (MAX_ADVANCE_DAYS + 1) * day + MIN, now), ValidationError);
+});
+
+test("identifiants avec « / » rejetés proprement", () => {
+  assert.throws(() => validateFlightInput({ ...ok, crew: ["u1", "u2/evil"] }), ValidationError);
+  assert.throws(() => validateFlightInput({ ...ok, aircraftId: "a1/evil" }), ValidationError);
+  assert.throws(() => validateFlightId({ flightId: "f1/evil" }), ValidationError);
+  assert.throws(
+    () => validateReviewChanges({ flightId: "f1", changes: { aircraftId: "a1/evil" } }),
+    ValidationError,
+  );
 });
 
 test("validateFlightId", () => {

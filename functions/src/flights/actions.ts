@@ -5,7 +5,7 @@ import { asInvalid } from "../common/errors";
 import type { PricingMode } from "../rules/flights";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import {
-  FlightInput, checkDuration, validateFlightId, validateRefusal, validateReviewChanges,
+  FlightInput, checkDuration, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
 } from "./validation";
 
 type Tx = FirebaseFirestore.Transaction;
@@ -46,6 +46,7 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       pricingMode: changes.pricingMode,
     };
     asInvalid(() => checkDuration(input.start, input.end));
+    asInvalid(() => checkHorizon(input.start, now));
     if (input.start <= now) throw new HttpsError("failed-precondition", "L'heure de départ est passée.");
     const instructorUid = (f.get("instructorUid") as string | null | undefined) ?? null;
     const p = await planFlight(tx, db, {

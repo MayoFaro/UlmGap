@@ -4,7 +4,7 @@ import { Caller, CallerProfile, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { PricingMode, decideStatus } from "../rules/flights";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
-import { validateFlightId, validateFlightInput } from "./validation";
+import { checkHorizon, validateFlightId, validateFlightInput } from "./validation";
 
 /** Spec §4.1 : un instructeur ou un admin choisit « carburant seulement ». */
 const mayChoose = (me: CallerProfile) => me.isAdmin || me.profile === "instructeur";
@@ -19,8 +19,10 @@ export async function createFlight(
   const db = admin.firestore();
   const me = await requireActiveUser(db, caller);
   const input = asInvalid(() => validateFlightInput(data));
+  const now = Date.now();
+  asInvalid(() => checkHorizon(input.start, now));
   // Seul un admin saisit après coup un vol passé (vol oublié).
-  if (!me.isAdmin) assertFuture(input.start, Date.now());
+  if (!me.isAdmin) assertFuture(input.start, now);
   const ref = db.collection("flights").doc();
 
   const status = await db.runTransaction(async (tx) => {
@@ -57,6 +59,7 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
   const flightId = asInvalid(() => validateFlightId(data));
   const input = asInvalid(() => validateFlightInput(data));
   const now = Date.now();
+  asInvalid(() => checkHorizon(input.start, now));
   assertFuture(input.start, now);
   const ref = db.collection("flights").doc(flightId);
 

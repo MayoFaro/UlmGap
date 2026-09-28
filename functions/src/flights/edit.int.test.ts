@@ -114,6 +114,8 @@ test("création concurrente du même créneau : une seule passe", async () => {
     createFlight(p2, draft(a, [p2.uid])),
   ]);
   assert.equal(r.filter((x) => x.status === "fulfilled").length, 1);
+  const rejected = r.find((x) => x.status === "rejected");
+  assert.equal(code((rejected as PromiseRejectedResult).reason), "failed-precondition");
 });
 
 test("mode : GAP + passager → fuel_only ; instructeur GAP choisit carburant ; lâché non", async () => {
