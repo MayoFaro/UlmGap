@@ -58,6 +58,57 @@ class _PlanningScreenState extends State<PlanningScreen> {
   Stream<List<CrewMember>>? _dir;
   Stream<List<Aircraft>>? _aircraft;
 
+  // Fix planning (retours de recette) : le titre de chaque jour doit rester
+  // visible pendant le défilement horizontal, donc il sort du
+  // SingleChildScrollView de la grille ; l'en-tête d'appareils est répété à
+  // l'intérieur de la zone défilante de CHAQUE jour (plutôt qu'une seule fois
+  // en haut de toute la grille). Pour que les colonnes restent alignées d'un
+  // jour à l'autre, chaque jour garde son propre ScrollController, mais tous
+  // sont liés : le défilement de l'un est répercuté sur les autres. Autre
+  // option envisagée (un seul ScrollController partagé pour tous les jours) :
+  // impossible ici, un SingleChildScrollView ne peut avoir qu'un seul enfant,
+  // et chaque jour a besoin de sa propre rangée d'en-têtes juste au-dessus de
+  // ses vols.
+  final Map<DateTime, ScrollController> _dayScrollControllers = {};
+  bool _syncingDayScroll = false;
+
+  ScrollController _dayScrollController(DateTime day) =>
+      _dayScrollControllers.putIfAbsent(day, () {
+        final controller = ScrollController();
+        controller.addListener(() => _syncDayScroll(controller));
+        return controller;
+      });
+
+  void _syncDayScroll(ScrollController source) {
+    if (_syncingDayScroll || !source.hasClients) return;
+    _syncingDayScroll = true;
+    for (final other in _dayScrollControllers.values) {
+      if (other != source && other.hasClients && other.offset != source.offset) {
+        other.jumpTo(source.offset);
+      }
+    }
+    _syncingDayScroll = false;
+  }
+
+  /// Supprime les contrôleurs des jours qui ne sont plus affichés (sinon ils
+  /// fuiraient d'un rendu à l'autre, ex. après un changement de plage de vols).
+  void _pruneDayScrollControllers(Iterable<DateTime> currentDays) {
+    final keep = currentDays.toSet();
+    for (final day in _dayScrollControllers.keys.toList()) {
+      if (!keep.contains(day)) {
+        _dayScrollControllers.remove(day)?.dispose();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _dayScrollControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -148,6 +199,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
     for (final f in flights) {
       byDay.putIfAbsent(dayOf(f.start), () => []).add(f);
     }
+    _pruneDayScrollControllers(byDay.keys);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -209,22 +261,32 @@ class _PlanningScreenState extends State<PlanningScreen> {
           );
         }
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: gridWidth,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                rowOf([for (final c in columns) cell(c, headerText: c.header)]),
-                for (final day in byDay.keys) ...[
-                  SizedBox(width: gridWidth, child: header(formatDay(day))),
-                  rowOf([for (final c in columns) cell(c, dayFlights: byDay[day])]),
-                ],
-              ],
-            ),
-          ),
+        // Le titre du jour est hors défilement (pleine largeur, toujours
+        // visible) ; l'en-tête d'appareils est répété à l'intérieur de la
+        // zone défilante propre à ce jour, juste au-dessus de ses vols.
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final day in byDay.keys) ...[
+              header(formatDay(day)),
+              SingleChildScrollView(
+                controller: _dayScrollController(day),
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: gridWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      rowOf([for (final c in columns) cell(c, headerText: c.header)]),
+                      rowOf([for (final c in columns) cell(c, dayFlights: byDay[day])]),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
         );
       },
     );

@@ -48,8 +48,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('lundi 12 octobre'), findsOneWidget);
     expect(find.text('mardi 13 octobre'), findsOneWidget);
-    expect(find.text('ULM 1 (F-JABC)'), findsOneWidget);
-    expect(find.text('ULM 2 (F-JXYZ)'), findsOneWidget);
+    // L'en-tête d'appareils est répété au-dessus des vols de chaque jour
+    // (fix planning, retours de recette) : deux jours, donc deux occurrences.
+    expect(find.text('ULM 1 (F-JABC)'), findsNWidgets(2));
+    expect(find.text('ULM 2 (F-JXYZ)'), findsNWidgets(2));
     expect(
       find.descendant(
         of: find.byKey(const Key('col-a1')),
@@ -139,6 +141,47 @@ void main() {
     expect(tester.takeException(), isNull);
 
     expect(find.byKey(const Key('col-a3')).hitTestable(), findsWidgets);
+  });
+
+  testWidgets(
+      'après défilement horizontal : titre du jour et en-tête d\'appareil toujours visibles',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final a = FakeFlightApi()
+      ..directory = [member('u1', 'JDU', 'eleve')]
+      ..aircraft = [
+        Aircraft.fromMap('a1', {'registration': 'F-AAA', 'label': 'A1', 'active': true}),
+        Aircraft.fromMap('a2', {'registration': 'F-BBB', 'label': 'A2', 'active': true}),
+        Aircraft.fromMap('a3', {'registration': 'F-CCC', 'label': 'A3', 'active': true}),
+      ]
+      ..flights = [
+        testFlight(id: 'v3', start: DateTime(2026, 10, 12, 9),
+            aircraftId: 'a3', aircraft: 'F-CCC', crew: ['u1']),
+      ];
+    await tester.pumpWidget(host(a, testUser()));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // Le titre du jour est hors du défilement horizontal : toujours visible.
+    expect(tester.getTopLeft(find.text('lundi 12 octobre')).dx, greaterThanOrEqualTo(0));
+    // L'en-tête d'appareil A3 défile avec les colonnes : hors écran avant.
+    expect(find.text('A3 (F-CCC)').hitTestable(), findsNothing);
+
+    await tester.drag(find.byType(SingleChildScrollView).first, const Offset(-400, 0));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // Le titre du jour ne défile pas horizontalement : son bord gauche reste
+    // dans la fenêtre visible (contrairement à un texte étiré sur la largeur
+    // de la grille, dont le bord gauche sortirait de l'écran ici).
+    expect(tester.getTopLeft(find.text('lundi 12 octobre')).dx, greaterThanOrEqualTo(0));
+    // L'en-tête d'appareil A3, lui, défile avec les colonnes : désormais
+    // visible au-dessus des cartes de ce jour.
+    expect(find.text('A3 (F-CCC)').hitTestable(), findsOneWidget);
   });
 
   testWidgets('mise en évidence des vols où l\'utilisateur est dans l\'équipage', (tester) async {
