@@ -96,4 +96,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.linksSent, ['jean@club.fr']);
   });
+
+  testWidgets('M6 : chargement, erreur et liste vide', (tester) async {
+    final api = FakeAdminApi()..hold = true;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.pumpWidget(host(FakeAdminApi()..error = Exception('refus')));
+    await tester.pump();
+    expect(find.text('Impossible de charger les données. Vérifiez la connexion.'),
+        findsOneWidget);
+
+    await tester.pumpWidget(host(FakeAdminApi()));
+    await tester.pump();
+    expect(find.text('Aucun compte.'), findsOneWidget);
+  });
 }

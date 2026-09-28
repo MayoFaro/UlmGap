@@ -79,10 +79,13 @@ class FakeAdminApi implements AdminApi {
   final created = <Map<String, dynamic>>[];
   final updated = <String, Map<String, dynamic>>{};
   final upserted = <Map<String, dynamic>>[];
+  Object? error; // si défini, les flux de listes échouent
+  bool hold = false; // si vrai, les flux n'émettent rien (chargement)
 
   @override
   Stream<List<AppUser>> watchAllUsers() async* {
-    yield users;
+    if (error != null) throw error!;
+    if (!hold) yield users;
     yield* usersCtrl.stream;
   }
 
@@ -104,7 +107,8 @@ class FakeAdminApi implements AdminApi {
 
   @override
   Stream<List<Aircraft>> watchAircraft() async* {
-    yield aircraft;
+    if (error != null) throw error!;
+    if (!hold) yield aircraft;
     yield* aircraftCtrl.stream;
   }
 

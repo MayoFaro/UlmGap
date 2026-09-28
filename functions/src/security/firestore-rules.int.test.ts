@@ -78,6 +78,13 @@ test("transactions : les siennes ; instructeur : toutes", async () => {
   await assertSucceeds(getDoc(doc(as("instr"), "transactions/t2")));
 });
 
+test("M5 : fcmToken doit être une chaîne raisonnable ou null", async () => {
+  const db = as("eleve");
+  await assertSucceeds(updateDoc(doc(db, "users/eleve"), { fcmToken: null }));
+  await assertFails(updateDoc(doc(db, "users/eleve"), { fcmToken: 123 }));
+  await assertFails(updateDoc(doc(db, "users/eleve"), { fcmToken: "x".repeat(5000) }));
+});
+
 test("aucune écriture client sur les collections métier", async () => {
   const db = as("instr");
   await assertFails(setDoc(doc(db, "flights/new"), { status: "valide" }));

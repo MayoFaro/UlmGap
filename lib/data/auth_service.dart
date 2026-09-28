@@ -78,8 +78,9 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> reload() async {
-    await _auth.currentUser?.reload();
-    // Rafraîchit le jeton : email_verified doit y figurer pour les règles.
+    // Jeton d'abord : reload() déclenche userChanges(), et l'écoute de
+    // users/{uid} qui s'ouvre alors doit porter email_verified (règles).
     await _auth.currentUser?.getIdToken(true);
+    await _auth.currentUser?.reload();
   }
 }

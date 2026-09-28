@@ -19,7 +19,10 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isStaff());
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken'])
+        && (request.resource.data.fcmToken == null
+            || (request.resource.data.fcmToken is string
+                && request.resource.data.fcmToken.size() <= 4096));
     }
 
     match /profiles/{uid} { allow read: if signedIn(); }

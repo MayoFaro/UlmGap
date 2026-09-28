@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/async_state.dart';
 import '../../core/profile_badge.dart';
 import '../../data/admin_api.dart';
 import '../../data/app_user.dart';
@@ -49,6 +50,8 @@ class UsersAdminScreen extends StatelessWidget {
         stream: api.watchAllUsers(),
         builder: (context, snap) {
           final users = snap.data ?? const <AppUser>[];
+          final state = asyncState(snap, isEmpty: users.isEmpty, empty: 'Aucun compte.');
+          if (state != null) return state;
           return ListView(
             children: [
               for (final u in users)

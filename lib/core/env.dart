@@ -16,3 +16,11 @@ final AppEnv appEnv = parseEnv(_rawEnv);
 FirebaseOptions firebaseOptionsFor(AppEnv env) => env == AppEnv.prod
     ? prod.DefaultFirebaseOptions.currentPlatform
     : dev.DefaultFirebaseOptions.currentPlatform;
+
+/// Message d'erreur si le flavor de compilation (Android/iOS) ne correspond pas
+/// à ENV ; null si tout concorde ou sans flavor (web).
+String? flavorMismatch(AppEnv env, String? flavor) {
+  if (flavor == null || flavor == env.name) return null;
+  return 'Build incohérent : flavor « $flavor » mais ENV=${env.name}. '
+      'Recompiler avec --flavor $flavor --dart-define=ENV=$flavor.';
+}

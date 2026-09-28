@@ -13,6 +13,13 @@ Gestion des vols ULM (Android, iOS, web). Spec :
 Déploiement : `firebase deploy --project dev ...`. La prod se déploie
 **toujours explicitement** avec `--project prod`.
 
+Sur Android/iOS, `--flavor` et `--dart-define=ENV` doivent **toujours être
+passés ensemble et concordants** : un flavor `prod` installe l'app de prod
+(`com.ulmgap.app`), qui parlerait à `ulmgap-dev` sans `ENV=prod`. Au
+démarrage, l'app compare son flavor de compilation (`appFlavor`) à `ENV` et
+**bloque** (écran d'erreur, pas d'accès à Firebase) en cas de discordance ;
+sans flavor (web), aucun contrôle n'est fait.
+
 ## Contrat avec AppGAP (NE PAS CASSER)
 
 Le pont AppGAP (`syncUlmFlights`) lit la collection `flights` de

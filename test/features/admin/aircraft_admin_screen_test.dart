@@ -46,4 +46,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.upserted.single['id'], 'a1');
   });
+
+  testWidgets('M6 : erreur et liste vide', (tester) async {
+    await tester.pumpWidget(host(FakeAdminApi()..error = Exception('refus')));
+    await tester.pump();
+    expect(find.text('Impossible de charger les données. Vérifiez la connexion.'),
+        findsOneWidget);
+
+    await tester.pumpWidget(host(FakeAdminApi()));
+    await tester.pump();
+    expect(find.text('Aucun appareil.'), findsOneWidget);
+  });
 }

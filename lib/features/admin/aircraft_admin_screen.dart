@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/async_state.dart';
 import '../../data/aircraft.dart';
 import '../../data/services.dart';
 import 'aircraft_form_dialog.dart';
@@ -35,23 +36,28 @@ class AircraftAdminScreen extends StatelessWidget {
       ),
       body: StreamBuilder<List<Aircraft>>(
         stream: api.watchAircraft(),
-        builder: (context, snap) => ListView(
-          children: [
-            for (final a in snap.data ?? const <Aircraft>[])
-              ListTile(
-                // Reste cliquable même inactif (pour le réactiver).
-                textColor: a.active ? null : Theme.of(context).disabledColor,
-                leading: const Icon(Icons.airplanemode_active),
-                title: Text(a.label),
-                subtitle: Text(a.registration),
-                trailing: a.active ? null : const Chip(label: Text('Inactif')),
-                onTap: () async {
-                  final input = await showAircraftFormDialog(context, aircraft: a);
-                  if (context.mounted) await _save(context, input);
-                },
-              ),
-          ],
-        ),
+        builder: (context, snap) {
+          final list = snap.data ?? const <Aircraft>[];
+          final state = asyncState(snap, isEmpty: list.isEmpty, empty: 'Aucun appareil.');
+          if (state != null) return state;
+          return ListView(
+            children: [
+              for (final a in list)
+                ListTile(
+                  // Reste cliquable même inactif (pour le réactiver).
+                  textColor: a.active ? null : Theme.of(context).disabledColor,
+                  leading: const Icon(Icons.airplanemode_active),
+                  title: Text(a.label),
+                  subtitle: Text(a.registration),
+                  trailing: a.active ? null : const Chip(label: Text('Inactif')),
+                  onTap: () async {
+                    final input = await showAircraftFormDialog(context, aircraft: a);
+                    if (context.mounted) await _save(context, input);
+                  },
+                ),
+            ],
+          );
+        },
       ),
     );
   }

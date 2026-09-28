@@ -11,4 +11,15 @@ void main() {
     expect(parseEnv(''), AppEnv.dev);
     expect(parseEnv('production'), AppEnv.dev);
   });
+  test('M9 : flavor et ENV concordants ou flavor absent → aucun blocage', () {
+    expect(flavorMismatch(AppEnv.dev, 'dev'), isNull);
+    expect(flavorMismatch(AppEnv.prod, 'prod'), isNull);
+    expect(flavorMismatch(AppEnv.dev, null), isNull); // web
+  });
+  test('M9 : flavor et ENV discordants → message', () {
+    expect(flavorMismatch(AppEnv.dev, 'prod'),
+        'Build incohérent : flavor « prod » mais ENV=dev. '
+        'Recompiler avec --flavor prod --dart-define=ENV=prod.');
+    expect(flavorMismatch(AppEnv.prod, 'dev'), isNotNull);
+  });
 }
