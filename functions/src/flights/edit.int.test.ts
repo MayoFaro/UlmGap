@@ -193,3 +193,47 @@ test("modification après le départ ou d'un vol avec un membre devenu inactif :
     updateFlight(me, { flightId: id, ...draft(a, [me.uid, mate.uid], { start: at(40), end: at(41), destination: "Kara" }) }),
     (e) => code(e) === "failed-precondition" && /MAT/.test((e as Error).message));
 });
+
+test("compte débité : un lâché ne place pas un autre en premier (appel direct)", async () => {
+  const me = await seedUser({ profile: "lache_toute_mission" });
+  const other = await seedUser({ profile: "lache_toute_mission" });
+  await assert.rejects(createFlight(me, draft(await seedAircraft(), [other.uid, me.uid])),
+    (e) => code(e) === "permission-denied");
+  const a = await seedAircraft();
+  const { id } = await createFlight(me, draft(a, [me.uid, other.uid]));
+  await assert.rejects(updateFlight(me, { flightId: id, ...draft(a, [other.uid, me.uid]) }),
+    (e) => code(e) === "permission-denied");
+});
+
+test("carburant choisi par l'instructeur : conservé quand le créateur non instructeur modifie", async () => {
+  const eleve = await seedUser({ profile: "eleve", category: "GAP" });
+  const instr = await seedUser({ profile: "instructeur", category: "GAP" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(50), end: at(51), aircraftId: a, crew: [eleve.uid, instr.uid], createdBy: eleve.uid,
+    instructorUid: instr.uid, status: "valide", pricingMode: "fuel_only",
+  });
+  await updateFlight(eleve, { flightId: id, ...draft(a, [eleve.uid, instr.uid], { start: at(50), end: at(51), destination: "Kara" }) });
+  assert.equal((await get(id)).pricingMode, "fuel_only");
+});
+
+test("carburant imposé par un passager : perdu quand le passager est retiré", async () => {
+  const gap = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await createFlight(gap, draft(a, [gap.uid], { start: at(60), end: at(61), passengers: ["Paul"] }));
+  assert.equal((await get(id)).pricingMode, "fuel_only");
+  await updateFlight(gap, { flightId: id, ...draft(a, [gap.uid], { start: at(60), end: at(61) }) });
+  assert.equal((await get(id)).pricingMode, "standard");
+});
+
+test("conflit : la cause (appareil ou personne) est dans les détails", async () => {
+  const p1 = await seedUser({ profile: "instructeur" });
+  const p2 = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  await createFlight(p1, draft(a, [p1.uid], { start: at(70), end: at(71) }));
+  await assert.rejects(createFlight(p2, draft(a, [p2.uid], { start: at(70), end: at(71) })),
+    (e) => details(e)?.conflict?.kind === "aircraft");
+  await assert.rejects(createFlight(p1, draft(await seedAircraft(), [p1.uid], { start: at(70), end: at(71) })),
+    (e) => details(e)?.conflict?.kind === "crew" &&
+      JSON.stringify(details(e)?.conflict?.members) === JSON.stringify([p1.uid]));
+});

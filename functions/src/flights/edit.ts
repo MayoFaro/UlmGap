@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Caller, CallerProfile, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
-import { PricingMode, decideStatus } from "../rules/flights";
+import { PricingMode, checkPayer, decideStatus } from "../rules/flights";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import { checkHorizon, validateFlightId, validateFlightInput } from "./validation";
 
@@ -23,6 +23,8 @@ export async function createFlight(
   asInvalid(() => checkHorizon(input.start, now));
   // Seul un admin saisit après coup un vol passé (vol oublié).
   if (!me.isAdmin) assertFuture(input.start, now);
+  const payerError = checkPayer(me, input.crew);
+  if (payerError) throw new HttpsError("permission-denied", payerError);
   const ref = db.collection("flights").doc();
 
   const status = await db.runTransaction(async (tx) => {
@@ -61,6 +63,8 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
   const now = Date.now();
   asInvalid(() => checkHorizon(input.start, now));
   assertFuture(input.start, now);
+  const payerError = checkPayer(me, input.crew);
+  if (payerError) throw new HttpsError("permission-denied", payerError);
   const ref = db.collection("flights").doc(flightId);
 
   const status = await db.runTransaction(async (tx) => {
@@ -71,7 +75,10 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
     assertNotStarted(f, now);
     const p = await planFlight(tx, db, {
       id: ref.id, input, mayChoose: mayChoose(me),
-      previousMode: f.get("pricingMode") as PricingMode,
+      // Mode conservé seulement si aucun passager ne l'imposait (décision 2b).
+      previousMode: ((f.get("passengers") as string[] | undefined) ?? []).length === 0
+        ? (f.get("pricingMode") as PricingMode)
+        : undefined,
       decide: (crew) => decideStatus(me, crew, input.passengers.length),
     });
     touchLocks(tx, p.locks);

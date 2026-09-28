@@ -31,7 +31,10 @@ export function decideStatus(creator: Creator, crew: Person[], passengers: numbe
   if (creator.profile === "instructeur") return { ok: true, status: "valide", instructorUid };
   if (instructorUid) return { ok: true, status: "demande", instructorUid };
   if (creator.profile === "eleve") {
-    return { ok: false, reason: "Un élève ne peut voler qu'avec un instructeur." };
+    return {
+      ok: false,
+      reason: "Impossible de créer un vol à votre profit sans la présence d'un instructeur.",
+    };
   }
   if (crew.length + passengers === 2 && creator.profile === "lache_solo") {
     return { ok: false, reason: "Un lâché solo ne vole à deux qu'avec un instructeur." };
@@ -51,8 +54,16 @@ export function resolvePricingMode(a: {
 }): "standard" | "fuel_only" {
   if (!a.allGap) return "standard";
   if (a.hasPassenger) return "fuel_only";
-  if (!a.mayChoose) return "standard";
+  if (!a.mayChoose) return a.previous === "fuel_only" ? "fuel_only" : "standard";
   return (a.requested ?? a.previous ?? "standard") === "fuel_only" ? "fuel_only" : "standard";
+}
+
+/** Décision utilisateur : hors instructeurs et admins, le créateur est le compte débité. */
+export function checkPayer(creator: Creator, crew: string[]): string | null {
+  if (creator.isAdmin || creator.profile === "instructeur") return null;
+  return crew[0] === creator.uid
+    ? null
+    : "Le compte débité doit être le vôtre : placez-vous en premier.";
 }
 
 export interface Slot { id?: string; start: number; end: number; aircraftId: string; crew: string[] }
@@ -67,4 +78,12 @@ export function findConflict(candidate: Slot, others: ExistingFlight[]): Existin
     candidate.start < o.end && o.start < candidate.end &&
     (o.aircraftId === candidate.aircraftId || o.crew.some((u) => candidate.crew.includes(u))),
   ) ?? null;
+}
+
+/** Cause d'un conflit : l'appareil d'abord, sinon les personnes communes. */
+export function conflictCause(
+  candidate: Slot, other: Slot,
+): { kind: "aircraft" | "crew"; members: string[] } {
+  if (candidate.aircraftId === other.aircraftId) return { kind: "aircraft", members: [] };
+  return { kind: "crew", members: candidate.crew.filter((u) => other.crew.includes(u)) };
 }

@@ -4,7 +4,8 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import type { Profile } from "../admin/validation";
 import {
-  Decision, ExistingFlight, FlightStatus, PricingMode, findConflict, payerOf, resolvePricingMode,
+  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, payerOf,
+  resolvePricingMode,
 } from "../rules/flights";
 import type { FlightInput } from "./validation";
 
@@ -112,6 +113,7 @@ async function assertNoConflict(
       aircraft: (doc.get("aircraft") as string | undefined) ?? "",
       crew: c.crew,
       passengers: (doc.get("passengers") as string[] | undefined) ?? [],
+      ...conflictCause(slot, c),
     },
   });
 }

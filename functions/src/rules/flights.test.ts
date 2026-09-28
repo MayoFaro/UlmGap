@@ -3,7 +3,8 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
-  decideStatus, designatedInstructor, findConflict, payerOf, resolvePricingMode,
+  checkPayer, conflictCause, decideStatus, designatedInstructor, findConflict, payerOf,
+  resolvePricingMode,
 } from "./flights";
 
 const fx = JSON.parse(fs.readFileSync(
@@ -43,4 +44,26 @@ test("instructeur désigné : jamais le créateur lui-même", () => {
   assert.equal(designatedInstructor("c", [
     { uid: "c", profile: "eleve" }, { uid: "i", profile: "instructeur" },
   ]), "i");
+});
+
+for (const c of fx.payer) {
+  test(`compte débité : ${c.name}`, () => {
+    const r = checkPayer(c.creator, c.crew);
+    if (c.ok) assert.equal(r, null);
+    else assert.equal(r, "Le compte débité doit être le vôtre : placez-vous en premier.");
+  });
+}
+
+for (const c of fx.conflicts.filter((x: { expectedCause?: unknown }) => x.expectedCause)) {
+  test(`cause du conflit : ${c.name}`, () => {
+    const other = findConflict(c.candidate, c.others)!;
+    assert.deepEqual(conflictCause(c.candidate, other), c.expectedCause);
+  });
+}
+
+test("message élève au vouvoiement", () => {
+  const d = decideStatus({ uid: "c", profile: "eleve", isAdmin: false },
+    [{ uid: "c", profile: "eleve" }], 0);
+  assert.deepEqual(d, { ok: false,
+    reason: "Impossible de créer un vol à votre profit sans la présence d'un instructeur." });
 });
