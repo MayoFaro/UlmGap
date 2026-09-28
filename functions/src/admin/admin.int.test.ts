@@ -247,6 +247,7 @@ test("seedTestUsers : crée 8 comptes vérifiés, avec documents users et profil
     assert.equal(u.isAdmin, false);
     assert.equal(u.active, true);
     assert.equal(u.balance, 0);
+    assert.equal(u.fcmToken, null);
     const p = (await db.collection("profiles").doc(rec.uid).get()).data()!;
     assert.deepEqual(p, {
       displayName: account.name, shortName: account.short, profile: account.profile, active: true,

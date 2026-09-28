@@ -84,9 +84,10 @@ export async function seedTestUsers(
     };
     await db.runTransaction(async (tx) => {
       const current = await tx.get(usersRef);
-      // balance/createdAt : seulement à la création, jamais écrasés ensuite
-      // (set(..., { merge: true }) ci-dessous ne les touche pas si absents).
-      const data = current.exists ? base : { ...base, balance: 0, createdAt: now };
+      // balance/createdAt/fcmToken : seulement à la création, jamais écrasés
+      // ensuite (set(..., { merge: true }) ci-dessous ne les touche pas si
+      // absents), comme pour createUser/bootstrapAdmin.
+      const data = current.exists ? base : { ...base, balance: 0, fcmToken: null, createdAt: now };
       tx.set(usersRef, data, { merge: true });
       tx.set(profilesRef, {
         displayName: account.name, shortName: account.short,
