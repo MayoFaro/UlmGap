@@ -18,16 +18,25 @@ export async function createUser(caller: Caller | undefined, data: unknown): Pro
   const input = asInvalid(() => validateNewUser(data));
 
   let uid: string;
+  let adopted = false;
   try {
     const rec = await admin.auth().createUser({
       email: input.email, displayName: input.displayName, disabled: !input.active,
     });
     uid = rec.uid;
   } catch (e) {
-    if ((e as { code?: string }).code === "auth/email-already-exists") {
+    if ((e as { code?: string }).code !== "auth/email-already-exists") throw e;
+    // Compte Auth sans document users (console, inscription directe, création
+    // interrompue) : on le reprend au lieu de bloquer l'e-mail pour toujours.
+    const existing = await admin.auth().getUserByEmail(input.email);
+    if ((await db.collection("users").doc(existing.uid).get()).exists) {
       throw new HttpsError("already-exists", "Un compte existe déjà pour cet e-mail.");
     }
-    throw e;
+    await admin.auth().updateUser(existing.uid, {
+      displayName: input.displayName, disabled: !input.active,
+    });
+    uid = existing.uid;
+    adopted = true;
   }
 
   try {
@@ -42,7 +51,11 @@ export async function createUser(caller: Caller | undefined, data: unknown): Pro
     });
     await batch.commit();
   } catch (e) {
-    await admin.auth().deleteUser(uid); // pas de compte Auth sans document
+    // Pas de compte Auth sans document (sauf compte repris : on ne le supprime pas).
+    if (!adopted) {
+      await admin.auth().deleteUser(uid).catch((err) =>
+        console.error("createUser: rollback deleteUser failed", uid, err));
+    }
     throw e;
   }
   return { uid };

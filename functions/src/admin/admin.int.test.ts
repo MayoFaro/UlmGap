@@ -103,3 +103,14 @@ test("appareils : création, modification, immatriculation en double refusée", 
   await assert.rejects(upsertAircraft(me, { registration: reg, label: "Autre" }),
     (e) => code(e) === "already-exists");
 });
+
+test("I2 : compte Auth orphelin (sans users) : repris au lieu de bloquer", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const input = newUser();
+  const orphan = await admin.auth().createUser({ email: input.email });
+  const { uid } = await createUser(me, input);
+  assert.equal(uid, orphan.uid);
+  assert.equal((await db.collection("users").doc(uid).get()).get("shortName"), "JDU");
+  assert.equal((await db.collection("profiles").doc(uid).get()).get("active"), true);
+  assert.equal((await admin.auth().getUser(uid)).displayName, "Jean Dupont");
+});
