@@ -183,7 +183,8 @@ class FakeFlightApi implements FlightApi {
   Map<String, UserCategory> categories = {};
   List<String> destinations = [];
   Object? error; // si défini, watchFrom échoue
-  FlightFailure? failWith; // si défini, les actions échouent
+  Object? flightError; // si défini, watchFlight échoue
+  Object? failWith; // si défini, les actions échouent (FlightFailure ou toute autre erreur)
   final flightsCtrl = StreamController<List<Flight>>.broadcast();
 
   final created = <Map<String, dynamic>>[];
@@ -205,6 +206,7 @@ class FakeFlightApi implements FlightApi {
 
   @override
   Stream<Flight?> watchFlight(String id) async* {
+    if (flightError != null) throw flightError!;
     yield _byId(flights, id);
     yield* flightsCtrl.stream.map((l) => _byId(l, id));
   }

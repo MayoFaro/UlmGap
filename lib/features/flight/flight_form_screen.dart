@@ -247,8 +247,12 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
   String? _localError() {
     if (_aircraftId == null) return 'Choisissez un appareil.';
     if (_destination.text.trim().isEmpty) return 'Indiquez une destination.';
-    if (_end.difference(_start).inMinutes < minPlannedMinutes) {
+    final duration = _end.difference(_start);
+    if (duration.inMinutes < minPlannedMinutes) {
       return 'Durée prévue minimale : $minPlannedMinutes min.';
+    }
+    if (duration > const Duration(hours: maxPlannedHours)) {
+      return 'Durée prévue maximale : $maxPlannedHours h.';
     }
     // Seul un admin crée après coup un vol passé (vol oublié).
     final pastAllowed = _me.isAdmin && widget.mode == FlightFormMode.create;
@@ -309,6 +313,8 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
       if (mounted) _snack(describeConflict(e.conflict, _dir));
     } on FlightFailure catch (e) {
       if (mounted) _snack(e.message);
+    } catch (_) {
+      if (mounted) _snack('Enregistrement impossible. Réessayez.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

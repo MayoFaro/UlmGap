@@ -102,7 +102,8 @@ class _PlanningScreenState extends State<PlanningScreen> {
             items: [
               const DropdownMenuItem<String?>(value: null, child: Text('Tous les appareils')),
               for (final a in aircraft)
-                DropdownMenuItem<String?>(value: a.id, child: Text(a.label)),
+                DropdownMenuItem<String?>(
+                    value: a.id, child: Text('${a.label} (${a.registration})')),
             ],
             onChanged: (v) => setState(() => _aircraftId = v),
           ),

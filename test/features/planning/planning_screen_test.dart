@@ -82,10 +82,10 @@ void main() {
     expect(find.textContaining('F-JXYZ'), findsOneWidget);
     await tester.tap(find.byKey(const Key('aircraft-filter')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ULM 1').last);
+    await tester.tap(find.text('ULM 1 (F-JABC)').last);
     await tester.pumpAndSettle();
     expect(find.textContaining('F-JXYZ'), findsNothing);
-    expect(find.textContaining('F-JABC'), findsOneWidget);
+    expect(find.textContaining('09:00–10:00 · F-JABC'), findsOneWidget);
   });
 
   testWidgets('vide et erreur', (tester) async {

@@ -4,6 +4,8 @@
 
 /// Durée prévue minimale (le plan 3 la lira dans settings/pricing).
 const minPlannedMinutes = 45;
+/// Durée prévue maximale.
+const maxPlannedHours = 12;
 
 class RulePerson {
   const RulePerson(this.uid, this.profile);

@@ -211,4 +211,31 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
   });
+
+  testWidgets('durée prévue maximale dépassée : refusé localement, aucun appel', (tester) async {
+    final a = api();
+    final start = DateTime(2026, 10, 13, 9);
+    final f = testFlight(id: 'e', start: start, end: start.add(const Duration(hours: 13)), crew: ['u1']);
+    await tester.pumpWidget(
+        host(a, testUser(uid: 'u1'), flight: f, mode: FlightFormMode.edit));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Durée prévue maximale : 12 h.'), findsOneWidget);
+    expect(a.updated, isEmpty);
+  });
+
+  testWidgets('erreur inattendue à l\'enregistrement : message générique, saisie réactivée',
+      (tester) async {
+    final a = api()..failWith = Exception('boom');
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await saveAndConfirm(tester);
+    expect(find.text('Enregistrement impossible. Réessayez.'), findsOneWidget);
+    final button = tester.widget<IconButton>(
+        find.ancestor(of: find.byIcon(Icons.check), matching: find.byType(IconButton)));
+    expect(button.onPressed, isNotNull);
+  });
 }

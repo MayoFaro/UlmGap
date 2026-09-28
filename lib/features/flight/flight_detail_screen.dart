@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/async_state.dart';
 import '../../core/formats.dart';
 import '../../core/profile_badge.dart';
 import '../../data/app_user.dart';
@@ -102,6 +103,7 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
       body: StreamBuilder<Flight?>(
         stream: _flight,
         builder: (context, snap) {
+          if (snap.hasError) return connectionErrorMessage();
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }

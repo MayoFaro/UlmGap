@@ -89,4 +89,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Vol introuvable.'), findsOneWidget);
   });
+
+  testWidgets('erreur du flux : message de connexion, pas « vol introuvable »', (tester) async {
+    final a = api()..flightError = Exception('offline');
+    await tester.pumpWidget(host(a, testUser(uid: 'u1'), 'd'));
+    await tester.pumpAndSettle();
+    expect(find.text('Impossible de charger les données. Vérifiez la connexion.'), findsOneWidget);
+    expect(find.text('Vol introuvable.'), findsNothing);
+  });
 }
