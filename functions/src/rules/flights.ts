@@ -21,14 +21,15 @@ export function designatedInstructor(creatorUid: string, crew: Person[]): string
 /** Spec §3.2. L'admin échappe à la matrice (pas aux contrôles communs). */
 export function decideStatus(creator: Creator, crew: Person[], passengers: number): Decision {
   const instructorUid = designatedInstructor(creator.uid, crew);
-  if (creator.isAdmin) return { ok: true, status: "valide", instructorUid };
+  if (creator.isAdmin || creator.profile === "instructeur") {
+    return { ok: true, status: "valide", instructorUid };
+  }
   if (!crew.some((p) => p.uid === creator.uid)) {
     return { ok: false, reason: "Vous devez faire partie de l'équipage." };
   }
   if (creator.profile === null) {
     return { ok: false, reason: "Un compte non pilote ne peut pas créer de vol." };
   }
-  if (creator.profile === "instructeur") return { ok: true, status: "valide", instructorUid };
   if (instructorUid) return { ok: true, status: "demande", instructorUid };
   if (creator.profile === "eleve") {
     return {
@@ -61,6 +62,7 @@ export function resolvePricingMode(a: {
 /** Décision utilisateur : hors instructeurs et admins, le créateur est le compte débité. */
 export function checkPayer(creator: Creator, crew: string[]): string | null {
   if (creator.isAdmin || creator.profile === "instructeur") return null;
+  if (!crew.includes(creator.uid)) return null; // laissé à la matrice (decideStatus)
   return crew[0] === creator.uid
     ? null
     : "Le compte débité doit être le vôtre : placez-vous en premier.";

@@ -39,7 +39,8 @@ test("appel direct : un lâché ne crée pas un vol dont il ne fait pas partie",
   const me = await seedUser({ profile: "lache_toute_mission" });
   const other = await seedUser({ profile: "lache_toute_mission" });
   await assert.rejects(createFlight(me, draft(await seedAircraft(), [other.uid])),
-    (e) => code(e) === "permission-denied");
+    (e) => code(e) === "permission-denied" &&
+      (e as Error).message === "Vous devez faire partie de l'équipage.");
 });
 
 test("admin hors équipage : élève + instructeur → valide", async () => {
@@ -47,6 +48,13 @@ test("admin hors équipage : élève + instructeur → valide", async () => {
   const eleve = await seedUser({ profile: "eleve" });
   const instr = await seedUser({ profile: "instructeur" });
   const { status } = await createFlight(adm, draft(await seedAircraft(), [eleve.uid, instr.uid]));
+  assert.equal(status, "valide");
+});
+
+test("instructeur hors équipage : élève seul → valide", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  const eleve = await seedUser({ profile: "eleve" });
+  const { status } = await createFlight(instr, draft(await seedAircraft(), [eleve.uid]));
   assert.equal(status, "valide");
 });
 

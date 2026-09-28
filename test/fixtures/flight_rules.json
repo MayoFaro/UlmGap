@@ -62,7 +62,13 @@
       "expected": "refus" },
     { "name": "lâché hors équipage (non admin)", "creator": { "uid": "c", "profile": "lache_toute_mission", "isAdmin": false },
       "crew": [{ "uid": "x", "profile": "lache_toute_mission" }], "passengers": 0,
-      "expected": "refus" }
+      "expected": "refus" },
+    { "name": "instructeur hors équipage, élève seul", "creator": { "uid": "c", "profile": "instructeur", "isAdmin": false },
+      "crew": [{ "uid": "x", "profile": "eleve" }], "passengers": 0,
+      "expected": "valide", "instructorUid": null },
+    { "name": "instructeur hors équipage, élève + instructeur", "creator": { "uid": "c", "profile": "instructeur", "isAdmin": false },
+      "crew": [{ "uid": "x", "profile": "eleve" }, { "uid": "i", "profile": "instructeur" }], "passengers": 0,
+      "expected": "valide", "instructorUid": "i" }
   ],
   "pricing": [
     { "name": "équipage non GAP avec passager", "allGap": false, "hasPassenger": true, "mayChoose": false, "expected": "standard" },
@@ -124,6 +130,7 @@
     { "name": "lâché en second : refusé", "creator": { "uid": "c", "profile": "lache_toute_mission", "isAdmin": false }, "crew": ["x", "c"], "ok": false },
     { "name": "élève en second : refusé", "creator": { "uid": "c", "profile": "eleve", "isAdmin": false }, "crew": ["i", "c"], "ok": false },
     { "name": "instructeur en second : libre", "creator": { "uid": "c", "profile": "instructeur", "isAdmin": false }, "crew": ["x", "c"], "ok": true },
-    { "name": "admin hors équipage : libre", "creator": { "uid": "a", "profile": null, "isAdmin": true }, "crew": ["x", "y"], "ok": true }
+    { "name": "admin hors équipage : libre", "creator": { "uid": "a", "profile": null, "isAdmin": true }, "crew": ["x", "y"], "ok": true },
+    { "name": "lâché hors équipage : laissé à la matrice", "creator": { "uid": "c", "profile": "lache_toute_mission", "isAdmin": false }, "crew": ["x", "y"], "ok": true }
   ]
 }
