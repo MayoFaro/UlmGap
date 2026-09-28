@@ -189,6 +189,34 @@ test("M8 : bootstrap sur un admin existant : ni solde, ni catégorie, ni created
   assert.ok((u.createdAt as admin.firestore.Timestamp).isEqual(createdAt));
 });
 
+test("M8 : bootstrap d'un existant sans profiles : profil complet écrit", async () => {
+  const email = `boot-${uniq()}@club.fr`;
+  const rec = await admin.auth().createUser({ email });
+  await db.collection("users").doc(rec.uid).set({
+    email, displayName: "Sans Profil", shortName: "SPR", profile: "eleve", category: "GAP",
+    isAdmin: false, active: true, balance: 0,
+  });
+  const uid = await bootstrapAdmin(admin.auth(), db, { email, name: "Autre", short: "XYZ" });
+  assert.equal(uid, rec.uid);
+  assert.deepEqual((await db.collection("profiles").doc(uid).get()).data(),
+    { displayName: "Sans Profil", shortName: "SPR", profile: "eleve", active: true });
+});
+
+test("M8 : bootstrap d'un existant avec profiles déjà présent : simple fusion active", async () => {
+  const email = `boot-${uniq()}@club.fr`;
+  const rec = await admin.auth().createUser({ email });
+  await db.collection("users").doc(rec.uid).set({
+    email, displayName: "Avec Profil", shortName: "AVP", profile: "eleve", category: "GAP",
+    isAdmin: false, active: true, balance: 0,
+  });
+  await db.collection("profiles").doc(rec.uid).set({
+    displayName: "Ancien Nom", shortName: "OLD", profile: "instructeur", active: false,
+  });
+  const uid = await bootstrapAdmin(admin.auth(), db, { email, name: "Autre", short: "XYZ" });
+  assert.deepEqual((await db.collection("profiles").doc(uid).get()).data(),
+    { displayName: "Ancien Nom", shortName: "OLD", profile: "instructeur", active: true });
+});
+
 test("M8 : bootstrap d'un nouvel admin : users et profiles complets", async () => {
   const email = `boot-${uniq()}@club.fr`;
   const uid = await bootstrapAdmin(admin.auth(), db, { email, name: "Neuf", short: "NEU" });

@@ -26,8 +26,21 @@ export async function bootstrapAdmin(
   await db.runTransaction(async (tx) => {
     const current = await tx.get(users);
     if (current.exists) {
+      const existingProfile = await tx.get(profiles);
       tx.update(users, { isAdmin: true, active: true, updatedAt: now });
-      tx.set(profiles, { active: true }, { merge: true });
+      if (existingProfile.exists) {
+        tx.set(profiles, { active: true }, { merge: true });
+      } else {
+        // Aucun document profiles : on en écrit un complet à partir de users
+        // (sinon la promotion laisserait un profil tronqué, cf. M4/updateUser).
+        const u = current.data() ?? {};
+        tx.set(profiles, {
+          displayName: (u.displayName as string | undefined) ?? "",
+          shortName: (u.shortName as string | undefined) ?? "",
+          profile: (u.profile as string | null | undefined) ?? null,
+          active: true,
+        });
+      }
       return;
     }
     tx.set(users, {
