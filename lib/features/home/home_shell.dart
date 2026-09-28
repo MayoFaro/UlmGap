@@ -5,6 +5,7 @@ import '../../data/app_user.dart';
 import '../../data/services.dart';
 import '../admin/aircraft_admin_screen.dart';
 import '../admin/users_admin_screen.dart';
+import '../planning/planning_screen.dart';
 
 class HomeShell extends StatelessWidget {
   const HomeShell({super.key, required this.user});
@@ -44,7 +45,7 @@ class HomeShell extends StatelessWidget {
           ),
         ],
       ),
-      body: const Center(child: Text('Planning : disponible au plan 2.')),
+      body: PlanningScreen(me: user),
     );
   }
 }
