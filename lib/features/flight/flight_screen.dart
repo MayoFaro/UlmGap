@@ -12,29 +12,31 @@ import '../../data/crew_member.dart';
 import '../../data/flight.dart';
 import '../../data/flight_api.dart';
 import '../../data/services.dart';
+import 'flight_actions.dart';
 import 'flight_texts.dart';
 
-enum FlightFormMode { create, edit, validate }
-
-class FlightFormScreen extends StatefulWidget {
-  const FlightFormScreen({
+/// Fenêtre unique d'un vol : consultation, création, édition, validation,
+/// refus et annulation (spec plan 2b, Task 3). Les droits sont calculés par
+/// [flightActions] à partir de [flight] ; `flight == null` signifie création.
+class FlightScreen extends StatefulWidget {
+  const FlightScreen({
     super.key,
     required this.me,
     this.flight,
-    this.mode = FlightFormMode.create,
     this.now = DateTime.now,
   });
 
   final AppUser me;
   final Flight? flight;
-  final FlightFormMode mode;
   final DateTime Function() now;
 
   @override
-  State<FlightFormScreen> createState() => _FlightFormScreenState();
+  State<FlightScreen> createState() => _FlightScreenState();
 }
 
-class _FlightFormScreenState extends State<FlightFormScreen> {
+enum _Mode { create, edit, validate, view }
+
+class _FlightScreenState extends State<FlightScreen> {
   late DateTime _start;
   late DateTime _end;
   String? _aircraftId;
@@ -54,7 +56,20 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
   bool _listening = false;
 
   AppUser get _me => widget.me;
-  bool get _validating => widget.mode == FlightFormMode.validate;
+
+  Set<FlightAction> get _actions =>
+      widget.flight == null ? const {} : flightActions(widget.flight!, _me, widget.now());
+
+  _Mode get _mode {
+    if (widget.flight == null) return _Mode.create;
+    if (_actions.contains(FlightAction.validate)) return _Mode.validate;
+    if (_actions.contains(FlightAction.edit)) return _Mode.edit;
+    return _Mode.view;
+  }
+
+  bool get _validating => _mode == _Mode.validate;
+  bool get _fieldsEditable => _mode != _Mode.view;
+  bool get _crewEditable => _mode == _Mode.create || _mode == _Mode.edit;
   bool get _isStaff => _me.isAdmin || _me.isInstructor;
   bool get _mayChoose => _validating || _isStaff;
 
@@ -91,7 +106,14 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
           onError: (Object _) {}, // l'aperçu reste indicatif
         ));
     listen(api.watchDirectory(), (l) => _dir = {for (final m in l) m.uid: m});
-    listen(api.watchAircraft(), (l) => _aircraft = l.where((a) => a.active).toList());
+    listen(api.watchAircraft(), (l) {
+      _aircraft = l.where((a) => a.active).toList();
+      // Spec §6 : en création, l'appareil par défaut est le premier de la
+      // liste dès qu'elle arrive.
+      if (widget.flight == null && _aircraftId == null && _aircraft.isNotEmpty) {
+        _aircraftId = _aircraft.first.id;
+      }
+    });
     listen(api.watchFrom(dayOf(widget.now())), (l) => _flights = l);
     if (_mayChoose) listen(api.watchCategories(), (m) => _categories = m);
     api.recentDestinations().then((d) {
@@ -128,7 +150,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
           passengers: _passenger == null ? 0 : 1,
         );
 
-  String get _mode => resolvePricingMode(
+  String get _pricingMode => resolvePricingMode(
         allGap: _allGap,
         hasPassenger: _passenger != null,
         mayChoose: _mayChoose,
@@ -136,29 +158,27 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
         previous: widget.flight?.pricingMode,
       );
 
-  Flight? get _conflict {
+  ({RuleFlight candidate, Flight other})? get _conflict {
     if (_aircraftId == null) return null;
-    final hit = findConflict(
-      RuleFlight(
-        id: widget.flight?.id,
-        start: _start.millisecondsSinceEpoch,
-        end: _end.millisecondsSinceEpoch,
-        aircraftId: _aircraftId!,
-        crew: _crew,
-      ),
-      _flights.map((f) => f.toRule()),
+    final candidate = RuleFlight(
+      id: widget.flight?.id,
+      start: _start.millisecondsSinceEpoch,
+      end: _end.millisecondsSinceEpoch,
+      aircraftId: _aircraftId!,
+      crew: _crew,
     );
+    final hit = findConflict(candidate, _flights.map((f) => f.toRule()));
     if (hit == null) return null;
-    return _flights.firstWhere((f) => f.id == hit.id);
+    return (candidate: candidate, other: _flights.firstWhere((f) => f.id == hit.id));
   }
 
   String _statusText(Decision d) {
     if (!d.ok) return 'Impossible : ${d.reason}';
     if (d.status == 'demande') return 'Sera une demande à ${_short(d.instructorUid!)}';
-    return switch (widget.mode) {
-      FlightFormMode.validate => 'Sera validé',
-      FlightFormMode.edit => 'Sera enregistré (validé)',
-      FlightFormMode.create => 'Sera créé (validé)',
+    return switch (_mode) {
+      _Mode.validate => 'Sera validé',
+      _Mode.edit => 'Sera enregistré (validé)',
+      _Mode.create || _Mode.view => 'Sera créé (validé)',
     };
   }
 
@@ -166,7 +186,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
 
   Future<void> _pickDate() async {
     // Un admin peut saisir un vol oublié (jusqu'à un an en arrière).
-    final computedFirst = _me.isAdmin && widget.mode == FlightFormMode.create
+    final computedFirst = _me.isAdmin && widget.flight == null
         ? dayOf(widget.now()).subtract(const Duration(days: 365))
         : dayOf(widget.now());
     // En édition/validation, le vol existant peut déjà commencer avant cette
@@ -239,7 +259,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
     if (name != null && name.isNotEmpty) setState(() => _passenger = name);
   }
 
-  // --- enregistrement ---
+  // --- enregistrement / actions ---
 
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -255,10 +275,22 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
       return 'Durée prévue maximale : $maxPlannedHours h.';
     }
     // Seul un admin crée après coup un vol passé (vol oublié).
-    final pastAllowed = _me.isAdmin && widget.mode == FlightFormMode.create;
+    final pastAllowed = _me.isAdmin && widget.flight == null;
     if (!pastAllowed && !_start.isAfter(widget.now())) return 'L\'heure de départ est passée.';
     final d = _decision;
-    return d.ok ? null : d.reason;
+    if (!d.ok) return d.reason;
+    // Décision utilisateur : hors validation (équipage figé), le créateur
+    // doit rester le compte débité s'il n'est ni instructeur ni admin.
+    if (!_validating) {
+      final payerError = checkPayer(
+        creatorUid: _me.uid,
+        creatorProfile: _me.profile?.code,
+        creatorIsAdmin: _me.isAdmin,
+        crew: _crew,
+      );
+      if (payerError != null) return payerError;
+    }
+    return null;
   }
 
   FlightDraft _draft() => FlightDraft(
@@ -271,43 +303,12 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
         pricingMode: _showFuelChoice ? (_fuelOnly ? 'fuel_only' : 'standard') : null,
       );
 
-  Future<void> _save() async {
-    final error = _localError();
-    if (error != null) {
-      _snack(error);
-      return;
-    }
-    // Spec §5 : la fin prévue est confirmée à l'enregistrement.
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Heure de fin'),
-        content: Text('Fin prévue à ${formatTime(_end)}. Confirmer ?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Corriger')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirmer')),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+  /// Exécute une action serveur, gère erreurs et succès communs (spec §11-12) :
+  /// après tout succès, on referme l'écran (retour au planning).
+  Future<void> _run(Future<void> Function() action) async {
     setState(() => _saving = true);
-    final api = AppServices.of(context).flights!;
     try {
-      switch (widget.mode) {
-        case FlightFormMode.create:
-          await api.create(_draft());
-        case FlightFormMode.edit:
-          await api.update(widget.flight!.id, _draft());
-        case FlightFormMode.validate:
-          final d = _draft();
-          await api.validate(widget.flight!.id, changes: {
-            'start': d.start.millisecondsSinceEpoch,
-            'end': d.end.millisecondsSinceEpoch,
-            'destination': d.destination,
-            'aircraftId': d.aircraftId,
-            if (d.pricingMode != null) 'pricingMode': d.pricingMode,
-          });
-      }
+      await action();
       if (mounted) Navigator.of(context).maybePop(true);
     } on FlightConflict catch (e) {
       if (mounted) _snack(describeConflict(e.conflict, _dir));
@@ -320,6 +321,60 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
     }
   }
 
+  Future<void> _save() async {
+    final error = _localError();
+    if (error != null) {
+      _snack(error);
+      return;
+    }
+    final api = AppServices.of(context).flights!;
+    await _run(() async {
+      switch (_mode) {
+        case _Mode.create:
+          await api.create(_draft());
+        case _Mode.edit:
+          await api.update(widget.flight!.id, _draft());
+        case _Mode.validate:
+          final d = _draft();
+          await api.validate(widget.flight!.id, changes: {
+            'start': d.start.millisecondsSinceEpoch,
+            'end': d.end.millisecondsSinceEpoch,
+            'destination': d.destination,
+            'aircraftId': d.aircraftId,
+            if (d.pricingMode != null) 'pricingMode': d.pricingMode,
+          });
+        case _Mode.view:
+          break; // bouton absent dans ce mode
+      }
+    });
+  }
+
+  Future<void> _refuse() async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => const _RefuseDialog(),
+    );
+    if (reason == null || !mounted) return;
+    final api = AppServices.of(context).flights!;
+    await _run(() => api.refuse(widget.flight!.id, reason));
+  }
+
+  Future<void> _cancel() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Annuler ce vol ?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Non')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Oui, annuler')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final api = AppServices.of(context).flights!;
+    await _run(() => api.cancel(widget.flight!.id));
+  }
+
   // --- affichage ---
 
   @override
@@ -327,46 +382,61 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
     final decision = _decision;
     final conflict = decision.status == 'valide' ? _conflict : null;
     final aboard = _crew.length + (_passenger == null ? 0 : 1);
-    final crewEditable = !_validating;
-    final title = switch (widget.mode) {
-      FlightFormMode.create => 'Nouveau vol',
-      FlightFormMode.edit => 'Modifier le vol',
-      FlightFormMode.validate => 'Valider la demande',
-    };
+    final f = widget.flight;
+    final now = widget.now();
+    final title = f == null ? 'Nouveau vol' : formatDay(_start);
+    final canReorder = _me.isAdmin || _me.isInstructor;
+
+    final buttons = <Widget>[
+      if (_mode == _Mode.create || _actions.contains(FlightAction.edit))
+        FilledButton(onPressed: _saving ? null : _save, child: const Text('Enregistrer')),
+      if (_actions.contains(FlightAction.validate)) ...[
+        FilledButton(onPressed: _saving ? null : _save, child: const Text('Valider')),
+        OutlinedButton(onPressed: _saving ? null : _refuse, child: const Text('Refuser')),
+      ],
+      if (_actions.contains(FlightAction.cancel))
+        TextButton(onPressed: _saving ? null : _cancel, child: const Text('Annuler le vol')),
+    ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: 'Enregistrer',
-            icon: const Icon(Icons.check),
-            onPressed: _saving ? null : _save,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (f != null) ...[
+            ListTile(
+              title: const Text('Statut'),
+              subtitle: Text(
+                f.isExpiredRequest(now) ? 'Refusé (non validée avant le départ)' : statusLabel(f.effectiveStatus(now)),
+                style: TextStyle(color: statusColor(f.effectiveStatus(now))),
+              ),
+            ),
+            if (f.status == FlightStatus.refuse && f.refusalReason != null)
+              ListTile(title: const Text('Motif du refus'), subtitle: Text(f.refusalReason!)),
+            if (f.instructorUid != null)
+              ListTile(title: Text('Instructeur désigné : ${_short(f.instructorUid!)}')),
+            ListTile(title: const Text('Tarification'), subtitle: Text(pricingModeLabel(f.pricingMode))),
+            const Divider(),
+          ],
           ListTile(
             leading: const Icon(Icons.event),
             title: const Text('Date'),
             subtitle: Text(formatDay(_start)),
-            onTap: _pickDate,
+            onTap: _fieldsEditable ? _pickDate : null,
           ),
           Row(children: [
             Expanded(
               child: ListTile(
                 title: const Text('Départ'),
                 subtitle: Text(formatTime(_start)),
-                onTap: _pickStart,
+                onTap: _fieldsEditable ? _pickStart : null,
               ),
             ),
             Expanded(
               child: ListTile(
                 title: const Text('Fin'),
                 subtitle: Text(formatTime(_end)),
-                onTap: _pickEnd,
+                onTap: _fieldsEditable ? _pickEnd : null,
               ),
             ),
           ]),
@@ -378,7 +448,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
               for (final a in _aircraft)
                 DropdownMenuItem(value: a.id, child: Text('${a.label} (${a.registration})')),
             ],
-            onChanged: (v) => setState(() => _aircraftId = v),
+            onChanged: _fieldsEditable ? (v) => setState(() => _aircraftId = v) : null,
           ),
           const SizedBox(height: 16),
           Text('Équipage', style: Theme.of(context).textTheme.titleMedium),
@@ -386,17 +456,17 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
             ListTile(
               leading: ProfileBadge(profile: _profile(_crew[i]), compact: true),
               title: Text(_short(_crew[i])),
-              subtitle: i == 0 ? const Text('Payeur') : null,
-              trailing: !crewEditable
+              subtitle: i == 0 ? const Text(debitedLabel) : null,
+              trailing: !_crewEditable
                   ? null
                   : Wrap(children: [
-                      if (i > 0)
+                      if (i > 0 && canReorder)
                         IconButton(
                           tooltip: 'Mettre en premier',
                           icon: const Icon(Icons.arrow_upward),
                           onPressed: () => setState(() => _crew.insert(0, _crew.removeAt(i))),
                         ),
-                      if (_crew.length > 1 && (_crew[i] != _me.uid || _me.isAdmin))
+                      if (_crew.length > 1 && (_crew[i] != _me.uid || canReorder))
                         IconButton(
                           tooltip: 'Retirer',
                           icon: const Icon(Icons.close),
@@ -409,7 +479,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
               leading: const Icon(Icons.person_outline),
               title: Text(_passenger!),
               subtitle: const Text('Passager sans compte'),
-              trailing: !crewEditable
+              trailing: !_crewEditable
                   ? null
                   : IconButton(
                       tooltip: 'Retirer le passager',
@@ -417,7 +487,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
                       onPressed: () => setState(() => _passenger = null),
                     ),
             ),
-          if (crewEditable && aboard < 2)
+          if (_crewEditable && aboard < 2)
             Wrap(spacing: 8, children: [
               TextButton.icon(
                 icon: const Icon(Icons.person_add),
@@ -430,7 +500,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
                 onPressed: _addPassenger,
               ),
             ]),
-          Text('Payeur : ${_short(_crew.first)}', key: const Key('payer')),
+          Text('$debitedLabel : ${_short(_crew.first)}', key: const Key('payer')),
           const SizedBox(height: 16),
           RawAutocomplete<String>(
             textEditingController: _destination,
@@ -444,6 +514,7 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
               key: const Key('f-destination'),
               controller: controller,
               focusNode: focusNode,
+              enabled: _fieldsEditable,
               decoration: const InputDecoration(labelText: 'Destination'),
               onChanged: (_) => setState(() {}),
             ),
@@ -466,40 +537,52 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
               key: const Key('f-fuel'),
               title: const Text('Carburant seulement'),
               value: _fuelOnly,
-              onChanged: (v) => setState(() => _fuelOnly = v ?? false),
+              onChanged: _fieldsEditable ? (v) => setState(() => _fuelOnly = v ?? false) : null,
             ),
-          const SizedBox(height: 16),
-          Card(
-            key: const Key('preview'),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(_statusText(decision)),
-                Text('Payeur : ${_short(_crew.first)}'),
-                Text('Mode : ${pricingModeLabel(_mode)}'),
-                if (conflict != null)
-                  Text(
-                    describeConflict(
-                      ConflictInfo(
-                        start: conflict.start,
-                        end: conflict.end,
-                        aircraft: conflict.aircraft,
-                        crew: conflict.crew,
-                        passengers: conflict.passengers,
+          if (_fieldsEditable) ...[
+            const SizedBox(height: 16),
+            Card(
+              key: const Key('preview'),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(_statusText(decision)),
+                  Text('$debitedLabel : ${_short(_crew.first)}'),
+                  Text('Mode : ${pricingModeLabel(_pricingMode)}'),
+                  if (conflict != null)
+                    Text(
+                      describeConflict(
+                        ConflictInfo(
+                          start: conflict.other.start,
+                          end: conflict.other.end,
+                          aircraft: conflict.other.aircraft,
+                          crew: conflict.other.crew,
+                          passengers: conflict.other.passengers,
+                          kind: conflictCause(conflict.candidate, conflict.other.toRule()).kind,
+                          members: conflictCause(conflict.candidate, conflict.other.toRule()).members,
+                        ),
+                        _dir,
                       ),
-                      _dir,
-                    ),
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  )
-                else if (decision.status == 'valide')
-                  const Text('Aucun conflit connu.'),
-                Text('Aperçu indicatif : la décision finale revient au serveur.',
-                    style: Theme.of(context).textTheme.bodySmall),
-              ]),
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    )
+                  else if (decision.status == 'valide')
+                    const Text('Aucun conflit connu.'),
+                  Text('Aperçu indicatif : la décision finale revient au serveur.',
+                      style: Theme.of(context).textTheme.bodySmall),
+                ]),
+              ),
             ),
-          ),
+          ],
         ],
       ),
+      bottomNavigationBar: buttons.isEmpty
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(spacing: 8, runSpacing: 8, children: buttons),
+              ),
+            ),
     );
   }
 }
@@ -536,6 +619,45 @@ class _PassengerDialogState extends State<_PassengerDialog> {
         FilledButton(
             onPressed: () => Navigator.pop(context, _c.text.trim()),
             child: const Text('Ajouter')),
+      ],
+    );
+  }
+}
+
+/// Dialogue « refuser la demande » : possède son propre contrôleur (dispose
+/// naturel à la fermeture, comme _PassengerDialog) plutôt qu'un contrôleur
+/// créé dans _refuse et disposé juste après le pop, qui plante pendant
+/// l'animation de fermeture ("TextEditingController used after being
+/// disposed").
+class _RefuseDialog extends StatefulWidget {
+  const _RefuseDialog();
+
+  @override
+  State<_RefuseDialog> createState() => _RefuseDialogState();
+}
+
+class _RefuseDialogState extends State<_RefuseDialog> {
+  final _c = TextEditingController();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Refuser la demande'),
+      content: TextField(
+        key: const Key('refuse-reason'),
+        controller: _c,
+        decoration: const InputDecoration(labelText: 'Motif (facultatif)'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Retour')),
+        FilledButton(
+            onPressed: () => Navigator.pop(context, _c.text), child: const Text('Refuser')),
       ],
     );
   }

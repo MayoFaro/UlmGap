@@ -5,8 +5,7 @@ import '../../data/app_user.dart';
 import '../../data/services.dart';
 import '../admin/aircraft_admin_screen.dart';
 import '../admin/users_admin_screen.dart';
-import '../flight/flight_detail_screen.dart';
-import '../flight/flight_form_screen.dart';
+import '../flight/flight_screen.dart';
 import '../planning/planning_screen.dart';
 
 class HomeShell extends StatelessWidget {
@@ -50,7 +49,7 @@ class HomeShell extends StatelessWidget {
       body: PlanningScreen(
         me: user,
         onOpen: (f) => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => FlightDetailScreen(flightId: f.id, me: user),
+          builder: (_) => FlightScreen(me: user, flight: f),
         )),
       ),
       floatingActionButton: (user.isAdmin || user.profile != null)
@@ -58,7 +57,7 @@ class HomeShell extends StatelessWidget {
               tooltip: 'Nouveau vol',
               child: const Icon(Icons.add),
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => FlightFormScreen(me: user),
+                builder: (_) => FlightScreen(me: user),
               )),
             )
           : null,
