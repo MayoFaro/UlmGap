@@ -1,0 +1,82 @@
+import * as admin from "firebase-admin";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { Caller, CallerProfile, requireActiveUser } from "../auth/guards";
+import { asInvalid } from "../common/errors";
+import { PricingMode, decideStatus } from "../rules/flights";
+import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
+import { validateFlightId, validateFlightInput } from "./validation";
+
+/** Spec §4.1 : un instructeur ou un admin choisit « carburant seulement ». */
+const mayChoose = (me: CallerProfile) => me.isAdmin || me.profile === "instructeur";
+
+function assertFuture(start: number, now: number): void {
+  if (start <= now) throw new HttpsError("failed-precondition", "L'heure de départ est passée.");
+}
+
+export async function createFlight(
+  caller: Caller | undefined, data: unknown,
+): Promise<{ id: string; status: string }> {
+  const db = admin.firestore();
+  const me = await requireActiveUser(db, caller);
+  const input = asInvalid(() => validateFlightInput(data));
+  // Seul un admin saisit après coup un vol passé (vol oublié).
+  if (!me.isAdmin) assertFuture(input.start, Date.now());
+  const ref = db.collection("flights").doc();
+
+  const status = await db.runTransaction(async (tx) => {
+    const p = await planFlight(tx, db, {
+      id: ref.id, input, mayChoose: mayChoose(me),
+      decide: (crew) => decideStatus(me, crew, input.passengers.length),
+    });
+    touchLocks(tx, p.locks);
+    tx.create(ref, {
+      ...p.fields,
+      createdBy: me.uid,
+      refusalReason: null,
+      customAmount: null,
+      shortFlightAmount: null,
+      pricingSnapshot: null, // figé au passage en valide à partir du plan 3
+      isClosed: false,
+      actualFlightMinutes: null,
+      closedBy: null,
+      closedAt: null,
+      billedAmount: null,
+      billedTo: null,
+      reminderGen: 0,
+      deleted: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return p.status;
+  });
+  return { id: ref.id, status };
+}
+
+export async function updateFlight(caller: Caller | undefined, data: unknown): Promise<{ status: string }> {
+  const db = admin.firestore();
+  const me = await requireActiveUser(db, caller);
+  const flightId = asInvalid(() => validateFlightId(data));
+  const input = asInvalid(() => validateFlightInput(data));
+  const now = Date.now();
+  assertFuture(input.start, now);
+  const ref = db.collection("flights").doc(flightId);
+
+  const status = await db.runTransaction(async (tx) => {
+    const f = await loadFlight(tx, ref);
+    if (f.get("createdBy") !== me.uid) {
+      throw new HttpsError("permission-denied", "Seul le créateur peut modifier ce vol.");
+    }
+    assertNotStarted(f, now);
+    const p = await planFlight(tx, db, {
+      id: ref.id, input, mayChoose: mayChoose(me),
+      previousMode: f.get("pricingMode") as PricingMode,
+      decide: (crew) => decideStatus(me, crew, input.passengers.length),
+    });
+    touchLocks(tx, p.locks);
+    tx.update(ref, { ...p.fields, refusalReason: null });
+    return p.status;
+  });
+  return { status };
+}
+
+export const createFlightFn = onCall((req) => createFlight(req.auth as Caller | undefined, req.data));
+export const updateFlightFn = onCall((req) => updateFlight(req.auth as Caller | undefined, req.data));
