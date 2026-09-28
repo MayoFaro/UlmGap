@@ -24,5 +24,24 @@ void main() {
     expect(c.aircraft, 'F-JABC');
     expect(c.crew, ['u1']);
     expect(c.passengers, ['Paul']);
+    expect(c.kind, 'aircraft'); // défaut quand absent
+    expect(c.members, isEmpty);
+  });
+
+  test('conflit : kind et members décodés quand présents', () {
+    final f = flightFailureFrom('Conflit avec un autre vol validé.', {
+      'conflict': {
+        'start': DateTime(2026, 10, 12, 9).millisecondsSinceEpoch,
+        'end': DateTime(2026, 10, 12, 10).millisecondsSinceEpoch,
+        'aircraft': 'F-JABC',
+        'crew': ['u1', 'u2'],
+        'passengers': [],
+        'kind': 'crew',
+        'members': ['u2'],
+      }
+    });
+    final c = (f as FlightConflict).conflict;
+    expect(c.kind, 'crew');
+    expect(c.members, ['u2']);
   });
 }

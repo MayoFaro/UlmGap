@@ -40,17 +40,19 @@ Decision decideStatus({
   required int passengers,
 }) {
   final instructorUid = designatedInstructor(creatorUid, crew);
-  if (creatorIsAdmin) return Decision.ok('valide', instructorUid);
+  if (creatorIsAdmin || creatorProfile == 'instructeur') {
+    return Decision.ok('valide', instructorUid);
+  }
   if (!crew.any((p) => p.uid == creatorUid)) {
     return const Decision.refused('Vous devez faire partie de l\'équipage.');
   }
   if (creatorProfile == null) {
     return const Decision.refused('Un compte non pilote ne peut pas créer de vol.');
   }
-  if (creatorProfile == 'instructeur') return Decision.ok('valide', instructorUid);
   if (instructorUid != null) return Decision.ok('demande', instructorUid);
   if (creatorProfile == 'eleve') {
-    return const Decision.refused('Un élève ne peut voler qu\'avec un instructeur.');
+    return const Decision.refused(
+        'Impossible de créer un vol à votre profit sans la présence d\'un instructeur.');
   }
   if (crew.length + passengers == 2 && creatorProfile == 'lache_solo') {
     return const Decision.refused('Un lâché solo ne vole à deux qu\'avec un instructeur.');
@@ -67,8 +69,23 @@ String resolvePricingMode({
 }) {
   if (!allGap) return 'standard';
   if (hasPassenger) return 'fuel_only';
-  if (!mayChoose) return 'standard';
+  if (!mayChoose) return previous == 'fuel_only' ? 'fuel_only' : 'standard';
   return (requested ?? previous ?? 'standard') == 'fuel_only' ? 'fuel_only' : 'standard';
+}
+
+/// Décision utilisateur : hors instructeurs et admins, le créateur est le
+/// compte débité (spec §4.2, mirroir functions/src/rules/flights.ts).
+String? checkPayer({
+  required String creatorUid,
+  required String? creatorProfile,
+  required bool creatorIsAdmin,
+  required List<String> crew,
+}) {
+  if (creatorIsAdmin || creatorProfile == 'instructeur') return null;
+  if (!crew.contains(creatorUid)) return null; // laissé à la matrice (decideStatus)
+  return crew.isNotEmpty && crew[0] == creatorUid
+      ? null
+      : 'Le compte débité doit être le vôtre : placez-vous en premier.';
 }
 
 class RuleFlight {
@@ -100,4 +117,10 @@ RuleFlight? findConflict(RuleFlight c, Iterable<RuleFlight> others) {
     if (o.aircraftId == c.aircraftId || o.crew.any(c.crew.contains)) return o;
   }
   return null;
+}
+
+/// Cause d'un conflit : l'appareil d'abord, sinon les personnes communes.
+({String kind, List<String> members}) conflictCause(RuleFlight candidate, RuleFlight other) {
+  if (candidate.aircraftId == other.aircraftId) return (kind: 'aircraft', members: const <String>[]);
+  return (kind: 'crew', members: candidate.crew.where(other.crew.contains).toList());
 }

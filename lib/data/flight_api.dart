@@ -21,12 +21,16 @@ class ConflictInfo {
     required this.aircraft,
     required this.crew,
     required this.passengers,
+    this.kind = 'aircraft',
+    this.members = const [],
   });
   final DateTime start;
   final DateTime end;
   final String aircraft;
   final List<String> crew; // uids
   final List<String> passengers;
+  final String kind; // 'aircraft' | 'crew'
+  final List<String> members; // uids en commun, quand kind == 'crew'
 }
 
 class FlightConflict extends FlightFailure {
@@ -46,6 +50,8 @@ FlightFailure flightFailureFrom(String message, Object? details) {
       aircraft: (c['aircraft'] as String?) ?? '',
       crew: (c['crew'] as List?)?.cast<String>() ?? const [],
       passengers: (c['passengers'] as List?)?.cast<String>() ?? const [],
+      kind: (c['kind'] as String?) ?? 'aircraft',
+      members: (c['members'] as List?)?.cast<String>() ?? const [],
     ),
   );
 }

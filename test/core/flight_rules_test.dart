@@ -60,11 +60,35 @@ void main() {
 
   for (final c in (fx['conflicts'] as List).cast<Map<String, dynamic>>()) {
     test('conflit : ${c['name']}', () {
+      final candidate = rf(c['candidate'] as Map<String, dynamic>);
       final hit = findConflict(
-        rf(c['candidate'] as Map<String, dynamic>),
+        candidate,
         (c['others'] as List).cast<Map<String, dynamic>>().map(rf),
       );
       expect(hit?.id, c['expected']);
+      final expectedCause = c['expectedCause'] as Map<String, dynamic>?;
+      if (expectedCause != null) {
+        final cause = conflictCause(candidate, hit!);
+        expect(cause.kind, expectedCause['kind']);
+        expect(cause.members, (expectedCause['members'] as List).cast<String>());
+      }
+    });
+  }
+
+  for (final c in (fx['payer'] as List).cast<Map<String, dynamic>>()) {
+    test('payeur : ${c['name']}', () {
+      final creator = c['creator'] as Map<String, dynamic>;
+      final result = checkPayer(
+        creatorUid: creator['uid'] as String,
+        creatorProfile: creator['profile'] as String?,
+        creatorIsAdmin: creator['isAdmin'] as bool,
+        crew: (c['crew'] as List).cast<String>(),
+      );
+      if (c['ok'] as bool) {
+        expect(result, isNull);
+      } else {
+        expect(result, 'Le compte débité doit être le vôtre : placez-vous en premier.');
+      }
     });
   }
 }

@@ -28,6 +28,20 @@ String pricingModeLabel(String mode) => switch (mode) {
 String crewText(List<String> crew, List<String> passengers, Map<String, CrewMember> dir) =>
     [...crew.map((u) => dir[u]?.shortName ?? '?'), ...passengers].join('/');
 
-String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) =>
-    'Conflit avec le vol du ${formatDay(c.start)}, ${formatRange(c.start, c.end)}, '
-    '${c.aircraft}, ${crewText(c.crew, c.passengers, dir)}.';
+/// Libellé du compte débité (anciennement « Payeur »).
+const debitedLabel = 'Compte débité';
+
+/// Mise en évidence des vols où l'utilisateur est dans l'équipage.
+const highlightFill = Color(0xFFE3F2FD);
+const highlightBorder = Color(0xFF1E88E5);
+
+/// Explique la cause d'un conflit : appareil (prioritaire) ou personne commune.
+String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {
+  final when = '${formatDay(c.start)}, ${formatRange(c.start, c.end)}';
+  final crew = crewText(c.crew, c.passengers, dir);
+  if (c.kind == 'crew') {
+    final members = c.members.map((u) => dir[u]?.shortName ?? '?').join('/');
+    return 'Conflit : $members est déjà sur le vol du $when (${c.aircraft}, $crew).';
+  }
+  return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew).';
+}

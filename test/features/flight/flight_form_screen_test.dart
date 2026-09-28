@@ -87,12 +87,14 @@ void main() {
     final a = api();
     await tester.pumpWidget(host(a, testUser(uid: 'u1')));
     await tester.pumpAndSettle();
-    expect(preview(tester), contains('Impossible : Un élève ne peut voler qu\'avec un instructeur.'));
+    expect(preview(tester),
+        contains('Impossible : Impossible de créer un vol à votre profit sans la présence d\'un instructeur.'));
     await pickAircraft(tester);
     await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
     await saveAndConfirm(tester);
     expect(a.created, isEmpty);
-    expect(find.text('Un élève ne peut voler qu\'avec un instructeur.'), findsOneWidget);
+    expect(find.text('Impossible de créer un vol à votre profit sans la présence d\'un instructeur.'),
+        findsOneWidget);
   });
 
   testWidgets('ordre modifiable : le payeur change', (tester) async {
@@ -127,7 +129,7 @@ void main() {
     await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'lache_toute_mission')));
     await tester.pumpAndSettle();
     await pickAircraft(tester);
-    expect(preview(tester), contains('Conflit avec le vol du lundi 12 octobre, 09:30–10:30, F-JABC, LAC.'));
+    expect(preview(tester), contains('Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:30–10:30 (LAC).'));
   });
 
   testWidgets('carburant seulement : proposé à un instructeur GAP pour un vol entre GAP', (tester) async {
@@ -174,7 +176,7 @@ void main() {
     await pickAircraft(tester);
     await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
     await saveAndConfirm(tester);
-    expect(find.text('Conflit avec le vol du lundi 12 octobre, 09:00–10:00, F-JABC, INS.'),
+    expect(find.text('Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:00–10:00 (INS).'),
         findsOneWidget);
   });
 
