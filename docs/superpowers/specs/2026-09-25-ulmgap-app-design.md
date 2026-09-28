@@ -71,8 +71,8 @@ détermine le forfait et le taux de dépassement (§4).
 
 **Admin** (`users.isAdmin`) : un drapeau indépendant du profil. Un admin gère
 les comptes, les profils, les catégories, les appareils et les tarifs. Il peut
-corriger ou supprimer n'importe quel vol, et il est le seul à pouvoir créer un
-vol dont il ne fait pas partie. Le premier admin de chaque projet est créé à la
+corriger ou supprimer n'importe quel vol. Un admin ou un instructeur peut créer
+un vol dont il ne fait pas partie (révision du 2026-09-28). Le premier admin de chaque projet est créé à la
 main dans la console Firebase.
 
 ## 2. Modèle de données (Firestore, identique en dev et en prod)
@@ -172,14 +172,14 @@ Règle absolue : **le solde n'est jamais modifié sans sa ligne d'historique**,
 
 ### 3.2 Création (`createFlight`)
 
-Hors admin, **le créateur doit figurer dans `crew`**. Statut obtenu :
+Hors admin et instructeur, **le créateur doit figurer dans `crew`**. Statut obtenu :
 
 | Créateur | Seul | À deux, sans instructeur | Avec un instructeur autre que lui |
 |---|---|---|---|
 | Élève | ✗ refusé | ✗ refusé | `demande` |
 | Lâché solo | `valide` | ✗ refusé | `demande` |
 | Lâché toute mission | `valide` | `valide` | `demande` |
-| Instructeur | `valide` | `valide` | `valide` (deux instructeurs) |
+| Instructeur (dans l'équipage ou non) | `valide` | `valide` | `valide` (deux instructeurs) |
 | Admin (dans l'équipage ou non) | `valide` | `valide` | `valide` |
 | Non pilote, non admin | ✗ refusé | ✗ refusé | ✗ refusé |
 
@@ -233,7 +233,7 @@ sont ouvertes : une fin égale à un début n'est pas un conflit.
 | Mode | Condition | Choix |
 |---|---|---|
 | `standard` | Tous les vols | Par défaut, sauf le cas ci-dessous |
-| `fuel_only` | **Tous les membres de `crew` sont d'appartenance `GAP`** (un passager sans compte ne l'empêche pas) | **Par défaut** si l'équipage GAP emmène un passager sans compte. Pour un vol entre GAP sans passager : au choix d'un instructeur (créateur ou validateur) ou d'un admin |
+| `fuel_only` | **Tous les membres de `crew` sont d'appartenance `GAP`** (un passager sans compte ne l'empêche pas) | **Par défaut** si l'équipage GAP emmène un passager sans compte. Pour un vol entre GAP sans passager : au choix d'un instructeur (créateur ou validateur) ou d'un admin ; ce choix est conservé quand un non-instructeur modifie le vol, sauf si c'est un passager qui l'imposait |
 | `custom` (facturé hors app) | **Tout vol avec un passager sans compte**, quelle que soit l'appartenance du pilote | **Décidé à la clôture** : « montant différent », avec la saisie du montant |
 
 La Function vérifie ces conditions à chaque écriture. Si l'équipage change et
@@ -242,10 +242,11 @@ que la condition n'est plus remplie, le vol repasse en `standard`.
 ### 4.2 Payeur
 
 Règle unique, valable pour tous les vols : **le premier inscrit dans `crew`
-paie**. DPS/LDX : DPS paie. LDX/DPS : LDX paie. L'app place le créateur en
-premier par défaut, et l'ordre reste modifiable. Le formulaire affiche en
-clair « Payeur : XXX » pour qu'on puisse inverser l'ordre avant
-d'enregistrer. Un passager sans compte ne paie jamais sur un solde.
+paie** (« compte débité »). DPS/LDX : DPS paie. LDX/DPS : LDX paie. L'app place
+le créateur en premier. Révision du 2026-09-28 : hors instructeurs et admins,
+le créateur est obligatoirement le premier (le serveur le vérifie) ; seuls les
+instructeurs et les admins peuvent changer l'ordre. Le formulaire affiche en
+clair « Compte débité : XXX ». Un passager sans compte ne paie jamais sur un solde.
 
 ### 4.3 Coût
 

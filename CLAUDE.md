@@ -9,6 +9,7 @@ doivent jamais accéder à AppGAP.
 - Spec (autorité) : `docs/superpowers/specs/2026-09-25-ulmgap-app-design.md`
 - Plan 1, le socle (terminé) : `docs/superpowers/plans/2026-09-25-ulmgap-01-socle.md`
 - Plan 2, vols et matrice de droits (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02-vols.md`
+- Plan 2b, retours de recette du plan 2 (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02b-retours-recette.md`
 - Découpage prévu des plans suivants :
   2. vols et matrice de droits ;
   3. finances (forfaits, crédit FCFA, relevé) ;
@@ -49,8 +50,8 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-09-28
 
-- Plans 1 et 2 terminés. `feature/socle` est fusionnée dans `main` ; le plan 2
-  est sur la branche `feature/vols` (non fusionnée).
+- Plans 1, 2 et 2b terminés. `feature/socle` est fusionnée dans `main` ; les plans 2 et 2b
+  sont sur la branche `feature/vols` (non fusionnée).
 - Points mineurs M1 à M9 du plan 1 soldés au plan 2.
 - En dev : Authentication activé, premier admin créé (DPS), règles et
   Functions du plan 2 déployées (`createFlight`, `updateFlight`,
@@ -61,6 +62,11 @@ d'où le JDK d'Android Studio.
   scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
   activer (e-mail et mot de passe, création de compte par l'utilisateur
   désactivée).
+- Plan 2b déployé en dev : compte débité imposé, « carburant seulement »
+  conservé, fenêtre unique par vol, planning en colonnes par appareil.
+- Comptes de test en dev (e-mails `test-…@ulmgap.invalid`, déjà vérifiés) :
+  `cd functions && npm run build && node scripts/seed-test-users.js --project ulmgap-dev --password <8 car. min.>`
+  (refusé pour tout autre projet).
 - Android : toujours passer `--flavor` et `--dart-define=ENV` ensemble ; une
   discordance bloque l'app au démarrage.
 
@@ -77,10 +83,9 @@ d'où le JDK d'Android Studio.
   peut déjà créer après coup un vol passé via `createFlight`).
 - Une demande expirée reste `demande` en base (statut calculé côté app) : le
   pont AppGAP ne copie que les vols `valide`, donc aucun impact.
-- Questions ouvertes pour l'utilisateur : consentement du payeur (le créateur
-  choisit `crew[0]`, qui paiera) ; faut-il garder « carburant seulement »
-  quand un non-instructeur modifie un vol entre GAP (aujourd'hui il repasse
-  en standard et le vol redevient une demande s'il y a un instructeur).
+- Pour les vols validés avant le plan 2b, le compte débité peut ne pas être
+  le créateur : un créateur non instructeur doit alors retirer puis rajouter
+  l'autre membre pour modifier le vol (données de dev seulement).
 
 ### Rappel côté AppGAP (plan 6)
 
