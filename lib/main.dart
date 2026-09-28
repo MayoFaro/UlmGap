@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'core/env.dart';
+import 'data/admin_api.dart';
 import 'data/auth_service.dart';
 import 'data/services.dart';
 import 'data/user_repository.dart';
@@ -14,6 +15,7 @@ Future<void> main() async {
   runApp(AppServices(
     auth: FirebaseAuthService(),
     users: FirestoreUserRepository(),
+    admin: FirebaseAdminApi(),
     child: UlmGapApp(env: appEnv, home: const AppGate()),
   ));
 }

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:ulmgap/data/admin_api.dart';
+import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/auth_service.dart';
 import 'package:ulmgap/data/user_repository.dart';
@@ -59,3 +61,41 @@ AppUser testUser({
       'active': active,
       'balance': 0,
     });
+
+// --- ajouts Task 8 ---
+class FakeAdminApi implements AdminApi {
+  final usersCtrl = StreamController<List<AppUser>>.broadcast();
+  final aircraftCtrl = StreamController<List<Aircraft>>.broadcast();
+  List<AppUser> users = [];
+  List<Aircraft> aircraft = [];
+  final created = <Map<String, dynamic>>[];
+  final updated = <String, Map<String, dynamic>>{};
+  final upserted = <Map<String, dynamic>>[];
+
+  @override
+  Stream<List<AppUser>> watchAllUsers() async* {
+    yield users;
+    yield* usersCtrl.stream;
+  }
+
+  @override
+  Future<String> createUser(Map<String, dynamic> input) async {
+    created.add(input);
+    return 'new-uid';
+  }
+
+  @override
+  Future<void> updateUser(String uid, Map<String, dynamic> patch) async => updated[uid] = patch;
+
+  @override
+  Stream<List<Aircraft>> watchAircraft() async* {
+    yield aircraft;
+    yield* aircraftCtrl.stream;
+  }
+
+  @override
+  Future<String> upsertAircraft(Map<String, dynamic> input) async {
+    upserted.add(input);
+    return 'a-new';
+  }
+}
