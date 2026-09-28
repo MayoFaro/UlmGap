@@ -9,6 +9,7 @@ if (admin.apps.length === 0) {
 import { createUser, updateUser } from "./users";
 import { upsertAircraft } from "./aircraft";
 import { bootstrapAdmin } from "./bootstrap";
+import { seedTestUsers, TEST_ACCOUNTS } from "./seed";
 import type { Caller } from "../auth/guards";
 
 const db = admin.firestore();
@@ -226,4 +227,42 @@ test("M8 : bootstrap d'un nouvel admin : users et profiles complets", async () =
   assert.ok(u.createdAt);
   assert.deepEqual((await db.collection("profiles").doc(uid).get()).data(),
     { displayName: "Neuf", shortName: "NEU", profile: null, active: true });
+});
+
+test("seedTestUsers : crée 8 comptes vérifiés, avec documents users et profiles complets", async () => {
+  const emails = await seedTestUsers(admin.auth(), db, "password1234");
+  assert.equal(emails.length, 8);
+  for (const account of TEST_ACCOUNTS) {
+    const email = `test-${account.code}@ulmgap.invalid`;
+    assert.ok(emails.includes(email));
+    const rec = await admin.auth().getUserByEmail(email);
+    assert.equal(rec.emailVerified, true);
+    assert.equal(rec.disabled, false);
+    const u = (await db.collection("users").doc(rec.uid).get()).data()!;
+    assert.equal(u.email, email);
+    assert.equal(u.displayName, account.name);
+    assert.equal(u.shortName, account.short);
+    assert.equal(u.profile, account.profile);
+    assert.equal(u.category, account.category);
+    assert.equal(u.isAdmin, false);
+    assert.equal(u.active, true);
+    assert.equal(u.balance, 0);
+    const p = (await db.collection("profiles").doc(rec.uid).get()).data()!;
+    assert.deepEqual(p, {
+      displayName: account.name, shortName: account.short, profile: account.profile, active: true,
+    });
+  }
+});
+
+test("seedTestUsers : une relance conserve un balance modifié entre-temps", async () => {
+  await seedTestUsers(admin.auth(), db, "password1234");
+  const email = `test-${TEST_ACCOUNTS[0].code}@ulmgap.invalid`;
+  const { uid } = await admin.auth().getUserByEmail(email);
+  await db.collection("users").doc(uid).update({ balance: 4242 });
+  const emails = await seedTestUsers(admin.auth(), db, "newpassword1");
+  assert.equal(emails.length, 8);
+  assert.equal((await db.collection("users").doc(uid).get()).get("balance"), 4242);
+  const rec = await admin.auth().getUser(uid);
+  assert.equal(rec.emailVerified, true);
+  assert.equal(rec.disabled, false);
 });

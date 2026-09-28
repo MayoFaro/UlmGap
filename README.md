@@ -50,3 +50,29 @@ node scripts/bootstrap-admin.js --project ulmgap-dev --email moi@x.fr --name "Mo
 
 Ouvrir le lien affiché pour définir le mot de passe, puis se connecter à
 l'app et vérifier l'e-mail.
+
+## Comptes de test (dev)
+
+Réservé à `ulmgap-dev` (ou un projet d'émulateur `demo-*`) : refusé sur tout
+autre projet, y compris la prod. Crée 8 comptes fixes (un par profil et
+appartenance), e-mail déjà vérifié, mot de passe fourni en argument.
+Relançable sans risque : les comptes déjà créés sont remis à niveau (mot de
+passe, vérification) sans toucher leur solde.
+
+```bash
+cd functions && npm run build
+node scripts/seed-test-users.js --project ulmgap-dev --password <mot de passe, 8 car. min>
+```
+
+Comptes créés (e-mail `test-<code>@ulmgap.invalid`) :
+
+| code | Nom | Profil | Appartenance |
+|---|---|---|---|
+| eleve-ext | Élève Externe | eleve | EXT |
+| eleve-gap | Élève GAP | eleve | GAP |
+| solo-gap | Lâché Solo GAP | lache_solo | GAP |
+| ltm-gap | Lâché Mission GAP | lache_toute_mission | GAP |
+| ltm-mil | Lâché Mission MIL | lache_toute_mission | MIL |
+| instr-gap | Instructeur GAP | instructeur | GAP |
+| instr-gr | Instructeur GR | instructeur | GR |
+| gest-gap | Gestionnaire GAP | — | GAP |
