@@ -33,3 +33,13 @@ npm run test:int         # émulateurs Auth + Firestore (nécessite Java 21)
 Les émulateurs de `firebase-tools` 15 exigent Java 21. Sur cette machine,
 utiliser le JDK d'Android Studio :
 `JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH npm run test:int`.
+
+## Premier admin (une fois par projet)
+
+```bash
+cd functions && npm run build
+node scripts/bootstrap-admin.js --project ulmgap-dev --email moi@x.fr --name "Mon Nom" --short ABC
+```
+
+Ouvrir le lien affiché pour définir le mot de passe, puis se connecter à
+l'app et vérifier l'e-mail.
