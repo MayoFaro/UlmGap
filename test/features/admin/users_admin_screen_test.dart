@@ -73,4 +73,27 @@ void main() {
     expect(api.updated['u1']!.containsKey('email'), isFalse);
     expect(api.updated['u1']!['shortName'], 'JDU');
   });
+
+  testWidgets('I3 : compte créé mais lien non envoyé → message explicite', (tester) async {
+    final api = FakeAdminApi()..failPasswordLink = true;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Nouveau compte'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('f-email')), 'p@club.fr');
+    await tester.enterText(find.byKey(const Key('f-name')), 'Paul');
+    await tester.enterText(find.byKey(const Key('f-short')), 'PMA');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Compte créé, mais'), findsOneWidget);
+  });
+
+  testWidgets('I3 : « Envoyer le lien de mot de passe » depuis la liste', (tester) async {
+    final api = FakeAdminApi()..users = [testUser(uid: 'u1')];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Envoyer le lien de mot de passe'));
+    await tester.pumpAndSettle();
+    expect(api.linksSent, ['jean@club.fr']);
+  });
 }

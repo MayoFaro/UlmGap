@@ -86,11 +86,18 @@ class FakeAdminApi implements AdminApi {
     yield* usersCtrl.stream;
   }
 
+  bool failPasswordLink = false;
+  final linksSent = <String>[];
+
   @override
   Future<String> createUser(Map<String, dynamic> input) async {
     created.add(input);
+    if (failPasswordLink) throw const PasswordLinkNotSent('new-uid');
     return 'new-uid';
   }
+
+  @override
+  Future<void> sendPasswordLink(String email) async => linksSent.add(email);
 
   @override
   Future<void> updateUser(String uid, Map<String, dynamic> patch) async => updated[uid] = patch;
