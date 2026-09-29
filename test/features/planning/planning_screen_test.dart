@@ -265,7 +265,7 @@ void main() {
     // donc, comme le fait déjà le test « 1600px » ci-dessus, que chaque
     // en-tête n'est pas rogné à gauche (donc visible sans défilement) et que
     // sa largeur correspond bien à la répartition en 4 colonnes.
-    const expectedWidth = (1600 - 8) / 4;
+    const expectedWidth = (1600 - 8 * 3) / 4; // 4 colonnes et 3 espaces de 8 px
     for (final id in ['a1', 'a2', 'a3', 'a4']) {
       final headFinder = find.byKey(Key('head-$id'));
       expect(headFinder, findsOneWidget);
@@ -274,6 +274,8 @@ void main() {
       expect(topLeft.dx, greaterThanOrEqualTo(0));
       expect((width - expectedWidth).abs(), lessThanOrEqualTo(2));
     }
+    // Aucun débordement : la dernière colonne se termine dans l'écran.
+    expect(tester.getTopRight(find.byKey(const Key('col-a4'))).dx, lessThanOrEqualTo(1600));
   });
 
   testWidgets(
@@ -304,6 +306,7 @@ void main() {
       expect(headFinder, findsOneWidget);
       expect(tester.getTopLeft(headFinder).dx, greaterThanOrEqualTo(0));
     }
+    expect(tester.getTopRight(find.byKey(const Key('col-a3'))).dx, lessThanOrEqualTo(800));
   });
 
   testWidgets('en-tête d\'appareils épinglée pendant le défilement vertical', (tester) async {

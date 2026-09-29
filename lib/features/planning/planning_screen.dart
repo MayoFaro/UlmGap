@@ -247,10 +247,12 @@ class _PlanningScreenState extends State<PlanningScreen> {
         // Sur un écran large, on répartit la largeur disponible entre toutes
         // les colonnes (sans défilement) tant que chacune reste lisible ;
         // sinon (mobile), on garde la règle historique avec défilement.
+        // Largeur qui fait tenir exactement n colonnes et leurs n-1 espaces de 8 px.
+        final fitWidth = (w - 8.0 * (n - 1)) / n;
         final colWidth = n <= 1
             ? w
-            : (w - 8) / n >= minFitColumnWidth
-                ? (w - 8) / n
+            : fitWidth >= minFitColumnWidth
+                ? fitWidth
                 : math.max((w - 8) / 2, 160.0);
         final gridWidth = columns.length <= 1
             ? w
