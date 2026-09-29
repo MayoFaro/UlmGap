@@ -10,6 +10,7 @@ import { createUser, updateUser } from "./users";
 import { upsertAircraft } from "./aircraft";
 import { bootstrapAdmin } from "./bootstrap";
 import { seedTestUsers, TEST_ACCOUNTS } from "./seed";
+import { seedInitialCredit } from "./seed-credit";
 import type { Caller } from "../auth/guards";
 
 const db = admin.firestore();
@@ -253,6 +254,37 @@ test("seedTestUsers : crée 8 comptes vérifiés, avec documents users et profil
       displayName: account.name, shortName: account.short, profile: account.profile, active: true,
     });
   }
+});
+
+test("seedInitialCredit : crédite chaque compte une fois, avec balanceAfter correct ; une relance ignore tout", async () => {
+  const withBalance = await seedUser(`a-${uniq()}`, { isAdmin: true, balance: 1000 });
+  const withoutBalance = await seedUser(`a-${uniq()}`, { isAdmin: true });
+
+  const first = await seedInitialCredit(db, 500000);
+  assert.ok(first.credited.includes(withBalance.uid));
+  assert.ok(first.credited.includes(withoutBalance.uid));
+  assert.equal(first.skipped.length, 0);
+
+  assert.equal((await db.collection("users").doc(withBalance.uid).get()).get("balance"), 501000);
+  assert.equal((await db.collection("users").doc(withoutBalance.uid).get()).get("balance"), 500000);
+
+  const txSnap = await db.collection("transactions")
+    .where("userUid", "==", withBalance.uid)
+    .where("reason", "==", "Crédit initial (tests)")
+    .get();
+  assert.equal(txSnap.size, 1);
+  const tx = txSnap.docs[0].data();
+  assert.equal(tx.amount, 500000);
+  assert.equal(tx.type, "credit");
+  assert.equal(tx.by, "system");
+  assert.equal(tx.flightId, null);
+  assert.equal(tx.balanceAfter, 501000);
+
+  const second = await seedInitialCredit(db, 500000);
+  assert.equal(second.credited.length, 0);
+  assert.ok(second.skipped.includes(withBalance.uid));
+  assert.ok(second.skipped.includes(withoutBalance.uid));
+  assert.equal((await db.collection("users").doc(withBalance.uid).get()).get("balance"), 501000);
 });
 
 test("seedTestUsers : une relance conserve un balance modifié entre-temps", async () => {
