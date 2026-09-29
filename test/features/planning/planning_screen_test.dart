@@ -4,6 +4,7 @@ import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/flight/flight_texts.dart';
+import 'package:ulmgap/features/planning/flight_card.dart';
 import 'package:ulmgap/features/planning/planning_screen.dart';
 
 import '../../support/fakes.dart';
@@ -48,10 +49,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('lundi 12 octobre'), findsOneWidget);
     expect(find.text('mardi 13 octobre'), findsOneWidget);
-    // L'en-tête d'appareils est répété au-dessus des vols de chaque jour
-    // (fix planning, retours de recette) : deux jours, donc deux occurrences.
-    expect(find.text('ULM 1 (F-JABC)'), findsNWidgets(2));
-    expect(find.text('ULM 2 (F-JXYZ)'), findsNWidgets(2));
+    // L'en-tête d'appareils est affiché une seule fois, épinglé au-dessus de
+    // la grille (fix planning : plus de répétition par jour).
+    expect(find.text('ULM 1 (F-JABC)'), findsOneWidget);
+    expect(find.text('ULM 2 (F-JXYZ)'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const Key('col-a1')),
@@ -144,7 +145,7 @@ void main() {
   });
 
   testWidgets(
-      'après défilement horizontal : titre du jour et en-tête d\'appareil toujours visibles',
+      'après défilement horizontal : titre du jour toujours visible, en-tête A3 apparaît',
       (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -168,8 +169,9 @@ void main() {
 
     // Le titre du jour est hors du défilement horizontal : toujours visible.
     expect(tester.getTopLeft(find.text('lundi 12 octobre')).dx, greaterThanOrEqualTo(0));
-    // L'en-tête d'appareil A3 défile avec les colonnes : hors écran avant.
-    expect(find.text('A3 (F-CCC)').hitTestable(), findsNothing);
+    // L'en-tête (unique, épinglé) d'appareil A3 défile avec les colonnes :
+    // hors écran avant le défilement.
+    expect(find.byKey(const Key('head-a3')).hitTestable(), findsNothing);
 
     await tester.drag(find.byType(SingleChildScrollView).first, const Offset(-400, 0));
     await tester.pumpAndSettle();
@@ -179,9 +181,9 @@ void main() {
     // dans la fenêtre visible (contrairement à un texte étiré sur la largeur
     // de la grille, dont le bord gauche sortirait de l'écran ici).
     expect(tester.getTopLeft(find.text('lundi 12 octobre')).dx, greaterThanOrEqualTo(0));
-    // L'en-tête d'appareil A3, lui, défile avec les colonnes : désormais
-    // visible au-dessus des cartes de ce jour.
-    expect(find.text('A3 (F-CCC)').hitTestable(), findsOneWidget);
+    // La ligne d'en-têtes défile en synchronisation avec les jours : A3
+    // devient visible.
+    expect(find.byKey(const Key('head-a3')).hitTestable(), findsOneWidget);
   });
 
   testWidgets('mise en évidence des vols où l\'utilisateur est dans l\'équipage', (tester) async {
@@ -196,6 +198,70 @@ void main() {
 
     expect(_hasHighlightAncestor(find.textContaining('09:00–10:00')), isTrue);
     expect(_hasHighlightAncestor(find.textContaining('11:00–12:00')), isFalse);
+  });
+
+  testWidgets(
+      'en-tête d\'appareil unique par colonne, aligné avec les cartes (1600px)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final a = api()
+      ..flights = [
+        testFlight(id: 'v1', start: DateTime(2026, 10, 12, 9), aircraftId: 'a1', aircraft: 'F-JABC'),
+      ];
+    await tester.pumpWidget(host(a, testUser()));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // Le premier en-tête n'est pas rogné à gauche.
+    final headFinder = find.byKey(const Key('head-a1'));
+    final headLeft = tester.getTopLeft(headFinder).dx;
+    expect(headLeft, greaterThanOrEqualTo(0));
+
+    // La carte de la colonne a1 démarre au même x que son en-tête (± 8 px).
+    final cardFinder = find.descendant(
+      of: find.byKey(const Key('col-a1')),
+      matching: find.byType(FlightCard),
+    );
+    final cardLeft = tester.getTopLeft(cardFinder).dx;
+    expect((cardLeft - headLeft).abs(), lessThanOrEqualTo(8));
+
+    // La carte remplit (quasiment) la largeur de la colonne.
+    final colWidth = tester.getSize(find.byKey(const Key('col-a1'))).width;
+    final cardWidth = tester.getSize(cardFinder).width;
+    expect(cardWidth, greaterThanOrEqualTo(colWidth - 16));
+  });
+
+  testWidgets('en-tête d\'appareils épinglée pendant le défilement vertical', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final a = api()
+      ..flights = [
+        for (var i = 0; i < 15; i++)
+          testFlight(
+              id: 'v$i',
+              start: DateTime(2026, 10, 12 + i, 9),
+              aircraftId: 'a1',
+              aircraft: 'F-JABC'),
+      ];
+    await tester.pumpWidget(host(a, testUser()));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('head-a1')).hitTestable(), findsOneWidget);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.takeException(), isNull);
+
+    // L'en-tête reste épinglé en haut malgré le défilement vertical.
+    expect(find.byKey(const Key('head-a1')).hitTestable(), findsOneWidget);
   });
 
   testWidgets('vide et erreur', (tester) async {

@@ -52,53 +52,107 @@ List<_AircraftColumn> _columnsFor(List<Aircraft> aircraft, List<Flight> flights)
   return columns;
 }
 
+/// Hauteur fixe de la rangée d'en-têtes d'appareils épinglée en haut de la
+/// grille (voir [_AircraftHeaderDelegate]).
+const double _headerHeight = 40;
+
+/// En-tête d'appareils épinglé : reste visible en haut du CustomScrollView
+/// pendant le défilement vertical (SliverPersistentHeader). Hauteur fixe et
+/// fond opaque (couleur de fond de la page) pour que les cartes ne
+/// transparaissent pas dessous.
+class _AircraftHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _AircraftHeaderDelegate({required this.background, required this.child});
+
+  final Color background;
+  final Widget child;
+
+  @override
+  double get minExtent => _headerHeight;
+
+  @override
+  double get maxExtent => _headerHeight;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => Container(
+        height: _headerHeight,
+        color: background,
+        child: child,
+      );
+
+  @override
+  bool shouldRebuild(covariant _AircraftHeaderDelegate oldDelegate) =>
+      background != oldDelegate.background || child != oldDelegate.child;
+}
+
 class _PlanningScreenState extends State<PlanningScreen> {
   FlightApi? _api;
   Stream<List<Flight>>? _flights;
   Stream<List<CrewMember>>? _dir;
   Stream<List<Aircraft>>? _aircraft;
 
-  // Fix planning (retours de recette) : le titre de chaque jour doit rester
-  // visible pendant le défilement horizontal, donc il sort du
-  // SingleChildScrollView de la grille ; l'en-tête d'appareils est répété à
-  // l'intérieur de la zone défilante de CHAQUE jour (plutôt qu'une seule fois
-  // en haut de toute la grille). Pour que les colonnes restent alignées d'un
-  // jour à l'autre, chaque jour garde son propre ScrollController, mais tous
-  // sont liés : le défilement de l'un est répercuté sur les autres. Autre
-  // option envisagée (un seul ScrollController partagé pour tous les jours) :
-  // impossible ici, un SingleChildScrollView ne peut avoir qu'un seul enfant,
-  // et chaque jour a besoin de sa propre rangée d'en-têtes juste au-dessus de
-  // ses vols.
+  // Fix planning (retours de recette) : l'en-tête d'appareils est affiché une
+  // seule fois, épinglé en haut de la grille (SliverPersistentHeader), et non
+  // plus répété sous chaque titre de jour. La rangée d'en-têtes et chaque
+  // rangée de jour ont chacune leur propre défilement horizontal (pour
+  // partager le même SingleChildScrollView il faudrait une seule rangée par
+  // écran, ce qui empêcherait le titre de chaque jour de rester hors du
+  // défilement horizontal) ; tous ces ScrollController sont donc synchronisés
+  // entre eux, en-tête compris, pour que les colonnes restent alignées.
+  final ScrollController _headerScrollController = ScrollController();
   final Map<DateTime, ScrollController> _dayScrollControllers = {};
-  bool _syncingDayScroll = false;
+  final Set<ScrollController> _syncedControllers = {};
+  bool _syncingScroll = false;
 
-  ScrollController _dayScrollController(DateTime day) =>
-      _dayScrollControllers.putIfAbsent(day, () {
-        final controller = ScrollController();
-        controller.addListener(() => _syncDayScroll(controller));
-        return controller;
-      });
+  ScrollController _registerSynced(ScrollController controller) {
+    _syncedControllers.add(controller);
+    controller.addListener(() => _syncScroll(controller));
+    return controller;
+  }
 
-  void _syncDayScroll(ScrollController source) {
-    if (_syncingDayScroll || !source.hasClients) return;
-    _syncingDayScroll = true;
-    for (final other in _dayScrollControllers.values) {
+  void _syncScroll(ScrollController source) {
+    if (_syncingScroll || !source.hasClients) return;
+    _syncingScroll = true;
+    for (final other in _syncedControllers) {
       if (other != source && other.hasClients && other.offset != source.offset) {
         other.jumpTo(source.offset);
       }
     }
-    _syncingDayScroll = false;
+    _syncingScroll = false;
   }
 
+  ScrollController _dayScrollController(DateTime day) =>
+      _dayScrollControllers.putIfAbsent(day, () => _registerSynced(ScrollController()));
+
   /// Supprime les contrôleurs des jours qui ne sont plus affichés (sinon ils
-  /// fuiraient d'un rendu à l'autre, ex. après un changement de plage de vols).
+  /// fuiraient d'un rendu à l'autre, ex. après un changement de plage de
+  /// vols). La suppression de la liste a lieu immédiatement (pour ne pas
+  /// recréer/reconnecter un contrôleur déjà obsolète pendant ce même build),
+  /// mais le dispose() effectif est reporté après la frame en cours : on ne
+  /// dispose jamais un ScrollController pendant un build.
   void _pruneDayScrollControllers(Iterable<DateTime> currentDays) {
     final keep = currentDays.toSet();
+    final removed = <ScrollController>[];
     for (final day in _dayScrollControllers.keys.toList()) {
       if (!keep.contains(day)) {
-        _dayScrollControllers.remove(day)?.dispose();
+        final controller = _dayScrollControllers.remove(day);
+        if (controller != null) {
+          _syncedControllers.remove(controller);
+          removed.add(controller);
+        }
       }
     }
+    if (removed.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in removed) {
+        controller.dispose();
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _registerSynced(_headerScrollController);
   }
 
   @override
@@ -106,6 +160,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
     for (final c in _dayScrollControllers.values) {
       c.dispose();
     }
+    _headerScrollController.dispose();
     super.dispose();
   }
 
@@ -146,6 +201,17 @@ class _PlanningScreenState extends State<PlanningScreen> {
     final flights = (snap.data ?? const <Flight>[]).where((f) => !f.deleted).toList();
     final state = asyncState(snap, isEmpty: flights.isEmpty, empty: 'Aucun vol à venir.');
 
+    Widget header(String text) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+        );
+
+    if (state != null) {
+      return CustomScrollView(
+        slivers: [SliverFillRemaining(hasScrollBody: false, child: state)],
+      );
+    }
+
     final toValidate = flights
         .where((f) =>
             f.status == FlightStatus.demande &&
@@ -163,38 +229,8 @@ class _PlanningScreenState extends State<PlanningScreen> {
           mine: f.crew.contains(me.uid),
           onTap: () => widget.onOpen?.call(f),
         );
-    Widget header(String text) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(text, style: Theme.of(context).textTheme.titleMedium),
-        );
 
-    return ListView(
-      children: [
-        if (state != null)
-          state
-        else ...[
-          if (toValidate.isNotEmpty) ...[header('À valider'), ...toValidate.map(tile)],
-          if (mineList.isNotEmpty) ...[header('Mes demandes'), ...mineList.map(tile)],
-          _grid(context, flights, dir, aircraft, now, me, header),
-        ],
-      ],
-    );
-  }
-
-  /// Grille jour par jour, une colonne par appareil, défilement horizontal
-  /// unique pour que tous les jours défilent ensemble.
-  Widget _grid(
-    BuildContext context,
-    List<Flight> flights,
-    Map<String, CrewMember> dir,
-    List<Aircraft> aircraft,
-    DateTime now,
-    AppUser me,
-    Widget Function(String) header,
-  ) {
     final columns = _columnsFor(aircraft, flights);
-    if (columns.isEmpty) return const SizedBox.shrink();
-
     final byDay = <DateTime, List<Flight>>{};
     for (final f in flights) {
       byDay.putIfAbsent(dayOf(f.start), () => []).add(f);
@@ -218,29 +254,43 @@ class _PlanningScreenState extends State<PlanningScreen> {
           return Row(crossAxisAlignment: CrossAxisAlignment.start, children: children);
         }
 
-        Widget cell(_AircraftColumn col, {String? headerText, List<Flight>? dayFlights}) {
-          Widget content;
-          if (headerText != null) {
-            content = Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: Text(
-                headerText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall,
+        Widget headCell(_AircraftColumn col) => SizedBox(
+              key: Key('head-${col.aircraftId}'),
+              width: colWidth,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    col.header,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
             );
-          } else {
-            final dayList = (dayFlights ?? const <Flight>[])
-                .where((f) => f.aircraftId == col.aircraftId)
-                .toList()
-              ..sort((a, b) => a.start.compareTo(b.start));
-            content = dayList.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
+
+        Widget dayCell(_AircraftColumn col, List<Flight>? dayFlights) {
+          final dayList = (dayFlights ?? const <Flight>[])
+              .where((f) => f.aircraftId == col.aircraftId)
+              .toList()
+            ..sort((a, b) => a.start.compareTo(b.start));
+          final content = dayList.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
                     child: Text('—', style: TextStyle(color: Colors.grey)),
-                  )
-                : Column(
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       for (final f in dayList)
@@ -252,8 +302,8 @@ class _PlanningScreenState extends State<PlanningScreen> {
                           onTap: () => widget.onOpen?.call(f),
                         ),
                     ],
-                  );
-          }
+                  ),
+                );
           return SizedBox(
             key: Key('col-${col.aircraftId}'),
             width: colWidth,
@@ -261,30 +311,51 @@ class _PlanningScreenState extends State<PlanningScreen> {
           );
         }
 
-        // Le titre du jour est hors défilement (pleine largeur, toujours
-        // visible) ; l'en-tête d'appareils est répété à l'intérieur de la
-        // zone défilante propre à ce jour, juste au-dessus de ses vols.
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final day in byDay.keys) ...[
-              header(formatDay(day)),
-              SingleChildScrollView(
-                controller: _dayScrollController(day),
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: gridWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      rowOf([for (final c in columns) cell(c, headerText: c.header)]),
-                      rowOf([for (final c in columns) cell(c, dayFlights: byDay[day])]),
-                    ],
+        final background = Theme.of(context).scaffoldBackgroundColor;
+
+        return CustomScrollView(
+          slivers: [
+            if (toValidate.isNotEmpty) ...[
+              SliverToBoxAdapter(child: header('À valider')),
+              SliverList(delegate: SliverChildListDelegate(toValidate.map(tile).toList())),
+            ],
+            if (mineList.isNotEmpty) ...[
+              SliverToBoxAdapter(child: header('Mes demandes')),
+              SliverList(delegate: SliverChildListDelegate(mineList.map(tile).toList())),
+            ],
+            if (columns.isNotEmpty) ...[
+              // En-tête d'appareils : une seule rangée, épinglée, alignée
+              // (même largeurs de colonnes) avec chaque rangée de jour.
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _AircraftHeaderDelegate(
+                  background: background,
+                  child: SingleChildScrollView(
+                    controller: _headerScrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: gridWidth,
+                      child: rowOf([for (final c in columns) headCell(c)]),
+                    ),
                   ),
                 ),
               ),
+              // Le titre de chaque jour est hors défilement horizontal
+              // (pleine largeur, toujours visible) ; en dessous, une rangée
+              // de cartes par appareil, sans en-tête répété.
+              for (final day in byDay.keys) ...[
+                SliverToBoxAdapter(child: header(formatDay(day))),
+                SliverToBoxAdapter(
+                  child: SingleChildScrollView(
+                    controller: _dayScrollController(day),
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: gridWidth,
+                      child: rowOf([for (final c in columns) dayCell(c, byDay[day])]),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         );
