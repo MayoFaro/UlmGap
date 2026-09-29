@@ -110,6 +110,32 @@ test("tarifs figés : le pricingSnapshot ne change pas après modification des t
   }
 });
 
+test("crédit d'un vol qui reste valide : calculé sur le snapshot figé, pas les tarifs courants", async () => {
+  const instr = await seedUser({ profile: "instructeur", balance: 70_000 }); // solde tout juste suffisant
+  const a = await seedAircraft();
+  const { id } = await createFlight(instr, draft(a, [instr.uid])); // valide, snapshot EXT 70 000
+  assert.equal((await get(id)).pricingSnapshot.flatFee.EXT, 70_000);
+
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  try {
+    // Au tarif courant (80 000), le solde de 70 000 ne suffirait plus : le
+    // contrôle de crédit d'un vol qui reste valide doit utiliser le snapshot
+    // figé (70 000), pas le tarif courant, pour rester cohérent avec la
+    // facturation et avec le calcul du crédit disponible des autres vols.
+    await updatePricing(admin1, {
+      ...DEFAULT_PRICING, flatFee: { ...DEFAULT_PRICING.flatFee, EXT: 80_000 },
+    });
+    const { status } = await updateFlight(instr,
+      { flightId: id, ...draft(a, [instr.uid], { destination: "Kara" }) });
+    assert.equal(status, "valide");
+    const after = await get(id);
+    assert.equal(after.destination, "Kara");
+    assert.equal(after.pricingSnapshot.flatFee.EXT, 70_000);
+  } finally {
+    await updatePricing(admin1, DEFAULT_PRICING);
+  }
+});
+
 test("minPlannedMinutes lu dans les tarifs : 30 min → un vol de 35 min accepté", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
   const me = await seedUser({ profile: "instructeur" });

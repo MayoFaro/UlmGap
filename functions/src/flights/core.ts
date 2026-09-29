@@ -134,12 +134,20 @@ async function assertNoConflict(
  * demande ou un vol valide. Le verrou `flightLocks/user_<payeur>` est lu (et
  * ajouté à `locks` s'il n'y est pas déjà) pour sérialiser deux contrôles sur
  * le même compte.
+ *
+ * `ownPricing` sert au coût du vol en cours : les tarifs courants, sauf s'il
+ * reste `valide` (un `pricingSnapshot` existant est conservé), auquel cas
+ * c'est le même snapshot figé qui le facturera (règle du contrôleur, task 3
+ * fix). `fallbackPricing` (toujours les tarifs courants) sert de repli pour
+ * les *autres* vols du compte qui n'ont pas encore de `pricingSnapshot`
+ * (vols validés avant le plan 3, décision 3).
  */
 async function checkCredit(
   tx: Tx, db: Db, locks: Ref[],
   a: {
     id: string; payerUid: string; category: string; pricingMode: "standard" | "fuel_only";
-    plannedMinutes: number; balance: number; shortName: string; pricing: Pricing;
+    plannedMinutes: number; balance: number; shortName: string;
+    ownPricing: Pricing; fallbackPricing: Pricing;
   },
 ): Promise<Ref[]> {
   const lockRef = db.collection("flightLocks").doc(`user_${a.payerUid}`);
@@ -160,13 +168,13 @@ async function checkCredit(
     .map((d) => {
       const start = (d.get("start") as FirebaseFirestore.Timestamp).toMillis();
       const end = (d.get("end") as FirebaseFirestore.Timestamp).toMillis();
-      const otherPricing = (d.get("pricingSnapshot") as Pricing | null | undefined) ?? a.pricing;
+      const otherPricing = (d.get("pricingSnapshot") as Pricing | null | undefined) ?? a.fallbackPricing;
       return estimatedCost(
         d.get("pricingMode") as "standard" | "fuel_only", (end - start) / 60_000, category, otherPricing,
       );
     });
   const available = availableCredit(a.balance, otherCosts);
-  const cost = estimatedCost(a.pricingMode, a.plannedMinutes, category, a.pricing);
+  const cost = estimatedCost(a.pricingMode, a.plannedMinutes, category, a.ownPricing);
   if (available < cost) {
     const missing = cost - available;
     throw new HttpsError("failed-precondition",
@@ -207,6 +215,16 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
     });
   }
 
+  // pricingSnapshot (décision, ctrl.) : figé au passage de demande/refuse à
+  // valide, conservé tant que le vol reste valide ; null pour une demande.
+  // Calculé avant le contrôle de crédit : un vol qui reste valide doit être
+  // évalué sur ce même snapshot figé, pas sur les tarifs courants (fix task 3,
+  // règle du contrôleur), pour rester cohérent avec ce qui le facturera et
+  // avec le calcul du crédit disponible des autres vols.
+  const pricingSnapshot: Pricing | null = d.status === "valide"
+    ? (a.existingSnapshot && a.previousStatus === "valide" ? a.existingSnapshot : pricing)
+    : null;
+
   // Décision 1 : crédit contrôlé dès la demande. `pricingMode` vaut toujours
   // "standard" ou "fuel_only" à ce stade (le mode "custom" ne se décide qu'à
   // la clôture, spec §4.1).
@@ -214,14 +232,9 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   const payer = crew.find((c) => c.uid === payerUid)!;
   locks = await checkCredit(tx, db, locks, {
     id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
-    shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000, pricing,
+    shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000,
+    ownPricing: pricingSnapshot ?? pricing, fallbackPricing: pricing,
   });
-
-  // pricingSnapshot (décision, ctrl.) : figé au passage de demande/refuse à
-  // valide, conservé tant que le vol reste valide ; null pour une demande.
-  const pricingSnapshot: Pricing | null = d.status === "valide"
-    ? (a.existingSnapshot && a.previousStatus === "valide" ? a.existingSnapshot : pricing)
-    : null;
 
   return {
     status: d.status,
