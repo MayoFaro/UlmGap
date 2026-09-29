@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'admin_api.dart';
 import 'auth_service.dart';
+import 'finance_api.dart';
 import 'flight_api.dart';
 import 'user_repository.dart';
 
@@ -13,6 +14,7 @@ class AppServices extends InheritedWidget {
     required this.users,
     this.admin,
     this.flights,
+    this.finance,
     required super.child,
   });
 
@@ -20,11 +22,16 @@ class AppServices extends InheritedWidget {
   final UserRepository users;
   final AdminApi? admin;
   final FlightApi? flights;
+  final FinanceApi? finance;
 
   static AppServices of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppServices>()!;
 
   @override
   bool updateShouldNotify(AppServices old) =>
-      auth != old.auth || users != old.users || admin != old.admin || flights != old.flights;
+      auth != old.auth ||
+      users != old.users ||
+      admin != old.admin ||
+      flights != old.flights ||
+      finance != old.finance;
 }

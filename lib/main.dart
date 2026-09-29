@@ -6,6 +6,7 @@ import 'app.dart';
 import 'core/env.dart';
 import 'data/admin_api.dart';
 import 'data/auth_service.dart';
+import 'data/finance_api.dart';
 import 'data/flight_api.dart';
 import 'data/services.dart';
 import 'data/user_repository.dart';
@@ -32,6 +33,7 @@ Future<void> main() async {
     users: FirestoreUserRepository(),
     admin: FirebaseAdminApi(),
     flights: FirebaseFlightApi(),
+    finance: FirebaseFinanceApi(),
     child: UlmGapApp(env: appEnv, home: const AppGate()),
   ));
 }

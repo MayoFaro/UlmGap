@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
+import 'package:ulmgap/data/account_movement.dart';
 import 'package:ulmgap/data/admin_api.dart';
 import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/auth_service.dart';
 import 'package:ulmgap/data/crew_member.dart';
+import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/user_repository.dart';
@@ -250,4 +253,88 @@ class FakeFlightApi implements FlightApi {
     _fail();
     cancelled.add(id);
   }
+}
+
+// --- ajouts Task 8 (finances) ---
+class FakeFinanceApi implements FinanceApi {
+  Pricing pricing = defaultPricing;
+  List<AppUser> accounts = [];
+  final Map<String, List<AccountMovement>> movements = {};
+  List<Flight> flights = [];
+  int balance = 0; // rendu par credit/correct
+  Object? failWith; // si défini, les actions échouent
+
+  Pricing? updatedPricing;
+  final credited = <Map<String, dynamic>>[];
+  final corrected = <Map<String, dynamic>>[];
+  final closed = <Map<String, dynamic>>[];
+  final adminUpdated = <String, Map<String, dynamic>>{};
+  final adminDeleted = <String>[];
+
+  void _fail() {
+    if (failWith != null) throw failWith!;
+  }
+
+  @override
+  Stream<Pricing> watchPricing() => Stream.value(pricing);
+
+  @override
+  Future<void> updatePricing(Pricing p) async {
+    _fail();
+    updatedPricing = p;
+  }
+
+  @override
+  Stream<List<AccountMovement>> watchMovements(String uid) =>
+      Stream.value(movements[uid] ?? const []);
+
+  @override
+  Stream<List<AppUser>> watchAccounts() => Stream.value(accounts);
+
+  @override
+  Future<int> credit(String uid, int amount, String? reason) async {
+    _fail();
+    credited.add({'uid': uid, 'amount': amount, 'reason': reason});
+    return balance;
+  }
+
+  @override
+  Future<int> correct(String uid, int amount, String reason) async {
+    _fail();
+    corrected.add({'uid': uid, 'amount': amount, 'reason': reason});
+    return balance;
+  }
+
+  @override
+  Future<void> closeFlight(
+    String flightId, {
+    required int actualMinutes,
+    int? shortFlightAmount,
+    int? customAmount,
+  }) async {
+    _fail();
+    closed.add({
+      'flightId': flightId,
+      'actualMinutes': actualMinutes,
+      'shortFlightAmount': shortFlightAmount,
+      'customAmount': customAmount,
+    });
+  }
+
+  @override
+  Future<void> adminUpdateFlight(String flightId, Map<String, dynamic> payload) async {
+    _fail();
+    adminUpdated[flightId] = payload;
+  }
+
+  @override
+  Future<void> adminDeleteFlight(String flightId) async {
+    _fail();
+    adminDeleted.add(flightId);
+  }
+
+  @override
+  Stream<List<Flight>> watchFlightsBetween(DateTime from, DateTime to) => Stream.value(
+        flights.where((f) => !f.start.isBefore(from) && f.start.isBefore(to)).toList(),
+      );
 }

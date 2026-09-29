@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/flight_rules.dart';
+import '../core/pricing.dart';
 
 enum FlightStatus { demande, valide, refuse }
 
@@ -12,6 +13,8 @@ DateTime _date(Object? v) => v is Timestamp
     : v is DateTime
         ? v
         : DateTime.fromMillisecondsSinceEpoch(0);
+
+DateTime? _dateOrNull(Object? v) => v == null ? null : _date(v);
 
 List<String> _strings(Object? v) => (v as List?)?.cast<String>() ?? const [];
 
@@ -32,6 +35,15 @@ class Flight {
     required this.pricingMode,
     required this.isClosed,
     required this.deleted,
+    this.payerUidField,
+    this.pricingSnapshot,
+    this.actualFlightMinutes,
+    this.billedAmount,
+    this.billedTo,
+    this.customAmount,
+    this.shortFlightAmount,
+    this.closedBy,
+    this.closedAt,
   });
 
   final String id;
@@ -49,6 +61,21 @@ class Flight {
   final String pricingMode;
   final bool isClosed;
   final bool deleted;
+
+  /// Compte débité stocké sur le vol (`payerUid`, plan 3), absent des vols
+  /// créés avant ce plan : distinct du repli [payerUid] (crew.first).
+  final String? payerUidField;
+
+  /// Tarifs figés au passage à `valide` (spec, décision du contrôleur) ;
+  /// `null` pour un vol validé avant le plan 3 (repli sur les tarifs courants).
+  final Pricing? pricingSnapshot;
+  final int? actualFlightMinutes;
+  final int? billedAmount;
+  final String? billedTo; // 'account' | 'off_app'
+  final int? customAmount;
+  final int? shortFlightAmount;
+  final String? closedBy;
+  final DateTime? closedAt;
 
   String get payerUid => crew.first;
 
@@ -68,6 +95,17 @@ class Flight {
         pricingMode: (m['pricingMode'] as String?) ?? 'standard',
         isClosed: m['isClosed'] == true,
         deleted: m['deleted'] == true,
+        payerUidField: m['payerUid'] as String?,
+        pricingSnapshot: m['pricingSnapshot'] == null
+            ? null
+            : Pricing.fromMap((m['pricingSnapshot'] as Map).cast<String, dynamic>()),
+        actualFlightMinutes: (m['actualFlightMinutes'] as num?)?.toInt(),
+        billedAmount: (m['billedAmount'] as num?)?.toInt(),
+        billedTo: m['billedTo'] as String?,
+        customAmount: (m['customAmount'] as num?)?.toInt(),
+        shortFlightAmount: (m['shortFlightAmount'] as num?)?.toInt(),
+        closedBy: m['closedBy'] as String?,
+        closedAt: _dateOrNull(m['closedAt']),
       );
 
   /// Demande non validée à l'heure du départ : considérée comme refusée.
