@@ -27,6 +27,9 @@ class PlanningScreen extends StatefulWidget {
   State<PlanningScreen> createState() => _PlanningScreenState();
 }
 
+/// Largeur minimale d'une colonne pour qu'elle reste lisible sans défilement.
+const double minFitColumnWidth = 220.0;
+
 /// Une colonne du planning : un appareil, avec l'en-tête à afficher.
 class _AircraftColumn {
   const _AircraftColumn(this.aircraftId, this.header);
@@ -240,7 +243,15 @@ class _PlanningScreenState extends State<PlanningScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
-        final colWidth = columns.length <= 1 ? w : math.max((w - 8) / 2, 160.0);
+        final n = columns.length;
+        // Sur un écran large, on répartit la largeur disponible entre toutes
+        // les colonnes (sans défilement) tant que chacune reste lisible ;
+        // sinon (mobile), on garde la règle historique avec défilement.
+        final colWidth = n <= 1
+            ? w
+            : (w - 8) / n >= minFitColumnWidth
+                ? (w - 8) / n
+                : math.max((w - 8) / 2, 160.0);
         final gridWidth = columns.length <= 1
             ? w
             : colWidth * columns.length + 8.0 * (columns.length - 1);

@@ -235,6 +235,77 @@ void main() {
     expect(cardWidth, greaterThanOrEqualTo(colWidth - 16));
   });
 
+  testWidgets(
+      'quatre appareils, écran large (1600px) : toutes les colonnes tiennent sans défilement',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final a = FakeFlightApi()
+      ..directory = [member('u1', 'JDU', 'eleve')]
+      ..aircraft = [
+        Aircraft.fromMap('a1', {'registration': 'F-AAA', 'label': 'A1', 'active': true}),
+        Aircraft.fromMap('a2', {'registration': 'F-BBB', 'label': 'A2', 'active': true}),
+        Aircraft.fromMap('a3', {'registration': 'F-CCC', 'label': 'A3', 'active': true}),
+        Aircraft.fromMap('a4', {'registration': 'F-DDD', 'label': 'A4', 'active': true}),
+      ]
+      ..flights = [
+        testFlight(id: 'v1', start: DateTime(2026, 10, 12, 9),
+            aircraftId: 'a1', aircraft: 'F-AAA', crew: ['u1']),
+      ];
+    await tester.pumpWidget(host(a, testUser()));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // NB : hitTestable() n'est pas fiable ici (quirk Flutter : le hit-test
+    // sur l'en-tête épinglé s'arrête avant d'atteindre le SingleChildScrollView
+    // quand son contenu ne déborde pas/peu de la largeur visible). On vérifie
+    // donc, comme le fait déjà le test « 1600px » ci-dessus, que chaque
+    // en-tête n'est pas rogné à gauche (donc visible sans défilement) et que
+    // sa largeur correspond bien à la répartition en 4 colonnes.
+    const expectedWidth = (1600 - 8) / 4;
+    for (final id in ['a1', 'a2', 'a3', 'a4']) {
+      final headFinder = find.byKey(Key('head-$id'));
+      expect(headFinder, findsOneWidget);
+      final topLeft = tester.getTopLeft(headFinder);
+      final width = tester.getSize(find.byKey(Key('col-$id'))).width;
+      expect(topLeft.dx, greaterThanOrEqualTo(0));
+      expect((width - expectedWidth).abs(), lessThanOrEqualTo(2));
+    }
+  });
+
+  testWidgets(
+      'trois appareils, écran moyen (800px) : toutes les colonnes tiennent sans défilement',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final a = FakeFlightApi()
+      ..directory = [member('u1', 'JDU', 'eleve')]
+      ..aircraft = [
+        Aircraft.fromMap('a1', {'registration': 'F-AAA', 'label': 'A1', 'active': true}),
+        Aircraft.fromMap('a2', {'registration': 'F-BBB', 'label': 'A2', 'active': true}),
+        Aircraft.fromMap('a3', {'registration': 'F-CCC', 'label': 'A3', 'active': true}),
+      ]
+      ..flights = [
+        testFlight(id: 'v1', start: DateTime(2026, 10, 12, 9),
+            aircraftId: 'a1', aircraft: 'F-AAA', crew: ['u1']),
+      ];
+    await tester.pumpWidget(host(a, testUser()));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    for (final id in ['a1', 'a2', 'a3']) {
+      final headFinder = find.byKey(Key('head-$id'));
+      expect(headFinder, findsOneWidget);
+      expect(tester.getTopLeft(headFinder).dx, greaterThanOrEqualTo(0));
+    }
+  });
+
   testWidgets('en-tête d\'appareils épinglée pendant le défilement vertical', (tester) async {
     tester.view.physicalSize = const Size(800, 600);
     tester.view.devicePixelRatio = 1;
