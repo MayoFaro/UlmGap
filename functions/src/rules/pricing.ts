@@ -114,5 +114,5 @@ export function toCategory(v: unknown): Category {
 export function formatFcfa(amount: number): string {
   const rounded = Math.round(Math.abs(amount));
   const grouped = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return `${amount < 0 ? "−" : ""}${grouped} FCFA`;
+  return `${amount < 0 ? "−" : ""}${grouped} FCFA`;
 }

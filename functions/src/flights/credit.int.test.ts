@@ -25,7 +25,7 @@ test("crédit insuffisant à la demande : refusée, montant manquant et message"
     createFlight(eleve, draft(a, [eleve.uid, instr.uid])), // 60 min, EXT par défaut → 70 000
     (e) => {
       assert.equal(code(e), "failed-precondition");
-      assert.equal((e as Error).message, "Crédit insuffisant pour ELV : il manque 70 000 FCFA.");
+      assert.equal((e as Error).message, "Crédit insuffisant pour ELV : il manque 70 000 FCFA.");
       assert.deepEqual(credit(e), { missing: 70_000, available: 0, cost: 70_000 });
       return true;
     },

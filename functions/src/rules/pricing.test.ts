@@ -26,11 +26,11 @@ test("toCategory : inconnu → EXT", () => {
 });
 
 test("formatFcfa : groupes de 3 chiffres, espace insécable, signe négatif", () => {
-  assert.equal(formatFcfa(0), "0 FCFA");
-  assert.equal(formatFcfa(70_000), "70 000 FCFA");
-  assert.equal(formatFcfa(12_000), "12 000 FCFA");
-  assert.equal(formatFcfa(1_234_567), "1 234 567 FCFA");
-  assert.equal(formatFcfa(-500), "−500 FCFA");
+  assert.equal(formatFcfa(0), "0 FCFA");
+  assert.equal(formatFcfa(70_000), "70 000 FCFA");
+  assert.equal(formatFcfa(12_000), "12 000 FCFA");
+  assert.equal(formatFcfa(1_234_567), "1 234 567 FCFA");
+  assert.equal(formatFcfa(-500), "−500 FCFA");
 });
 
 for (const c of fx.cost) {

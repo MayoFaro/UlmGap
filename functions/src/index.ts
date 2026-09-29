@@ -15,3 +15,4 @@ export {
   refuseFlightFn as refuseFlight,
   cancelFlightFn as cancelFlight,
 } from "./flights/actions";
+export { closeFlightFn as closeFlight } from "./flights/close";

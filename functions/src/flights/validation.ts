@@ -1,5 +1,6 @@
 // Validation (pure) des entrées des fonctions de vol.
 import { ValidationError, obj, text } from "../admin/validation";
+import { MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
 
 /** Durée prévue maximale. */
 export const MAX_PLANNED_HOURS = 12;
@@ -137,4 +138,39 @@ export function validateRefusal(data: unknown): { flightId: string; reason: stri
   const raw = typeof d.reason === "string" ? d.reason.trim() : "";
   if (raw.length > 200) throw new ValidationError("Motif trop long (200 caractères au maximum).");
   return { flightId, reason: raw || null };
+}
+
+function actualMinutes(v: unknown): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 720) {
+    throw new ValidationError("Durée réelle invalide (1 à 720 min).");
+  }
+  return v;
+}
+
+/** Plafond des montants saisis à la clôture (décision 5, spec §2.4). */
+function manualAmount(v: unknown, field: string): number | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
+    throw new ValidationError(`${field} invalide.`);
+  }
+  if (v > MAX_MANUAL_AMOUNT) {
+    throw new ValidationError(`Montant trop élevé (${formatFcfa(MAX_MANUAL_AMOUNT)} au maximum).`);
+  }
+  return v;
+}
+
+export function validateClosing(data: unknown): {
+  flightId: string;
+  actualMinutes: number;
+  shortFlightAmount: number | null;
+  customAmount: number | null;
+} {
+  const d = obj(data);
+  const flightId = validateFlightId(d);
+  return {
+    flightId,
+    actualMinutes: actualMinutes(d.actualMinutes),
+    shortFlightAmount: manualAmount(d.shortFlightAmount, "Montant à facturer"),
+    customAmount: manualAmount(d.customAmount, "Montant différent"),
+  };
 }
