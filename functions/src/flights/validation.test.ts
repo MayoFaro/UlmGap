@@ -3,8 +3,8 @@ import * as assert from "node:assert/strict";
 import { ValidationError } from "../admin/validation";
 import { MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
 import {
-  MAX_ADVANCE_DAYS, checkDuration, checkHorizon, checkMinDuration, validateClosing, validateFlightId,
-  validateFlightInput, validateRefusal, validateReviewChanges,
+  MAX_ADVANCE_DAYS, checkDuration, checkHorizon, checkMinDuration, validateAdminUpdate, validateClosing,
+  validateFlightId, validateFlightInput, validateRefusal, validateReviewChanges,
 } from "./validation";
 
 const T0 = 1_900_000_000_000;
@@ -173,4 +173,57 @@ test("validateClosing : montant au-delà de 200 000 → message exact avec espac
     () => validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT + 1 }),
     (e: unknown) => e instanceof ValidationError && e.message === expected,
   );
+});
+
+test("validateAdminUpdate : champs du vol, champs de clôture facultatifs (absents = inchangés)", () => {
+  assert.deepEqual(validateAdminUpdate({ ...ok, flightId: " f1 " }), {
+    flightId: "f1",
+    input: {
+      start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
+      crew: ["u1", "u2"], passengers: [],
+    },
+  });
+  assert.deepEqual(
+    validateAdminUpdate({
+      ...ok, flightId: "f1", pricingMode: "fuel_only", actualMinutes: 30, shortFlightAmount: null,
+    }),
+    {
+      flightId: "f1",
+      input: {
+        start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
+        crew: ["u1", "u2"], passengers: [],
+      },
+      pricingMode: "fuel_only", actualMinutes: 30, shortFlightAmount: null,
+    },
+  );
+});
+
+test("validateAdminUpdate : mode custom avec montant différent ; mode choisi incompatible avec un montant différent", () => {
+  const r = validateAdminUpdate({
+    ...ok, crew: ["u1"], passengers: ["Paul"], flightId: "f1", pricingMode: "custom", customAmount: 20_000,
+  });
+  assert.equal(r.pricingMode, "custom");
+  assert.equal(r.customAmount, 20_000);
+  assert.equal(r.input.pricingMode, undefined);
+  assert.throws(
+    () => validateAdminUpdate({ ...ok, flightId: "f1", pricingMode: "standard", customAmount: 20_000 }),
+    ValidationError,
+  );
+  assert.throws(
+    () => validateAdminUpdate({ ...ok, flightId: "f1", pricingMode: "custom", customAmount: null }),
+    ValidationError,
+  );
+});
+
+test("validateAdminUpdate : mêmes rejets que la saisie et la clôture", () => {
+  assert.throws(() => validateAdminUpdate({ ...ok }), ValidationError);
+  assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", crew: [] }), ValidationError);
+  assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", pricingMode: "gratuit" }), ValidationError);
+  assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", actualMinutes: 0 }), ValidationError);
+  assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", actualMinutes: null }), ValidationError);
+  assert.throws(
+    () => validateAdminUpdate({ ...ok, flightId: "f1", shortFlightAmount: MAX_MANUAL_AMOUNT + 1 }),
+    ValidationError,
+  );
+  assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", customAmount: -1 }), ValidationError);
 });

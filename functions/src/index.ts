@@ -17,3 +17,7 @@ export {
   cancelFlightFn as cancelFlight,
 } from "./flights/actions";
 export { closeFlightFn as closeFlight } from "./flights/close";
+export {
+  adminUpdateFlightFn as adminUpdateFlight,
+  adminDeleteFlightFn as adminDeleteFlight,
+} from "./flights/admin-edit";

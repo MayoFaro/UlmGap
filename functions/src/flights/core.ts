@@ -38,6 +38,12 @@ export interface PlanArgs {
   /** Snapshot existant du vol (édition/validation), pour la décision de gel (spec, ctrl.). */
   existingSnapshot?: Pricing | null;
   previousStatus?: string;
+  /** Correction admin : ni comptes ni appareils actifs contrôlés. */
+  skipActiveChecks?: boolean;
+  /** Correction admin d'un vol clôturé : la régularisation remplace le contrôle du crédit. */
+  skipCredit?: boolean;
+  /** Correction admin : mode choisi librement, resolvePricingMode non appliqué. */
+  forcedMode?: "standard" | "fuel_only";
 }
 
 export interface Planned {
@@ -74,11 +80,13 @@ async function loadCrew(tx: Tx, db: Db, uids: string[]): Promise<CrewInfo[]> {
   });
 }
 
-async function loadAircraft(tx: Tx, db: Db, id: string): Promise<{ id: string; registration: string }> {
+async function loadAircraft(
+  tx: Tx, db: Db, id: string, checkActive: boolean,
+): Promise<{ id: string; registration: string }> {
   const s = await tx.get(db.collection("aircraft").doc(id));
   if (!s.exists) throw new HttpsError("not-found", "Appareil introuvable.");
   const registration = (s.get("registration") as string | undefined) ?? "";
-  if (s.get("active") !== true) {
+  if (checkActive && s.get("active") !== true) {
     throw new HttpsError("failed-precondition", `L'appareil ${registration} n'est plus actif.`);
   }
   return { id, registration };
@@ -190,16 +198,16 @@ async function checkCredit(
  */
 export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> {
   const crew = await loadCrew(tx, db, a.input.crew);
-  const aircraft = await loadAircraft(tx, db, a.input.aircraftId);
+  const aircraft = await loadAircraft(tx, db, a.input.aircraftId, !a.skipActiveChecks);
   const pricing = await readPricing(tx, db);
   asInvalid(() => checkMinDuration(a.input.start, a.input.end, pricing.minPlannedMinutes));
-  const off = crew.find((c) => !c.active);
+  const off = a.skipActiveChecks ? undefined : crew.find((c) => !c.active);
   if (off) throw new HttpsError("failed-precondition", `${off.shortName} n'est plus actif.`);
 
   const d = a.decide(crew);
   if (!d.ok) throw new HttpsError("permission-denied", d.reason);
 
-  const pricingMode = resolvePricingMode({
+  const pricingMode = a.forcedMode ?? resolvePricingMode({
     allGap: crew.every((c) => c.category === "GAP"),
     hasPassenger: a.input.passengers.length > 0,
     mayChoose: a.mayChoose,
@@ -230,11 +238,13 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   // la clôture, spec §4.1).
   const payerUid = payerOf(a.input.crew);
   const payer = crew.find((c) => c.uid === payerUid)!;
-  locks = await checkCredit(tx, db, locks, {
-    id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
-    shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000,
-    ownPricing: pricingSnapshot ?? pricing, fallbackPricing: pricing,
-  });
+  if (!a.skipCredit) {
+    locks = await checkCredit(tx, db, locks, {
+      id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
+      shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000,
+      ownPricing: pricingSnapshot ?? pricing, fallbackPricing: pricing,
+    });
+  }
 
   return {
     status: d.status,

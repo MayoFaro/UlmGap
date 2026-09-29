@@ -174,3 +174,40 @@ export function validateClosing(data: unknown): {
     customAmount: manualAmount(d.customAmount, "Montant différent"),
   };
 }
+
+export interface AdminUpdate {
+  flightId: string;
+  input: FlightInput;
+  pricingMode?: "standard" | "fuel_only" | "custom";
+  actualMinutes?: number;
+  shortFlightAmount?: number | null;
+  customAmount?: number | null;
+}
+
+/**
+ * Correction admin (adminUpdateFlight) : les champs du vol comme
+ * validateFlightInput, et les champs de clôture comme validateClosing.
+ * Champs de clôture absents = inchangés ; `null` efface un montant. Le mode
+ * est rendu à part (« custom » n'existe qu'à la clôture), jamais dans `input`.
+ */
+export function validateAdminUpdate(data: unknown): AdminUpdate {
+  const d = obj(data);
+  const flightId = validateFlightId(d);
+  const input = validateFlightInput({ ...d, pricingMode: undefined });
+  const out: AdminUpdate = { flightId, input };
+  if (d.pricingMode !== undefined) {
+    out.pricingMode = d.pricingMode === "custom" ? "custom" : mode(d.pricingMode);
+  }
+  if (d.actualMinutes !== undefined) out.actualMinutes = actualMinutes(d.actualMinutes);
+  if (d.shortFlightAmount !== undefined) {
+    out.shortFlightAmount = manualAmount(d.shortFlightAmount, "Montant à facturer");
+  }
+  if (d.customAmount !== undefined) out.customAmount = manualAmount(d.customAmount, "Montant différent");
+  if (out.pricingMode === "custom" && d.customAmount !== undefined && out.customAmount == null) {
+    throw new ValidationError("Montant différent obligatoire en mode « montant différent ».");
+  }
+  if ((out.pricingMode === "standard" || out.pricingMode === "fuel_only") && out.customAmount != null) {
+    throw new ValidationError("Montant différent incompatible avec ce mode.");
+  }
+  return out;
+}
