@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { ValidationError } from "../admin/validation";
+import { MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
 import {
-  MAX_ADVANCE_DAYS, checkDuration, checkHorizon, checkMinDuration, validateFlightId,
+  MAX_ADVANCE_DAYS, checkDuration, checkHorizon, checkMinDuration, validateClosing, validateFlightId,
   validateFlightInput, validateRefusal, validateReviewChanges,
 } from "./validation";
 
@@ -106,4 +107,70 @@ test("validateRefusal : motif facultatif, vide → null", () => {
   assert.deepEqual(validateRefusal({ flightId: "f1", reason: "  " }), { flightId: "f1", reason: null });
   assert.deepEqual(validateRefusal({ flightId: "f1", reason: " Météo " }), { flightId: "f1", reason: "Météo" });
   assert.throws(() => validateRefusal({ flightId: "f1", reason: "x".repeat(201) }), ValidationError);
+});
+
+test("validateClosing : durée réelle, 1 à 720 min, entier", () => {
+  assert.equal(validateClosing({ flightId: "f1", actualMinutes: 1 }).actualMinutes, 1);
+  assert.equal(validateClosing({ flightId: "f1", actualMinutes: 720 }).actualMinutes, 720);
+  for (const bad of [0, 721, 1.5, "90"]) {
+    assert.throws(
+      () => validateClosing({ flightId: "f1", actualMinutes: bad }),
+      (e: unknown) => e instanceof ValidationError && e.message === "Durée réelle invalide (1 à 720 min).",
+      JSON.stringify(bad),
+    );
+  }
+});
+
+test("validateClosing : flightId manquant → ValidationError", () => {
+  assert.throws(() => validateClosing({ actualMinutes: 90 }), ValidationError);
+});
+
+test("validateClosing : montants absents ou null → null", () => {
+  const r1 = validateClosing({ flightId: "f1", actualMinutes: 90 });
+  assert.equal(r1.shortFlightAmount, null);
+  assert.equal(r1.customAmount, null);
+  const r2 = validateClosing({
+    flightId: "f1", actualMinutes: 90, shortFlightAmount: null, customAmount: null,
+  });
+  assert.equal(r2.shortFlightAmount, null);
+  assert.equal(r2.customAmount, null);
+});
+
+test("validateClosing : montants entiers de 0 à 200 000 acceptés", () => {
+  assert.equal(
+    validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: 0 }).shortFlightAmount, 0);
+  assert.equal(
+    validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: MAX_MANUAL_AMOUNT })
+      .shortFlightAmount, MAX_MANUAL_AMOUNT);
+  assert.equal(
+    validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT }).customAmount,
+    MAX_MANUAL_AMOUNT);
+});
+
+test("validateClosing : montant négatif ou non entier → invalide (message générique)", () => {
+  for (const bad of [-1, 1.5]) {
+    assert.throws(
+      () => validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: bad }),
+      (e: unknown) => e instanceof ValidationError && e.message === "Montant à facturer invalide.",
+      JSON.stringify(bad),
+    );
+    assert.throws(
+      () => validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: bad }),
+      (e: unknown) => e instanceof ValidationError && e.message === "Montant différent invalide.",
+      JSON.stringify(bad),
+    );
+  }
+});
+
+test("validateClosing : montant au-delà de 200 000 → message exact avec espace insécable", () => {
+  const expected = `Montant trop élevé (${formatFcfa(MAX_MANUAL_AMOUNT)} au maximum).`;
+  assert.equal(expected, "Montant trop élevé (200 000 FCFA au maximum).");
+  assert.throws(
+    () => validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: MAX_MANUAL_AMOUNT + 1 }),
+    (e: unknown) => e instanceof ValidationError && e.message === expected,
+  );
+  assert.throws(
+    () => validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT + 1 }),
+    (e: unknown) => e instanceof ValidationError && e.message === expected,
+  );
 });

@@ -97,6 +97,7 @@ test("deux clôtures simultanées : une seule réussit, un seul débit", async (
   assert.equal(r.filter((x) => x.status === "fulfilled").length, 1);
   const rejected = r.find((x) => x.status === "rejected") as PromiseRejectedResult;
   assert.equal(code(rejected.reason), "failed-precondition");
+  assert.equal((rejected.reason as Error).message, "Ce vol est déjà clôturé.");
 
   const txs = await flightTx(id);
   assert.equal(txs.length, 1);

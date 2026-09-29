@@ -47,7 +47,8 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     }
 
     // 1. Le vol (ci-dessus), le compte débité, son verrou, puis les tarifs.
-    const payerUid = f.get("payerUid") as string;
+    // payerUid de repli (spec §4.2, payerOf) : au cas où un vol ancien ne l'aurait pas encore.
+    const payerUid = (f.get("payerUid") as string | undefined) ?? crew[0];
     const payerRef = db.collection("users").doc(payerUid);
     const payerSnap = await tx.get(payerRef);
     if (!payerSnap.exists) throw new HttpsError("not-found", "Compte débité introuvable.");
