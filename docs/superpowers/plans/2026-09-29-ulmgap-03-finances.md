@@ -50,7 +50,7 @@ le web).
    initial (tests) », une seule fois par compte. Les vols déjà prévus pèsent
    ensuite sur le crédit disponible, et les vols réalisés seront débités à
    leur clôture.
-5. **Plafond de 200 000 FCFA** pour les montants saisis à la main.
+5. **Plafond de 200 000 FCFA** pour les montants saisis à la clôture d'un vol. **Pas de plafond pour les versements** (crédits).
 6. **Format des montants** : `12 000 FCFA`, groupes de 3 chiffres séparés par
    une espace insécable, sans décimales, avec un signe « − » pour un montant
    négatif.
@@ -59,9 +59,10 @@ le web).
 
 ## Décisions du contrôleur (à relire)
 
-- **Plafond** : il s'applique à `shortFlightAmount`, `customAmount`, au
-  crédit et à la correction (valeur absolue). Un versement plus gros se fait
-  en plusieurs fois.
+- **Plafond** : il s'applique seulement à `shortFlightAmount` et
+  `customAmount`. Pas de plafond pour les crédits (décision utilisateur), ni
+  pour les corrections, pour pouvoir annuler un versement erroné en une
+  seule fois.
 - **Tarifs absents** : si `settings/pricing` n'existe pas, le serveur utilise
   les valeurs par défaut de la spec §2.4. Le premier enregistrement depuis
   l'écran « Tarifs » crée le document.
@@ -143,8 +144,8 @@ Celles des plans 2 et 2b restent en vigueur. En particulier :
    durée ou le mode (hors app ↔ compte) : les soldes et l'historique restent
    cohérents, et la somme des transactions liées au vol égale le montant
    facturé actuel. → tests d'intégration (Task 6).
-4. **Montant saisi avec un zéro de trop** : refusé au-delà de 200 000 FCFA,
-   côté serveur comme côté app. → tests (Tasks 1, 5 et 9).
+4. **Montant de clôture saisi avec un zéro de trop** : refusé au-delà de
+   200 000 FCFA, côté serveur comme côté app. → tests (Tasks 4 et 9).
 5. **Tarifs modifiés entre la validation et la clôture** : la clôture
    utilise les tarifs figés. → test d'intégration (Task 4).
 
@@ -433,9 +434,9 @@ Règles :
   (instructeur ou admin actif, sinon « Réservé aux instructeurs et aux
   admins. »).
 - `validateCredit(data)` → `{ userUid, amount, reason: string | null }`,
-  avec `0 < amount ≤ 200 000`.
+  avec `amount` entier `> 0`, sans plafond.
 - `validateCorrection(data)` → `{ userUid, amount, reason: string }`, avec
-  `amount ≠ 0`, `|amount| ≤ 200 000`, et une raison obligatoire de 1 à 200
+  `amount ≠ 0` (entier, sans plafond), et une raison obligatoire de 1 à 200
   caractères (sinon « Motif obligatoire pour une correction. »).
 - Callables `creditAccount` et `correctAccount` :
   - accès via `requireStaff` ;
@@ -445,13 +446,12 @@ Règles :
   - renvoient `{ balance }`.
 
 - [ ] **Step 1 : tests qui échouent.**
-  - Unitaires : validations (plafond, zéro, négatif pour un crédit, motif
-    obligatoire pour une correction).
+  - Unitaires : validations (zéro, décimal, négatif pour un crédit, motif
+    obligatoire pour une correction) ; un crédit de 1 000 000 est accepté.
   - Intégration :
     - crédit de 50 000 → solde +50 000, transaction `credit` ;
     - correction de −10 000 avec motif → transaction `correction` ;
     - un lâché → `permission-denied` ;
-    - 200 001 → `invalid-argument` ;
     - un crédit et une clôture simultanés sur le même compte → le solde
       final et les deux `balanceAfter` sont cohérents.
 - [ ] **Step 2 : implémentation.** Run : PASS.
@@ -703,7 +703,7 @@ Comportement :
     bouton « Créditer / corriger » ;
   - **`CreditDialog`** : choix entre « Créditer » et « Corriger » ; montant
     (positif pour un crédit, signé pour une correction) ; motif (obligatoire
-    pour une correction) ; contrôle local du plafond de 200 000 ; appel de
+    pour une correction) ; aucun plafond ; appel de
     l'API et SnackBar « Nouveau solde : <montant> ».
 - **HomeShell** :
   - une icône « Mon compte » (tous) et une icône « Instructeurs »
@@ -712,7 +712,7 @@ Comportement :
 
 - [ ] **Step 1 : tests de widgets qui échouent** : solde et mouvements
   affichés et formatés ; crédit (appel avec le bon montant et SnackBar) ;
-  correction sans motif → bloquée ; 250 000 → bloqué ; l'icône
+  correction sans motif → bloquée ; 1 000 000 → accepté ; l'icône
   « Instructeurs » est absente pour un élève.
 - [ ] **Step 2 : implémentation.** Run : PASS.
 - [ ] **Step 3 : commit** `feat: my account and instructors screens`.
