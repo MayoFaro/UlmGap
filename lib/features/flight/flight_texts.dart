@@ -35,6 +35,10 @@ const debitedLabel = 'Compte débité';
 const highlightFill = Color(0xFFE3F2FD);
 const highlightBorder = Color(0xFF1E88E5);
 
+/// Vol refusé (ou demande expirée) : carte grisée, jamais surlignée.
+const refusedFill = Color(0xFFEEEEEE);
+const refusedBorder = Color(0xFFBDBDBD);
+
 /// Explique la cause d'un conflit : appareil (prioritaire) ou personne commune.
 String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {
   final when = '${formatDay(c.start)}, ${formatRange(c.start, c.end)}';

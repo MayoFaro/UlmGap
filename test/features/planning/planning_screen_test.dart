@@ -25,18 +25,43 @@ FakeFlightApi api() => FakeFlightApi()
     Aircraft.fromMap('a2', {'registration': 'F-JXYZ', 'label': 'ULM 2', 'active': true}),
   ];
 
-bool _hasHighlightAncestor(Finder textFinder) => find
+bool _hasFillAncestor(Finder textFinder, Color fill) => find
     .ancestor(
       of: textFinder,
       matching: find.byWidgetPredicate((w) =>
           w is Container &&
           w.decoration is BoxDecoration &&
-          (w.decoration as BoxDecoration).color == highlightFill),
+          (w.decoration as BoxDecoration).color == fill),
     )
     .evaluate()
     .isNotEmpty;
 
+bool _hasHighlightAncestor(Finder textFinder) => _hasFillAncestor(textFinder, highlightFill);
+
 void main() {
+  testWidgets('vol refusé : grisé, jamais surligné en bleu, même pour un membre de l\'équipage',
+      (tester) async {
+    final a = api()
+      ..flights = [
+        testFlight(id: 'r', start: DateTime(2026, 10, 13, 16), status: 'refuse',
+            crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins', destination: 'Refusée'),
+        testFlight(id: 'e', start: DateTime(2026, 10, 12, 7), status: 'demande',
+            crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins', destination: 'Expirée'),
+        testFlight(id: 'v', start: DateTime(2026, 10, 13, 9), crew: ['u1'], destination: 'Validée'),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1')));
+    await tester.pumpAndSettle();
+    for (final dest in ['→ Refusée', '→ Expirée']) {
+      for (final e in find.textContaining(dest).evaluate()) {
+        final f = find.byWidget(e.widget);
+        expect(_hasHighlightAncestor(f), isFalse, reason: dest);
+        expect(_hasFillAncestor(f, refusedFill), isTrue, reason: dest);
+      }
+    }
+    final valid = find.descendant(of: find.byKey(const Key('col-a1')), matching: find.textContaining('→ Validée'));
+    expect(_hasHighlightAncestor(valid), isTrue);
+  });
+
   testWidgets('vols groupés par jour, statut, équipage ; annulés masqués', (tester) async {
     final a = api()
       ..flights = [

@@ -38,7 +38,8 @@ class FlightTile extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(crewText(f.crew, f.passengers, dir)),
-          for (final u in f.crew) ProfileBadge(profile: dir[u]?.profile, compact: true),
+          for (final u in f.crew)
+            ProfileBadge(profile: dir[u]?.profile, compact: true),
           Text('→ ${f.destination}'),
         ],
       ),
@@ -47,6 +48,18 @@ class FlightTile extends StatelessWidget {
         side: BorderSide(color: color),
       ),
     );
+    // Refusé (ou demande expirée) : grisé et jamais surligné.
+    if (status == FlightStatus.refuse) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: refusedFill,
+          border: Border.all(color: refusedBorder),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Opacity(opacity: 0.6, child: tile),
+      );
+    }
     if (!mine) return tile;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
