@@ -2,8 +2,8 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { ValidationError } from "../admin/validation";
 import {
-  MAX_ADVANCE_DAYS, checkHorizon, validateFlightId, validateFlightInput, validateRefusal,
-  validateReviewChanges,
+  MAX_ADVANCE_DAYS, checkDuration, checkHorizon, checkMinDuration, validateFlightId,
+  validateFlightInput, validateRefusal, validateReviewChanges,
 } from "./validation";
 
 const T0 = 1_900_000_000_000;
@@ -22,13 +22,12 @@ test("validateFlightInput : normalise, passagers par défaut vides", () => {
     .passengers[0], "Paul");
 });
 
-test("validateFlightInput : 45 min pile acceptées", () => {
-  assert.equal(validateFlightInput({ ...ok, end: T0 + 45 * MIN }).end, T0 + 45 * MIN);
+test("validateFlightInput : la durée prévue minimale n'est plus vérifiée ici (déplacée dans planFlight)", () => {
+  assert.equal(validateFlightInput({ ...ok, end: T0 + 30 * MIN }).end, T0 + 30 * MIN);
 });
 
 test("validateFlightInput : rejets", () => {
   for (const bad of [
-    { ...ok, end: T0 + 44 * MIN },
     { ...ok, end: T0 - MIN },
     { ...ok, start: "demain" },
     { ...ok, destination: "  " },
@@ -49,6 +48,27 @@ test("validateFlightInput : rejets", () => {
 test("validateFlightInput : durée prévue maximale 12 h", () => {
   assert.equal(validateFlightInput({ ...ok, end: T0 + 12 * 60 * MIN }).end, T0 + 12 * 60 * MIN);
   assert.throws(() => validateFlightInput({ ...ok, end: T0 + 12 * 60 * MIN + MIN }), ValidationError);
+});
+
+test("checkDuration : accepte 30 min, rejette fin ≤ départ et plus de 12 h", () => {
+  assert.doesNotThrow(() => checkDuration(T0, T0 + 30 * MIN));
+  assert.throws(
+    () => checkDuration(T0, T0),
+    (e: unknown) => e instanceof ValidationError && e.message === "L'heure de fin doit suivre le départ.",
+  );
+  assert.throws(
+    () => checkDuration(T0, T0 - MIN),
+    (e: unknown) => e instanceof ValidationError && e.message === "L'heure de fin doit suivre le départ.",
+  );
+  assert.throws(() => checkDuration(T0, T0 + 12 * 60 * MIN + MIN), ValidationError);
+});
+
+test("checkMinDuration : refuse 44 min avec un minimum de 45", () => {
+  assert.throws(
+    () => checkMinDuration(T0, T0 + 44 * MIN, 45),
+    (e: unknown) => e instanceof ValidationError && e.message === "Durée prévue minimale : 45 min.",
+  );
+  assert.doesNotThrow(() => checkMinDuration(T0, T0 + 45 * MIN, 45));
 });
 
 test("checkHorizon : 366 jours acceptés, au-delà rejeté", () => {

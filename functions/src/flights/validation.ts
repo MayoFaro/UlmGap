@@ -1,8 +1,6 @@
 // Validation (pure) des entrées des fonctions de vol.
 import { ValidationError, obj, text } from "../admin/validation";
 
-/** Durée prévue minimale. Le plan 3 la lira dans settings/pricing. */
-export const MIN_PLANNED_MINUTES = 45;
 /** Durée prévue maximale. */
 export const MAX_PLANNED_HOURS = 12;
 /** Horizon maximal de planification, en jours avant le départ. */
@@ -65,11 +63,22 @@ function passengerList(v: unknown): string[] {
 }
 
 export function checkDuration(start: number, end: number): void {
-  if (end - start < MIN_PLANNED_MINUTES * 60_000) {
-    throw new ValidationError(`Durée prévue minimale : ${MIN_PLANNED_MINUTES} min.`);
+  if (end <= start) {
+    throw new ValidationError("L'heure de fin doit suivre le départ.");
   }
   if (end - start > MAX_PLANNED_HOURS * 3_600_000) {
     throw new ValidationError(`Durée prévue maximale : ${MAX_PLANNED_HOURS} h.`);
+  }
+}
+
+/**
+ * Durée prévue minimale (settings/pricing, spec §2.4) : vérifiée par
+ * planFlight, pas par la validation pure (le minimum peut changer sans
+ * redéployer les fonctions).
+ */
+export function checkMinDuration(start: number, end: number, minPlannedMinutes: number): void {
+  if (end - start < minPlannedMinutes * 60_000) {
+    throw new ValidationError(`Durée prévue minimale : ${minPlannedMinutes} min.`);
   }
 }
 

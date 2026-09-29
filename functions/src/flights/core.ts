@@ -3,11 +3,13 @@
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import type { Profile } from "../admin/validation";
+import { asInvalid } from "../common/errors";
+import { readPricing } from "../finance/pricing-store";
 import {
   Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, payerOf,
   resolvePricingMode,
 } from "../rules/flights";
-import type { FlightInput } from "./validation";
+import { checkMinDuration, type FlightInput } from "./validation";
 
 type Db = FirebaseFirestore.Firestore;
 type Tx = FirebaseFirestore.Transaction;
@@ -125,6 +127,8 @@ async function assertNoConflict(
 export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> {
   const crew = await loadCrew(tx, db, a.input.crew);
   const aircraft = await loadAircraft(tx, db, a.input.aircraftId);
+  const pricing = await readPricing(tx, db);
+  asInvalid(() => checkMinDuration(a.input.start, a.input.end, pricing.minPlannedMinutes));
   const off = crew.find((c) => !c.active);
   if (off) throw new HttpsError("failed-precondition", `${off.shortName} n'est plus actif.`);
 
