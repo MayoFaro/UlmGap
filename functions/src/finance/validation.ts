@@ -1,5 +1,6 @@
-// Validation (pure) des tarifs (settings/pricing, spec §2.4).
-import { ValidationError } from "../admin/validation";
+// Validation (pure) des tarifs (settings/pricing, spec §2.4) et des crédits /
+// corrections de compte (task 5).
+import { obj, ValidationError } from "../admin/validation";
 import { Category, Pricing } from "../rules/pricing";
 
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
@@ -33,4 +34,52 @@ export function validatePricing(data: unknown): Pricing {
     overtimeHourly: byCategory(d.overtimeHourly, "overtimeHourly", 1_000_000),
     fuelHourlyRate: intInRange(d.fuelHourlyRate, "fuelHourlyRate", 0, 1_000_000),
   };
+}
+
+function accountUid(v: unknown): string {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s || s.includes("/")) throw new ValidationError("Compte manquant.");
+  return s;
+}
+
+function amountInt(v: unknown): number {
+  if (typeof v !== "number" || !Number.isInteger(v)) throw new ValidationError("Montant invalide.");
+  return v;
+}
+
+function optionalReason(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  const s = typeof v === "string" ? v.trim() : "";
+  if (s.length > 200) throw new ValidationError("Motif trop long (200 caractères au maximum).");
+  return s || null;
+}
+
+/**
+ * Crédit (versement) d'un compte par un instructeur ou un admin. Aucun
+ * plafond (décision utilisateur) : un montant entier positif est toujours
+ * accepté, y compris 1 000 000.
+ */
+export function validateCredit(data: unknown): { userUid: string; amount: number; reason: string | null } {
+  const d = obj(data);
+  const userUid = accountUid(d.userUid);
+  const amount = amountInt(d.amount);
+  if (amount <= 0) throw new ValidationError("Montant invalide.");
+  return { userUid, amount, reason: optionalReason(d.reason) };
+}
+
+/**
+ * Correction (positive ou négative) d'un compte par un instructeur ou un
+ * admin. Aucun plafond, pour pouvoir annuler un versement erroné en une
+ * seule fois (décision du contrôleur) ; le motif est obligatoire.
+ */
+export function validateCorrection(data: unknown): { userUid: string; amount: number; reason: string } {
+  const d = obj(data);
+  const userUid = accountUid(d.userUid);
+  const amount = amountInt(d.amount);
+  if (amount === 0) throw new ValidationError("Montant invalide.");
+  const reason = typeof d.reason === "string" ? d.reason.trim() : "";
+  if (!reason || reason.length > 200) {
+    throw new ValidationError("Motif obligatoire pour une correction.");
+  }
+  return { userUid, amount, reason };
 }
