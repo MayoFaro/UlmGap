@@ -3,12 +3,19 @@
 // au-dessous des durées de 60 min employées par les autres tests d'intégration
 // de vols (edit.int.test.ts, actions.int.test.ts), qui peuvent s'exécuter en
 // parallèle et lisent le même document settings/pricing.
-import { test } from "node:test";
+import { after, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { createFlight } from "../flights/edit";
 import { at, code, db, draft, seedAircraft, seedUser } from "../flights/testkit";
 import { DEFAULT_PRICING } from "../rules/pricing";
 import { readPricing, updatePricing } from "./pricing-store";
+
+// Ce fichier modifie settings/pricing (document global) : on le supprime à la
+// fin pour ne pas perturber les fichiers de tests d'intégration suivants
+// (exécutés l'un après l'autre, cf. run-tests.js).
+after(async () => {
+  await db.collection("settings").doc("pricing").delete();
+});
 
 const CUSTOM = {
   flatFee: { GAP: 13_000, GR: 31_000, MIL: 51_000, EXT: 71_000 },

@@ -18,10 +18,11 @@ export const at = (h: number) => {
 
 export const code = (e: unknown) => (e as { code?: string }).code;
 export const details = (e: unknown) =>
-  (e as { details?: { conflict?: Record<string, unknown> } }).details;
+  (e as { details?: { conflict?: Record<string, unknown>; credit?: Record<string, unknown> } }).details;
 
 export async function seedUser(fields: {
   profile: string | null; category?: string; isAdmin?: boolean; active?: boolean; shortName?: string;
+  balance?: number;
 }): Promise<Caller> {
   const uid = `u-${uniq()}`;
   // Firestore refuse les valeurs `undefined` : on les retire avant de fusionner
@@ -29,7 +30,8 @@ export async function seedUser(fields: {
   const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
   await db.collection("users").doc(uid).set({
     displayName: uid, shortName: fields.shortName ?? uid.slice(2, 5).toUpperCase(),
-    category: "EXT", isAdmin: false, active: true, balance: 0, ...clean,
+    // Solde confortable par défaut : les tests de crédit passent balance: 0 explicitement.
+    category: "EXT", isAdmin: false, active: true, balance: 1_000_000, ...clean,
   });
   return { uid, token: { email_verified: true } };
 }
@@ -43,9 +45,11 @@ export async function seedAircraft(active = true): Promise<string> {
 /** Écrit un vol directement (vols passés, états particuliers). */
 export async function seedFlight(fields: Record<string, unknown>): Promise<string> {
   const ref = db.collection("flights").doc();
+  const crew = (fields.crew as string[] | undefined) ?? [];
   await ref.set({
     destination: "Lomé", aircraft: "F-TEST", passengers: [], instructorUid: null,
     status: "valide", pricingMode: "standard", isClosed: false, deleted: false,
+    payerUid: crew[0], pricingSnapshot: null,
     ...fields,
     start: admin.firestore.Timestamp.fromMillis(fields.start as number),
     end: admin.firestore.Timestamp.fromMillis(fields.end as number),

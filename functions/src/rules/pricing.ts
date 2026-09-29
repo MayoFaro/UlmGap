@@ -106,3 +106,13 @@ export function adjustments(
 export function toCategory(v: unknown): Category {
   return CATEGORIES.includes(v as Category) ? (v as Category) : "EXT";
 }
+
+/**
+ * Format des montants (décision 6) : groupes de 3 chiffres séparés par une
+ * espace insécable, sans décimales, signe « − » pour un montant négatif.
+ */
+export function formatFcfa(amount: number): string {
+  const rounded = Math.round(Math.abs(amount));
+  const grouped = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${amount < 0 ? "−" : ""}${grouped} FCFA`;
+}

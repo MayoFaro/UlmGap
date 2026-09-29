@@ -9,6 +9,9 @@ import {
   Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, payerOf,
   resolvePricingMode,
 } from "../rules/flights";
+import {
+  availableCredit, estimatedCost, formatFcfa, Pricing, toCategory,
+} from "../rules/pricing";
 import { checkMinDuration, type FlightInput } from "./validation";
 
 type Db = FirebaseFirestore.Firestore;
@@ -23,6 +26,7 @@ export interface CrewInfo {
   profile: Profile | null;
   category: string;
   active: boolean;
+  balance: number;
 }
 
 export interface PlanArgs {
@@ -31,6 +35,9 @@ export interface PlanArgs {
   decide: (crew: CrewInfo[]) => Decision;
   mayChoose: boolean;
   previousMode?: PricingMode;
+  /** Snapshot existant du vol (édition/validation), pour la décision de gel (spec, ctrl.). */
+  existingSnapshot?: Pricing | null;
+  previousStatus?: string;
 }
 
 export interface Planned {
@@ -62,6 +69,7 @@ async function loadCrew(tx: Tx, db: Db, uids: string[]): Promise<CrewInfo[]> {
       profile: (s.get("profile") as Profile | null | undefined) ?? null,
       category: (s.get("category") as string | undefined) ?? "EXT",
       active: s.get("active") === true,
+      balance: (s.get("balance") as number | undefined) ?? 0,
     };
   });
 }
@@ -121,6 +129,54 @@ async function assertNoConflict(
 }
 
 /**
+ * Contrôle du crédit (décision 1, spec §4.4) : le crédit disponible du compte
+ * débité doit couvrir le coût estimé du vol en cours, qu'il devienne une
+ * demande ou un vol valide. Le verrou `flightLocks/user_<payeur>` est lu (et
+ * ajouté à `locks` s'il n'y est pas déjà) pour sérialiser deux contrôles sur
+ * le même compte.
+ */
+async function checkCredit(
+  tx: Tx, db: Db, locks: Ref[],
+  a: {
+    id: string; payerUid: string; category: string; pricingMode: "standard" | "fuel_only";
+    plannedMinutes: number; balance: number; shortName: string; pricing: Pricing;
+  },
+): Promise<Ref[]> {
+  const lockRef = db.collection("flightLocks").doc(`user_${a.payerUid}`);
+  let out = locks;
+  if (!out.some((l) => l.path === lockRef.path)) {
+    await tx.get(lockRef);
+    out = [...out, lockRef];
+  }
+  const category = toCategory(a.category);
+  const snap = await tx.get(db.collection("flights").where("payerUid", "==", a.payerUid));
+  const otherCosts = snap.docs
+    .filter((d) =>
+      d.id !== a.id &&
+      d.get("status") === "valide" &&
+      d.get("isClosed") !== true &&
+      d.get("deleted") !== true &&
+      (d.get("pricingMode") === "standard" || d.get("pricingMode") === "fuel_only"))
+    .map((d) => {
+      const start = (d.get("start") as FirebaseFirestore.Timestamp).toMillis();
+      const end = (d.get("end") as FirebaseFirestore.Timestamp).toMillis();
+      const otherPricing = (d.get("pricingSnapshot") as Pricing | null | undefined) ?? a.pricing;
+      return estimatedCost(
+        d.get("pricingMode") as "standard" | "fuel_only", (end - start) / 60_000, category, otherPricing,
+      );
+    });
+  const available = availableCredit(a.balance, otherCosts);
+  const cost = estimatedCost(a.pricingMode, a.plannedMinutes, category, a.pricing);
+  if (available < cost) {
+    const missing = cost - available;
+    throw new HttpsError("failed-precondition",
+      `Crédit insuffisant pour ${a.shortName} : il manque ${formatFcfa(missing)}.`,
+      { credit: { missing, available, cost } });
+  }
+  return out;
+}
+
+/**
  * Contrôles communs, décision de statut, mode de tarification, payeur et,
  * si le vol devient ou reste valide, conflits et verrous.
  */
@@ -151,6 +207,22 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
     });
   }
 
+  // Décision 1 : crédit contrôlé dès la demande. `pricingMode` vaut toujours
+  // "standard" ou "fuel_only" à ce stade (le mode "custom" ne se décide qu'à
+  // la clôture, spec §4.1).
+  const payerUid = payerOf(a.input.crew);
+  const payer = crew.find((c) => c.uid === payerUid)!;
+  locks = await checkCredit(tx, db, locks, {
+    id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
+    shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000, pricing,
+  });
+
+  // pricingSnapshot (décision, ctrl.) : figé au passage de demande/refuse à
+  // valide, conservé tant que le vol reste valide ; null pour une demande.
+  const pricingSnapshot: Pricing | null = d.status === "valide"
+    ? (a.existingSnapshot && a.previousStatus === "valide" ? a.existingSnapshot : pricing)
+    : null;
+
   return {
     status: d.status,
     locks,
@@ -165,7 +237,8 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       instructorUid: d.instructorUid,
       status: d.status,
       pricingMode,
-      payerUid: payerOf(a.input.crew),
+      payerUid,
+      pricingSnapshot,
       updatedAt: FieldValue.serverTimestamp(),
     },
   };
