@@ -10,6 +10,7 @@ import { closeFlight } from "./close";
 import { createFlight } from "./edit";
 import { DEFAULT_PRICING } from "../rules/pricing";
 import { updatePricing } from "../finance/pricing-store";
+import { CLUB_UTC_OFFSET_MS, clubDay } from "../rules/club-day";
 
 const getFlight = async (id: string) => (await db.collection("flights").doc(id).get()).data()!;
 const getUser = async (uid: string) => (await db.collection("users").doc(uid).get()).data()!;
@@ -83,6 +84,20 @@ test("avant le départ : failed-precondition", async () => {
     closeFlight(pilot, { flightId: id, actualMinutes: 90 }),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "Le vol n'a pas encore eu lieu.",
   );
+});
+
+test("vol du jour pas encore parti : clôture acceptée (décision 6)", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  // Dernière seconde du jour au club : toujours aujourd'hui, et dans le
+  // futur sauf pendant cette seconde-là.
+  const endOfClubDay = (clubDay(Date.now()) + 1) * 86_400_000 - CLUB_UTC_OFFSET_MS - 1000;
+  const id = await seedFlight({
+    start: endOfClubDay - 60 * 60_000, end: endOfClubDay, crew: [pilot.uid], aircraftId: a,
+    status: "valide", pricingMode: "standard",
+  });
+  const r = await closeFlight(pilot, { flightId: id, actualMinutes: 60 });
+  assert.equal(r.billedTo, "account");
 });
 
 test("deux clôtures simultanées : une seule réussit, un seul débit", async () => {

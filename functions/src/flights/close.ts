@@ -9,6 +9,7 @@ import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
 import { closingBill, Pricing, toCategory } from "../rules/pricing";
+import { isOnOrBeforeClubToday } from "../rules/club-day";
 import { touchLocks } from "./core";
 import { validateClosing } from "./validation";
 
@@ -42,7 +43,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     if (!me.isAdmin && !crew.includes(me.uid)) {
       throw new HttpsError("permission-denied", "Réservé à l'équipage ou à un admin.");
     }
-    if ((f.get("start") as FirebaseFirestore.Timestamp).toMillis() > now) {
+    if (!isOnOrBeforeClubToday((f.get("start") as FirebaseFirestore.Timestamp).toMillis(), now)) {
       throw new HttpsError("failed-precondition", "Le vol n'a pas encore eu lieu.");
     }
 
