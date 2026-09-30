@@ -15,6 +15,7 @@ import '../../data/finance_api.dart';
 import '../../data/flight.dart';
 import '../../data/flight_api.dart';
 import '../../data/services.dart';
+import 'closing_dialog.dart';
 import 'flight_actions.dart';
 import 'flight_texts.dart';
 
@@ -540,17 +541,17 @@ class _FlightScreenState extends State<FlightScreen> {
   }
 
   /// Clôture (Task 9, spec §4.3) : durée réelle, montant si nécessaire, puis
-  /// `closeFlight` et retour au planning (via _run).
+  /// `closeFlight` et retour au planning (via _run). `category` peut être
+  /// `null` (fix round 1, décision utilisateur 2 : tout membre d'équipage ou
+  /// un admin clôture, même sans connaître l'appartenance d'un compte débité
+  /// qui n'est pas le sien) : le dialogue s'ouvre quand même, seul son
+  /// aperçu local du montant est alors indisponible.
   Future<void> _openClosing() async {
     final f = _current!;
     final category = _category(_debitedUid);
-    if (category == null) {
-      _snack('Catégorie du compte débité indisponible.');
-      return;
-    }
-    final result = await showDialog<_ClosingResult>(
+    final result = await showDialog<ClosingResult>(
       context: context,
-      builder: (_) => _ClosingDialog(
+      builder: (_) => ClosingDialog(
         plannedMinutes: f.end.difference(f.start).inMinutes,
         mode: f.pricingMode,
         category: category,
@@ -891,183 +892,6 @@ class _RefuseDialogState extends State<_RefuseDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Retour')),
         FilledButton(
             onPressed: () => Navigator.pop(context, _c.text), child: const Text('Refuser')),
-      ],
-    );
-  }
-}
-
-/// Saisie validée du dialogue de clôture, prête pour FinanceApi.closeFlight.
-class _ClosingResult {
-  const _ClosingResult(this.actualMinutes, this.shortFlightAmount, this.customAmount);
-  final int actualMinutes;
-  final int? shortFlightAmount;
-  final int? customAmount;
-}
-
-/// Dialogue « Clôturer le vol » (Task 9, spec §4.3) : durée réelle
-/// (préremplie avec la durée prévue), montant à facturer si le vol est plus
-/// court que le minimum tarifaire, montant différent si un passager sans
-/// compte est à bord, aperçu du montant calculé par [closingBill] et plafond
-/// local de 200 000 FCFA sur les montants saisis (décision 5).
-class _ClosingDialog extends StatefulWidget {
-  const _ClosingDialog({
-    required this.plannedMinutes,
-    required this.mode,
-    required this.category,
-    required this.pricing,
-    required this.hasPassenger,
-  });
-
-  final int plannedMinutes;
-  final String mode; // 'standard' | 'fuel_only'
-  final UserCategory category;
-  final Pricing pricing;
-  final bool hasPassenger;
-
-  @override
-  State<_ClosingDialog> createState() => _ClosingDialogState();
-}
-
-class _ClosingDialogState extends State<_ClosingDialog> {
-  late final _minutes = TextEditingController(text: '${widget.plannedMinutes}');
-  final _shortAmount = TextEditingController();
-  final _customAmount = TextEditingController();
-  bool _customChecked = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _minutes.dispose();
-    _shortAmount.dispose();
-    _customAmount.dispose();
-    super.dispose();
-  }
-
-  int? get _actualMinutes => int.tryParse(_minutes.text.trim());
-
-  /// Mode standard et durée réelle sous le minimum tarifaire (spec §4.3) :
-  /// un vol carburant seulement est toujours calculé à la minute.
-  bool get _needsShortAmount {
-    final m = _actualMinutes;
-    return widget.mode == 'standard' && m != null && m < widget.pricing.minPlannedMinutes;
-  }
-
-  /// Aperçu indicatif (pas d'erreur tant que les champs requis manquent :
-  /// celle-ci n'apparaît qu'à la validation, dans [_submit]).
-  int? get _preview {
-    final m = _actualMinutes;
-    if (m == null) return null;
-    final shortAmount = _needsShortAmount ? parseAmount(_shortAmount.text) : null;
-    if (_needsShortAmount && shortAmount == null) return null;
-    final customAmount = _customChecked ? parseAmount(_customAmount.text) : null;
-    if (_customChecked && customAmount == null) return null;
-    try {
-      return closingBill(
-        mode: widget.mode,
-        actualMinutes: m,
-        category: widget.category,
-        pricing: widget.pricing,
-        shortFlightAmount: shortAmount,
-        customAmount: customAmount,
-        hasPassenger: widget.hasPassenger,
-      ).billedAmount;
-    } on ArgumentError {
-      return null;
-    }
-  }
-
-  void _submit() {
-    final m = _actualMinutes;
-    if (m == null || m < 1 || m > 720) {
-      setState(() => _error = 'Durée réelle invalide (1 à 720 min).');
-      return;
-    }
-    int? shortAmount;
-    if (_needsShortAmount) {
-      shortAmount = parseAmount(_shortAmount.text);
-      if (shortAmount == null) {
-        setState(() => _error = 'Montant à facturer obligatoire pour un vol de moins de '
-            '${widget.pricing.minPlannedMinutes} min.');
-        return;
-      }
-      if (shortAmount > maxManualAmount) {
-        setState(() => _error = 'Montant trop élevé (200 000 FCFA au maximum).');
-        return;
-      }
-    }
-    int? customAmount;
-    if (_customChecked) {
-      customAmount = parseAmount(_customAmount.text);
-      if (customAmount == null) {
-        setState(() => _error = 'Indiquez le montant.');
-        return;
-      }
-      if (customAmount > maxManualAmount) {
-        setState(() => _error = 'Montant trop élevé (200 000 FCFA au maximum).');
-        return;
-      }
-    }
-    Navigator.pop(context, _ClosingResult(m, shortAmount, customAmount));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final preview = _preview;
-    return AlertDialog(
-      title: const Text('Clôturer le vol'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              key: const Key('closing-minutes'),
-              controller: _minutes,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Durée réelle (minutes)'),
-              onChanged: (_) => setState(() {}),
-            ),
-            if (_needsShortAmount) ...[
-              const SizedBox(height: 8),
-              TextField(
-                key: const Key('closing-short-amount'),
-                controller: _shortAmount,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Montant à facturer'),
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
-            if (widget.hasPassenger) ...[
-              CheckboxListTile(
-                key: const Key('closing-custom-check'),
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Montant différent (facturé hors app)'),
-                value: _customChecked,
-                onChanged: (v) => setState(() => _customChecked = v ?? false),
-              ),
-              if (_customChecked)
-                TextField(
-                  key: const Key('closing-custom-amount'),
-                  controller: _customAmount,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Montant'),
-                  onChanged: (_) => setState(() {}),
-                ),
-            ],
-            const SizedBox(height: 12),
-            if (preview != null) Text('Montant : ${formatFcfa(preview)}'),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child:
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-        FilledButton(onPressed: _submit, child: const Text('Clôturer')),
       ],
     );
   }

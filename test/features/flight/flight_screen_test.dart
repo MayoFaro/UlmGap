@@ -646,6 +646,40 @@ void main() {
     expect(find.byType(FlightScreen), findsNothing);
   });
 
+  testWidgets(
+      'clôture : équipier non-staff, compte débité autre (catégorie inconnue) → '
+      'clôture quand même possible (fix round 1, décision 2)', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.directory = [...a.directory, member('pay', 'PAY', 'eleve')];
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c5', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['pay', 'u1'], createdBy: 'pay', status: 'valide');
+    final finance = FakeFinanceApi();
+    // 'u1' est équipier, pas staff, et n'est pas le compte débité ('pay') :
+    // watchCategories n'est pas écouté (_mayChoose == false), donc la
+    // catégorie de 'pay' est inconnue ici.
+    await tester
+        .pumpWidget(pushHost(a, testUser(uid: 'u1', profile: 'eleve'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Clôturer'), findsOneWidget);
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    // Aucun aperçu chiffré local (catégorie inconnue), mais le formulaire
+    // reste utilisable.
+    expect(find.text('Montant calculé par le serveur à la clôture.'), findsOneWidget);
+    expect(find.textContaining('Montant :'), findsNothing);
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(finance.closed.single['flightId'], 'c5');
+    expect(finance.closed.single['actualMinutes'], 90);
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.byType(FlightScreen), findsNothing);
+  });
+
   testWidgets('clôture : vol standard de 30 min → montant à facturer exigé', (tester) async {
     _useTallView(tester);
     final start = DateTime(2026, 10, 12, 5);
