@@ -5,6 +5,8 @@ import '../../data/app_user.dart';
 import '../../data/services.dart';
 import '../account/account_screen.dart';
 import '../admin/aircraft_admin_screen.dart';
+import '../admin/billing_report_screen.dart';
+import '../admin/pricing_admin_screen.dart';
 import '../admin/users_admin_screen.dart';
 import '../flight/flight_screen.dart';
 import '../instructors/instructors_screen.dart';
@@ -48,12 +50,18 @@ class HomeShell extends StatelessWidget {
               tooltip: 'Administration',
               icon: const Icon(Icons.admin_panel_settings),
               onSelected: (v) => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) =>
-                    v == 'users' ? const UsersAdminScreen() : const AircraftAdminScreen(),
+                builder: (_) => switch (v) {
+                  'users' => const UsersAdminScreen(),
+                  'aircraft' => const AircraftAdminScreen(),
+                  'pricing' => const PricingAdminScreen(),
+                  _ => const BillingReportScreen(),
+                },
               )),
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'users', child: Text('Comptes')),
                 PopupMenuItem(value: 'aircraft', child: Text('Appareils')),
+                PopupMenuItem(value: 'pricing', child: Text('Tarifs')),
+                PopupMenuItem(value: 'billing', child: Text('Relevé des vols facturés')),
               ],
             ),
           IconButton(

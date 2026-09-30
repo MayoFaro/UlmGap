@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/account/account_screen.dart';
+import 'package:ulmgap/features/admin/billing_report_screen.dart';
+import 'package:ulmgap/features/admin/pricing_admin_screen.dart';
 import 'package:ulmgap/features/home/home_shell.dart';
 import 'package:ulmgap/features/instructors/instructors_screen.dart';
 
@@ -48,5 +50,26 @@ void main() {
     await tester.pumpWidget(host(testUser(profile: 'eleve', isAdmin: true)));
     await tester.pump();
     expect(find.byTooltip('Instructeurs'), findsOneWidget);
+  });
+
+  testWidgets('menu Administration : Tarifs ouvre PricingAdminScreen', (tester) async {
+    await tester.pumpWidget(host(testUser(isAdmin: true)));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Administration'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tarifs'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PricingAdminScreen), findsOneWidget);
+  });
+
+  testWidgets('menu Administration : Relevé des vols facturés ouvre BillingReportScreen',
+      (tester) async {
+    await tester.pumpWidget(host(testUser(isAdmin: true)));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Administration'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Relevé des vols facturés'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BillingReportScreen), findsOneWidget);
   });
 }

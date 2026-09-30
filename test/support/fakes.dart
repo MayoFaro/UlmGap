@@ -157,6 +157,7 @@ Flight testFlight({
   int? actualFlightMinutes,
   int? billedAmount,
   String? billedTo,
+  String? payerUidField,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -177,6 +178,7 @@ Flight testFlight({
     'actualFlightMinutes': actualFlightMinutes,
     'billedAmount': billedAmount,
     'billedTo': billedTo,
+    'payerUid': payerUidField,
   });
 }
 
