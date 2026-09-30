@@ -92,6 +92,19 @@ Future<void> pickAircraft(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Code court de l'équipier marqué « Compte débité » (mention unique).
+void expectDebited(String short) {
+  expect(find.text('Compte débité'), findsOneWidget);
+  expect(find.textContaining('Compte débité :'), findsNothing);
+  expect(
+    find.descendant(
+      of: find.ancestor(of: find.text('Compte débité'), matching: find.byType(ListTile)),
+      matching: find.text(short),
+    ),
+    findsOneWidget,
+  );
+}
+
 Future<void> addMember(WidgetTester tester, String uid) async {
   await tester.tap(find.text('Ajouter un équipier'));
   await tester.pumpAndSettle();
@@ -120,8 +133,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('09:00'), findsOneWidget); // départ : heure pleine suivante
     expect(find.text('10:00'), findsOneWidget); // fin par défaut
-    expect(find.byKey(const Key('payer')), findsOneWidget);
-    expect(find.text('Compte débité : JDU'), findsWidgets);
+    expect(find.byKey(const Key('payer')), findsNothing);
+    expectDebited('JDU');
 
     await addMember(tester, 'ins');
     await pickAircraft(tester);
@@ -158,10 +171,10 @@ void main() {
     await tester.pumpWidget(host(api(), testUser(uid: 'u1', profile: 'instructeur')));
     await tester.pumpAndSettle();
     await addMember(tester, 'lac');
-    expect(find.text('Compte débité : JDU'), findsWidgets);
+    expectDebited('JDU');
     await tester.tap(find.byTooltip('Mettre en premier'));
     await tester.pumpAndSettle();
-    expect(find.text('Compte débité : LAC'), findsWidgets);
+    expectDebited('LAC');
   });
 
   testWidgets('mettre en premier : absent pour un élève, présent pour un instructeur',
@@ -225,7 +238,7 @@ void main() {
     await tester.tap(find.text('Ajouter'));
     await tester.pumpAndSettle();
     expect(find.text('Paul'), findsOneWidget);
-    expect(find.text('Compte débité : JDU'), findsWidgets);
+    expectDebited('JDU');
     expect(find.text('Ajouter un équipier'), findsNothing); // 2 à bord
   });
 

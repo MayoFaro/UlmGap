@@ -992,7 +992,6 @@ class _FlightScreenState extends State<FlightScreen> {
                 onPressed: _addPassenger,
               ),
             ]),
-          Text('$debitedLabel : ${_short(_crew.first)}', key: const Key('payer')),
           const SizedBox(height: 16),
           RawAutocomplete<String>(
             textEditingController: _destination,
@@ -1078,7 +1077,6 @@ class _FlightScreenState extends State<FlightScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(_statusText(decision)),
-                  Text('$debitedLabel : ${_short(_crew.first)}'),
                   Text('Mode : ${pricingModeLabel(_pricingMode)}'),
                   ..._previewFinanceLines(context),
                   if (conflict != null)
