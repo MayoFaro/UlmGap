@@ -2,6 +2,7 @@
 // adminUpdatePricing (Task 12).
 import 'package:flutter/material.dart';
 
+import '../../core/money.dart';
 import '../../core/pricing.dart';
 import '../../core/profiles.dart';
 import '../../data/services.dart';
@@ -50,9 +51,18 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _fuelHourlyRate.text = p.fuelHourlyRate.toString();
   }
 
-  String? _validateNonNegativeInt(String? v) {
+  // Plages identiques au serveur (functions/src/finance/validation.ts).
+  String? _validateAmount(String? v) {
     final n = int.tryParse((v ?? '').trim());
-    if (n == null || n < 0) return 'Nombre entier requis.';
+    if (n == null) return 'Nombre entier requis.';
+    if (n < 0 || n > 1000000) return 'Entre 0 et ${formatFcfa(1000000)}.';
+    return null;
+  }
+
+  String? _validateMinutes(String? v) {
+    final n = int.tryParse((v ?? '').trim());
+    if (n == null) return 'Nombre entier requis.';
+    if (n < 1 || n > 600) return 'Entre 1 et 600 min.';
     return null;
   }
 
@@ -107,7 +117,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                       controller: _flatFee[c],
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(labelText: 'Forfait ${c.code} (FCFA)'),
-                      validator: _validateNonNegativeInt,
+                      validator: _validateAmount,
                     ),
                   ),
                 const SizedBox(height: 16),
@@ -121,7 +131,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                       controller: _overtimeHourly[c],
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(labelText: 'Dépassement ${c.code} (FCFA/h)'),
-                      validator: _validateNonNegativeInt,
+                      validator: _validateAmount,
                     ),
                   ),
                 const SizedBox(height: 16),
@@ -130,7 +140,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   controller: _includedMinutes,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Minutes incluses'),
-                  validator: _validateNonNegativeInt,
+                  validator: _validateMinutes,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -138,7 +148,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   controller: _minPlannedMinutes,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Durée prévue minimale (min)'),
-                  validator: _validateNonNegativeInt,
+                  validator: _validateMinutes,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -146,7 +156,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   controller: _fuelHourlyRate,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Carburant (FCFA/h)'),
-                  validator: _validateNonNegativeInt,
+                  validator: _validateAmount,
                 ),
                 const SizedBox(height: 24),
                 FilledButton(

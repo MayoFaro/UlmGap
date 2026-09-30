@@ -23,9 +23,12 @@ AppUser _user({required int balance}) => AppUser(
       balance: balance,
     );
 
-Widget host(FakeFinanceApi finance, AppUser me, {FakeUserRepository? users}) => AppServices(
+Widget host(FakeFinanceApi finance, AppUser me,
+        {FakeUserRepository? users, FakeFlightApi? flights}) =>
+    AppServices(
       auth: FakeAuthService(),
       users: users ?? FakeUserRepository(),
+      flights: flights,
       finance: finance,
       child: MaterialApp(home: AccountScreen(me: me)),
     );
@@ -74,7 +77,9 @@ void main() {
     expect(soldeText.style?.color, errorColor);
 
     // Mouvements : type, raison, montant signé, solde après.
-    expect(find.text('Vol — Vol'), findsOneWidget);
+    // Sans FlightApi, le vol n'est pas identifié ; la raison « Vol » égale
+    // au libellé n'est pas répétée.
+    expect(find.text('Vol'), findsOneWidget);
     expect(find.text('Crédit — Versement caisse'), findsOneWidget);
     expect(find.text(formatFcfa(-15000)), findsOneWidget);
     expect(find.text('+${formatFcfa(12000)}'), findsOneWidget);
@@ -114,5 +119,34 @@ void main() {
     await tester.pump();
     expect(find.text('Solde : ${formatFcfa(20000)}'), findsOneWidget);
     expect(find.text('Solde : ${formatFcfa(0)}'), findsNothing);
+  });
+
+  testWidgets('mouvements liés à un vol : date du vol, raison égale au libellé omise',
+      (tester) async {
+    final me = _user(balance: 0);
+    AccountMovement move(String id, String type, String reason, int amount) => AccountMovement(
+          id: id,
+          userUid: 'u1',
+          amount: amount,
+          type: type,
+          reason: reason,
+          flightId: 'f1',
+          by: 'u1',
+          at: DateTime(2026, 10, 14, 9),
+          balanceAfter: 0,
+        );
+    final finance = FakeFinanceApi()
+      ..movements['u1'] = [
+        move('m1', 'flight', 'Vol', -15000),
+        move('m2', 'flight_adjustment', 'Régularisation', -6000),
+        move('m3', 'flight_adjustment', 'Annulation du vol', 21000),
+      ];
+    final flights = FakeFlightApi()..flights = [testFlight(id: 'f1', start: DateTime(2026, 10, 12, 9))];
+    await tester.pumpWidget(host(finance, me, flights: flights));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vol du lundi 12 octobre'), findsOneWidget);
+    expect(find.text('Régularisation — vol du lundi 12 octobre'), findsOneWidget);
+    expect(find.text('Régularisation — vol du lundi 12 octobre — Annulation du vol'), findsOneWidget);
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/money.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/app_user.dart';
+import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/instructors/instructors_screen.dart';
 
@@ -161,5 +162,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Solde : ${formatFcfa(15000)}'), findsOneWidget);
     expect(find.text('Solde : ${formatFcfa(0)}'), findsNothing);
+  });
+
+  Future<void> openDialog(WidgetTester tester, FakeFinanceApi finance) async {
+    await tester.pumpWidget(host(finance));
+    await tester.pump();
+    await tester.tap(find.text('Jean Dupont'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Créditer / corriger'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('échec refusé par le serveur : message du serveur affiché', (tester) async {
+    final finance = FakeFinanceApi()
+      ..accounts = [_account('u1', 'Jean Dupont', balance: 0)]
+      ..failWith = const FlightFailure('Compte introuvable.');
+    await openDialog(tester, finance);
+    await tester.enterText(find.byKey(const Key('credit-amount')), '12000');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Compte introuvable.'), findsOneWidget);
+    expect(find.byKey(const Key('credit-amount')), findsOneWidget);
+  });
+
+  testWidgets('échec inattendu (réseau) : opération incertaine, vérifier le solde',
+      (tester) async {
+    final finance = FakeFinanceApi()
+      ..accounts = [_account('u1', 'Jean Dupont', balance: 0)]
+      ..failWith = Exception('réseau');
+    await openDialog(tester, finance);
+    await tester.enterText(find.byKey(const Key('credit-amount')), '12000');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Opération incertaine : vérifiez le solde avant de réessayer.'),
+        findsOneWidget);
+  });
+
+  testWidgets('motif limité à 200 caractères', (tester) async {
+    final finance = FakeFinanceApi()..accounts = [_account('u1', 'Jean Dupont', balance: 0)];
+    await openDialog(tester, finance);
+    final field = tester.widget<TextField>(find.byKey(const Key('credit-reason')));
+    expect(field.maxLength, 200);
   });
 }

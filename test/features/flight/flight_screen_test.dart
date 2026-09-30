@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/money.dart';
+import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
@@ -678,6 +679,50 @@ void main() {
     expect(finance.closed.single['actualMinutes'], 90);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets(
+      'clôture par un élève (sa décision serait « demande ») : tarifs figés du vol, pas les '
+      'tarifs courants', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    // Figé à 45 min au moment de la validation ; abaissé depuis à 30 min.
+    final f = testFlight(
+        id: 'c6', start: start, end: start.add(const Duration(hours: 1)),
+        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins', status: 'valide',
+        pricingSnapshot: defaultPricing.toMap());
+    final finance = FakeFinanceApi()
+      ..pricing = Pricing.fromMap({...defaultPricing.toMap(), 'minPlannedMinutes': 30});
+    await tester.pumpWidget(pushHost(api(), testUser(uid: 'u1', profile: 'eleve', category: 'GAP'),
+        flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('closing-minutes')), '40');
+    await tester.pumpAndSettle();
+    // 40 min < 45 (snapshot) : le serveur exigera le montant à facturer.
+    expect(find.byKey(const Key('closing-short-amount')), findsOneWidget);
+  });
+
+  testWidgets('crédit disponible : un vol passé non clôturé du compte débité est déduit',
+      (tester) async {
+    _useTallView(tester);
+    final past = DateTime(2026, 10, 10, 9);
+    final finance = FakeFinanceApi()
+      ..flights = [
+        testFlight(
+            id: 'old', start: past, crew: ['u1'], createdBy: 'u1', status: 'valide',
+            payerUidField: 'u1'),
+      ];
+    await tester.pumpWidget(host(
+        api(), testUser(uid: 'u1', profile: 'instructeur', category: 'EXT', balance: 100000),
+        finance: finance));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    // 100 000 − 70 000 (vol passé, EXT 60 min) = 30 000.
+    expect(preview(tester), contains('Crédit disponible de JDU : ${formatFcfa(30000)}'));
   });
 
   testWidgets('clôture : vol standard de 30 min → montant à facturer exigé', (tester) async {

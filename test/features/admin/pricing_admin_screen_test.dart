@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/core/money.dart';
 import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/services.dart';
@@ -77,5 +78,36 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('refus serveur'), findsOneWidget);
+  });
+
+  testWidgets('minutes : 0 refusé localement (1 au minimum, comme le serveur)', (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()..pricing = defaultPricing;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('includedMinutes')), '0');
+    await tester.enterText(find.byKey(const Key('minPlannedMinutes')), '0');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+
+    expect(api.updatedPricing, isNull);
+    expect(find.text('Entre 1 et 600 min.'), findsNWidgets(2));
+  });
+
+  testWidgets('montants : plus de 1 000 000 refusé localement (comme le serveur)',
+      (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()..pricing = defaultPricing;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('flatFee-EXT')), '1000001');
+    await tester.enterText(find.byKey(const Key('fuelHourlyRate')), '1000001');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+
+    expect(api.updatedPricing, isNull);
+    expect(find.text('Entre 0 et ${formatFcfa(1000000)}.'), findsNWidgets(2));
   });
 }

@@ -158,6 +158,7 @@ Flight testFlight({
   int? billedAmount,
   String? billedTo,
   String? payerUidField,
+  Map<String, dynamic>? pricingSnapshot,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -179,6 +180,7 @@ Flight testFlight({
     'billedAmount': billedAmount,
     'billedTo': billedTo,
     'payerUid': payerUidField,
+    'pricingSnapshot': pricingSnapshot,
   });
 }
 
@@ -363,5 +365,10 @@ class FakeFinanceApi implements FinanceApi {
   @override
   Stream<List<Flight>> watchFlightsBetween(DateTime from, DateTime to) => Stream.value(
         flights.where((f) => !f.start.isBefore(from) && f.start.isBefore(to)).toList(),
+      );
+
+  @override
+  Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => Stream.value(
+        flights.where((f) => f.payerUidField == payerUid && !f.isClosed).toList(),
       );
 }

@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/money.dart';
+import '../../data/flight_api.dart' show FlightFailure;
 import '../../data/services.dart';
 
 enum _Mode { credit, correction }
@@ -64,11 +65,16 @@ class _CreditDialogState extends State<CreditDialog> {
       if (!mounted) return;
       Navigator.pop(context);
       messenger.showSnackBar(SnackBar(content: Text('Nouveau solde : ${formatFcfa(balance)}')));
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = 'Échec. Réessayez.';
+        // Refus du serveur : son message. Autre erreur (réseau, délai) :
+        // l'opération a pu aboutir, d'où la vérification du solde avant
+        // de réessayer (pas de double versement).
+        _error = e is FlightFailure
+            ? e.message
+            : 'Opération incertaine : vérifiez le solde avant de réessayer.';
       });
     }
   }
@@ -107,6 +113,7 @@ class _CreditDialogState extends State<CreditDialog> {
             TextField(
               key: const Key('credit-reason'),
               controller: _reason,
+              maxLength: 200,
               decoration: InputDecoration(
                 labelText:
                     _mode == _Mode.correction ? 'Motif (obligatoire)' : 'Motif (facultatif)',

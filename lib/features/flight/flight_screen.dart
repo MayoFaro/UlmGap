@@ -81,6 +81,12 @@ class _FlightScreenState extends State<FlightScreen> {
   /// enregistrement.
   FinanceApi? _finance;
 
+  /// Vols non clôturés du compte débité affiché (passés compris), écoutés
+  /// pour [_payerFlightsUid] et réabonnés quand le compte débité change.
+  List<Flight> _payerFlights = [];
+  String? _payerFlightsUid;
+  StreamSubscription<List<Flight>>? _payerFlightsSub;
+
   AppUser get _me => widget.me;
 
   Set<FlightAction> get _actions {
@@ -177,6 +183,7 @@ class _FlightScreenState extends State<FlightScreen> {
     for (final s in _subs) {
       s.cancel();
     }
+    _payerFlightsSub?.cancel();
     _destination.dispose();
     _destinationFocus.dispose();
     _correctMinutes.dispose();
@@ -281,9 +288,13 @@ class _FlightScreenState extends State<FlightScreen> {
   /// Tarifs à utiliser pour le coût du vol en cours (règle du contrôleur,
   /// miroir de planFlight côté serveur) : le `pricingSnapshot` figé s'il
   /// reste `valide`, sinon les tarifs courants.
+  /// En consultation (y compris la clôture par un équipier dont la propre
+  /// décision serait `demande`), un vol `valide` garde son snapshot figé.
   Pricing get _pricingForCost {
-    final f = widget.flight;
-    if (f != null && f.status == FlightStatus.valide && _decision.status == 'valide') {
+    final f = _current;
+    if (f != null &&
+        f.status == FlightStatus.valide &&
+        (!_fieldsEditable || _decision.status == 'valide')) {
       return f.pricingSnapshot ?? _pricing;
     }
     return _pricing;
@@ -299,18 +310,34 @@ class _FlightScreenState extends State<FlightScreen> {
     return computedCost(_pricingMode, _end.difference(_start).inMinutes, category, _pricingForCost);
   }
 
+  /// Abonne l'écran aux vols non clôturés du compte débité courant (appelé
+  /// à chaque build : le compte débité suit la saisie de l'équipage).
+  void _syncPayerFlights() {
+    final finance = _finance;
+    final uid = _debitedUid;
+    if (finance == null || uid == _payerFlightsUid) return;
+    _payerFlightsUid = uid;
+    _payerFlights = [];
+    _payerFlightsSub?.cancel();
+    _payerFlightsSub = finance.watchUnclosedFlightsPaidBy(uid).listen(
+      (l) {
+        if (mounted && _payerFlightsUid == uid) setState(() => _payerFlights = l);
+      },
+      onError: (Object _) {}, // l'aperçu reste indicatif
+    );
+  }
+
   /// Coût estimé des autres vols `valide`, non clôturés, du même compte
-  /// débité (spec §4.4), sur les vols déjà chargés par l'écran.
+  /// débité (spec §4.4), passés compris, comme le serveur.
   List<int> get _otherCosts {
     final category = _category(_debitedUid);
     if (category == null) return const [];
     return [
-      for (final o in _flights)
+      for (final o in _payerFlights)
         if (o.id != widget.flight?.id &&
             o.status == FlightStatus.valide &&
             !o.isClosed &&
             !o.deleted &&
-            (o.payerUidField ?? o.crew.first) == _debitedUid &&
             (o.pricingMode == 'standard' || o.pricingMode == 'fuel_only'))
           estimatedCost(o.pricingMode, o.end.difference(o.start).inMinutes, category,
               o.pricingSnapshot ?? _pricing),
@@ -775,6 +802,7 @@ class _FlightScreenState extends State<FlightScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _syncPayerFlights();
     // Task 3 (retours de recette) : un vol existant supprimé ou devenu
     // introuvable pendant la consultation (annulé/effacé ailleurs) n'affiche
     // plus la fiche (champs alors obsolètes) ni aucun bouton.

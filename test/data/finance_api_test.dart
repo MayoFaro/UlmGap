@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/account_movement.dart';
+import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
+import 'package:ulmgap/data/flight_api.dart';
 
 void main() {
   test('AccountMovement.fromMap : champs du contrat', () {
@@ -108,5 +110,19 @@ void main() {
     expect(f.billedTo, 'off_app');
     expect(f.customAmount, 50000);
     expect(f.pricingMode, 'custom');
+  });
+
+  test('financeFailureFrom : refus du serveur → FlightFailure avec son message', () {
+    for (final code in ['invalid-argument', 'failed-precondition', 'permission-denied', 'not-found']) {
+      final f = financeFailureFrom(code, 'Compte introuvable.', null);
+      expect(f, isA<FlightFailure>(), reason: code);
+      expect(f!.message, 'Compte introuvable.');
+    }
+  });
+
+  test('financeFailureFrom : issue incertaine (réseau, délai, interne) → null', () {
+    for (final code in ['unavailable', 'deadline-exceeded', 'internal', 'unknown', 'cancelled']) {
+      expect(financeFailureFrom(code, 'x', null), isNull, reason: code);
+    }
   });
 }

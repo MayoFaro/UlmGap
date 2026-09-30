@@ -5,8 +5,22 @@ import '../core/pricing.dart';
 import 'account_movement.dart';
 import 'app_user.dart';
 import 'flight.dart';
-import 'flight_api.dart' show flightFailureFrom;
+import 'flight_api.dart' show FlightFailure, flightFailureFrom;
 import 'pricing_settings.dart';
+
+/// Codes d'erreur des callables qui signifient un refus certain : l'opération
+/// n'a pas eu lieu, le message du serveur peut être affiché tel quel.
+const _refusalCodes = {
+  'invalid-argument', 'failed-precondition', 'permission-denied', 'not-found',
+  'unauthenticated', 'already-exists', 'out-of-range',
+};
+
+/// FlightFailure pour un refus certain du serveur ; null si l'issue est
+/// incertaine (réseau, délai, erreur interne) : l'opération a pu aboutir, et
+/// l'appelant laisse alors passer l'erreur d'origine (pas de double
+/// versement sur un « Réessayez »).
+FlightFailure? financeFailureFrom(String code, String message, Object? details) =>
+    _refusalCodes.contains(code) ? flightFailureFrom(message, details) : null;
 
 abstract class FinanceApi {
   /// Tarifs courants ; document absent → valeurs par défaut (spec §2.4).
@@ -41,6 +55,11 @@ abstract class FinanceApi {
   /// Vols dont le départ tombe dans [from, to[, pour le calcul du crédit
   /// disponible et les écrans admin.
   Stream<List<Flight>> watchFlightsBetween(DateTime from, DateTime to);
+
+  /// Vols non clôturés dont [payerUid] est le compte débité, passés compris
+  /// (crédit disponible, spec §4.4 : même requête que le serveur, égalités
+  /// seules, sans index composite).
+  Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid);
 }
 
 class FirebaseFinanceApi implements FinanceApi {
@@ -62,7 +81,7 @@ class FirebaseFinanceApi implements FinanceApi {
     try {
       return (await _fn.httpsCallable(name).call(payload)).data;
     } on FirebaseFunctionsException catch (e) {
-      throw flightFailureFrom(e.message ?? e.code, e.details);
+      throw financeFailureFrom(e.code, e.message ?? e.code, e.details) ?? e;
     }
   }
 
@@ -129,6 +148,13 @@ class FirebaseFinanceApi implements FinanceApi {
       .where('start', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
       .where('start', isLessThan: Timestamp.fromDate(to))
       .orderBy('start')
+      .snapshots()
+      .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
+
+  @override
+  Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => _flights
+      .where('payerUid', isEqualTo: payerUid)
+      .where('isClosed', isEqualTo: false)
       .snapshots()
       .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
 }
