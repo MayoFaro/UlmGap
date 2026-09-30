@@ -1,7 +1,6 @@
-// Miroir de functions/src/rules/pricing.ts (coûts, crédit disponible et
-// facturation à la clôture). Cas partagés : test/fixtures/pricing_cases.json
-// (la partie "adjustments" ne concerne que la régularisation admin, gérée
-// côté serveur : pas nécessaire côté app).
+// Miroir de functions/src/rules/pricing.ts (coûts, crédit disponible,
+// facturation à la clôture et régularisation admin). Cas partagés :
+// test/fixtures/pricing_cases.json.
 import 'profiles.dart';
 
 class Pricing {
@@ -124,4 +123,36 @@ ClosingBill closingBill({
     return (billedAmount: shortFlightAmount, billedTo: 'account', pricingMode: mode);
   }
   return (billedAmount: computed, billedTo: 'account', pricingMode: mode);
+}
+
+/// Une facture (avant ou après correction) telle que stockée sur le vol :
+/// `billedTo` vaut `'account'`, `'off_app'` ou `null` (jamais facturé).
+typedef BillLeg = ({String? billedTo, String? payerUid, int amount});
+
+/// Miroir exact de functions/src/rules/pricing.ts#adjustments : régularisation
+/// admin d'un vol clôturé (spec §4.5). Rend un mouvement par compte impacté
+/// (montants nuls omis, ordre de première apparition) : l'ancien montant
+/// facturé est remboursé au compte débité *avant* correction (s'il était
+/// imputé sur un solde), le nouveau est débité du compte débité *après*
+/// correction (de même). `amount` est le montant à appliquer tel quel au
+/// solde (positif = crédit/remboursement, négatif = débit).
+List<({String uid, int amount})> adjustments(BillLeg before, BillLeg after) {
+  final totals = <String, int>{};
+  final order = <String>[];
+  void add(String? uid, int amount) {
+    if (uid == null) return;
+    if (!totals.containsKey(uid)) {
+      totals[uid] = 0;
+      order.add(uid);
+    }
+    totals[uid] = totals[uid]! + amount;
+  }
+
+  if (before.billedTo == 'account') add(before.payerUid, before.amount);
+  if (after.billedTo == 'account') add(after.payerUid, -after.amount);
+
+  return [
+    for (final uid in order)
+      if (totals[uid] != 0) (uid: uid, amount: totals[uid]!),
+  ];
 }

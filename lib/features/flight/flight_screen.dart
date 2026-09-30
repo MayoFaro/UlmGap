@@ -368,14 +368,15 @@ class _FlightScreenState extends State<FlightScreen> {
     return _pricingMode == 'standard' && m != null && m < _pricingForCost.minPlannedMinutes;
   }
 
-  /// Régularisation locale (indicative) : différence entre l'ancienne facture
-  /// du vol (billedTo/billedAmount stockés) et la nouvelle (calcul local de
-  /// closingBill avec la saisie en cours), sur la part imputée à un compte.
-  /// La répartition exacte entre l'ancien et le nouveau compte débité (s'ils
-  /// diffèrent) reste au serveur (contrôleur : pas nécessaire côté app,
-  /// cf. core/pricing.dart) ; l'aperçu attribue simplement la différence au
-  /// compte débité courant.
-  ({int amount, String uid})? get _regularisation {
+  /// Régularisation locale (indicative), miroir exact de
+  /// `core/pricing.dart#adjustments` (lui-même miroir de
+  /// functions/src/rules/pricing.ts) : l'ancienne facture rembourse
+  /// intégralement l'ancien compte débité (`payerUidField ?? crew.first` du
+  /// vol stocké, avant correction), et la nouvelle facture (calcul local de
+  /// closingBill avec la saisie en cours) débite intégralement le nouveau
+  /// (`_debitedUid`, `crew.first` en cours d'édition) — un mouvement par
+  /// compte impacté, montants nuls omis.
+  List<({String uid, int amount})>? get _regularisation {
     final f = _current;
     if (f == null || !f.isClosed) return null;
     final category = _category(_debitedUid);
@@ -400,31 +401,37 @@ class _FlightScreenState extends State<FlightScreen> {
     } on ArgumentError {
       return null;
     }
-    int onAccount(String? billedTo, int? amount) => billedTo == 'account' ? (amount ?? 0) : 0;
-    final oldAmount = onAccount(f.billedTo, f.billedAmount);
-    final newAmount = onAccount(bill.billedTo, bill.billedAmount);
-    return (amount: newAmount - oldAmount, uid: _debitedUid);
+    final oldPayer = f.payerUidField ?? f.crew.first;
+    return adjustments(
+      (billedTo: f.billedTo, payerUid: oldPayer, amount: f.billedAmount ?? 0),
+      (billedTo: bill.billedTo, payerUid: _debitedUid, amount: bill.billedAmount),
+    );
   }
 
-  /// Ligne « Régularisation » affichée dans l'aperçu pendant la correction
-  /// d'un vol clôturé, à la place des lignes coût estimé/crédit disponible
-  /// (sans objet une fois le vol réalisé).
-  Widget? _regularisationLine() {
+  /// `+15 000 FCFA` (crédit/remboursement) ou `−15 000 FCFA` (débit) :
+  /// formatFcfa gère déjà le signe négatif, seul le « + » manque ici.
+  String _signedFcfa(int amount) => amount > 0 ? '+${formatFcfa(amount)}' : formatFcfa(amount);
+
+  /// Lignes « Régularisation », une par compte impacté (ou « Aucune
+  /// régularisation. » si la correction ne change rien), affichées dans
+  /// l'aperçu pendant la correction d'un vol clôturé, à la place des lignes
+  /// coût estimé/crédit disponible (sans objet une fois le vol réalisé).
+  List<Widget> _regularisationLines() {
     if (_category(_debitedUid) == null) {
-      return const Text('Montant calculé par le serveur à la clôture.');
+      return const [Text('Montant calculé par le serveur à la clôture.')];
     }
-    final r = _regularisation;
-    return r == null
-        ? null
-        : Text('Régularisation : ${formatFcfa(r.amount)} sur le compte de ${_short(r.uid)}');
+    final moves = _regularisation;
+    if (moves == null) return const [];
+    if (moves.isEmpty) return const [Text('Aucune régularisation.')];
+    return [
+      for (final m in moves)
+        Text('Régularisation : ${_signedFcfa(m.amount)} sur le compte de ${_short(m.uid)}'),
+    ];
   }
 
   List<Widget> _previewFinanceLines(BuildContext context) {
     final f = _current;
-    if (_correcting && f != null && f.isClosed) {
-      final line = _regularisationLine();
-      return line == null ? const [] : [line];
-    }
+    if (_correcting && f != null && f.isClosed) return _regularisationLines();
     return _financeLines(context);
   }
 
@@ -510,7 +517,10 @@ class _FlightScreenState extends State<FlightScreen> {
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
-  String? _localError() {
+  /// Contrôles communs à un enregistrement normal et à une correction admin
+  /// (Task 10) : appareil, destination, durée prévue (min/max). Factorisé
+  /// pour éviter la duplication entre [_localError] et [_correctionError].
+  String? _commonFieldError() {
     if (_aircraftId == null) return 'Choisissez un appareil.';
     if (_destination.text.trim().isEmpty) return 'Indiquez une destination.';
     final duration = _end.difference(_start);
@@ -520,6 +530,26 @@ class _FlightScreenState extends State<FlightScreen> {
     if (duration > const Duration(hours: maxPlannedHours)) {
       return 'Durée prévue maximale : $maxPlannedHours h.';
     }
+    return null;
+  }
+
+  /// Décision utilisateur 1 : contrôle du crédit (le serveur refuse aussi) —
+  /// commun à un enregistrement normal et à une correction admin d'un vol non
+  /// clôturé (skipCredit ne vaut que pour un vol déjà clôturé côté serveur).
+  /// Blocage local uniquement quand le solde est lisible ici (cf.
+  /// _canSeeCredit) ; sinon le serveur refusera l'action avec le même message.
+  String? _creditError() {
+    final cost = _estimatedCost;
+    final credit = _availableCredit;
+    if (cost != null && credit != null && credit < cost) {
+      return 'Crédit insuffisant : il manque ${formatFcfa(cost - credit)}.';
+    }
+    return null;
+  }
+
+  String? _localError() {
+    final common = _commonFieldError();
+    if (common != null) return common;
     // Seul un admin crée après coup un vol passé (vol oublié).
     final pastAllowed = _me.isAdmin && widget.flight == null;
     if (!pastAllowed && !_start.isAfter(widget.now())) return 'L\'heure de départ est passée.';
@@ -536,15 +566,7 @@ class _FlightScreenState extends State<FlightScreen> {
       );
       if (payerError != null) return payerError;
     }
-    // Décision utilisateur 1 : contrôle du crédit dès la demande (blocage
-    // local uniquement quand le solde est lisible ici, cf. _canSeeCredit ;
-    // sinon le serveur refusera l'action avec le même message).
-    final cost = _estimatedCost;
-    final credit = _availableCredit;
-    if (cost != null && credit != null && credit < cost) {
-      return 'Crédit insuffisant : il manque ${formatFcfa(cost - credit)}.';
-    }
-    return null;
+    return _creditError();
   }
 
   FlightDraft _draft() => FlightDraft(
@@ -664,15 +686,8 @@ class _FlightScreenState extends State<FlightScreen> {
   /// serveur ; ceux conservés — composition, conflits, crédit hors clôture —
   /// sont vérifiés localement comme pour un enregistrement normal).
   String? _correctionError() {
-    if (_aircraftId == null) return 'Choisissez un appareil.';
-    if (_destination.text.trim().isEmpty) return 'Indiquez une destination.';
-    final duration = _end.difference(_start);
-    if (duration.inMinutes < minPlannedMinutes) {
-      return 'Durée prévue minimale : $minPlannedMinutes min.';
-    }
-    if (duration > const Duration(hours: maxPlannedHours)) {
-      return 'Durée prévue maximale : $maxPlannedHours h.';
-    }
+    final common = _commonFieldError();
+    if (common != null) return common;
     final f = _current!;
     if (f.isClosed) {
       final m = _correctActualMinutes;
@@ -694,37 +709,31 @@ class _FlightScreenState extends State<FlightScreen> {
           return 'Montant trop élevé (${formatFcfa(maxManualAmount)} au maximum).';
         }
       }
-    } else {
-      // Décision utilisateur 1 : l'admin est soumis au même contrôle de
-      // crédit (le serveur refuse aussi ; skipCredit ne vaut que pour un vol
-      // déjà clôturé).
-      final cost = _estimatedCost;
-      final credit = _availableCredit;
-      if (cost != null && credit != null && credit < cost) {
-        return 'Crédit insuffisant : il manque ${formatFcfa(cost - credit)}.';
-      }
+      return null;
     }
-    return null;
+    return _creditError();
   }
 
   /// Construit le payload d'`adminUpdateFlight` : les champs du vol comme un
-  /// enregistrement normal, et, sur un vol clôturé, les champs de clôture.
-  /// Le mode de tarification est explicite sur un vol clôturé (jamais
-  /// `null`) : soit omis en faveur de `customAmount` (le serveur en déduit
-  /// `custom`), soit envoyé explicitement pour revenir d'un montant différent
-  /// à une facturation normale.
+  /// enregistrement normal (`pricingMode` inclus seulement si un choix est
+  /// proposé, cf. `_draft`/`_showFuelChoice`, exactement comme un
+  /// enregistrement normal), et, sur un vol clôturé, les champs de clôture.
+  /// `pricingMode` n'est forcé explicitement que pour revenir d'un montant
+  /// différent (`billedTo == 'off_app'`) à une facturation normale sans choix
+  /// visible : sans lui, le serveur reprendrait le mode `custom` stocké faute
+  /// de `pricingMode` envoyé (validateAdminUpdate). Avec `customAmount`, le
+  /// serveur déduit lui-même le mode `custom`.
   Map<String, dynamic> _correctionPayload() {
     final payload = _draft().toPayload();
     final f = _current!;
     if (!f.isClosed) return payload;
-    payload.remove('pricingMode');
     payload['actualMinutes'] = _correctActualMinutes;
     if (_correctNeedsShortAmount) {
       payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
     }
     if (_correctCustomChecked) {
       payload['customAmount'] = parseAmount(_correctCustomAmount.text);
-    } else {
+    } else if (f.billedTo == 'off_app' && !payload.containsKey('pricingMode')) {
       payload['pricingMode'] = _pricingMode;
     }
     return payload;
@@ -932,7 +941,14 @@ class _FlightScreenState extends State<FlightScreen> {
                   : IconButton(
                       tooltip: 'Retirer le passager',
                       icon: const Icon(Icons.close),
-                      onPressed: () => setState(() => _passenger = null),
+                      // Task 10 (fix round 1) : sans passager, « Montant
+                      // différent » n'a plus de sens (closingBill le refuse) ;
+                      // réinitialiser évite d'envoyer customAmount à tort si
+                      // la case était restée cochée depuis une correction.
+                      onPressed: () => setState(() {
+                        _passenger = null;
+                        _correctCustomChecked = false;
+                      }),
                     ),
             ),
           if (_crewEditable && aboard < 2)

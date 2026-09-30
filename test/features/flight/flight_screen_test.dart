@@ -790,14 +790,162 @@ void main() {
     await tester.enterText(find.byKey(const Key('correct-minutes')), '120');
     await tester.pumpAndSettle();
     // 120 min GAP standard : 12 000 (forfait) + (120-75) min à 12 000/h = 21 000,
-    // contre 15 000 facturés initialement : régularisation de +6 000.
-    expect(find.text('Régularisation : ${formatFcfa(6000)} sur le compte de JDU'),
+    // contre 15 000 facturés initialement : le compte (inchangé) est
+    // remboursé des 15 000 déjà débités puis débité des 21 000 dus, soit un
+    // débit supplémentaire net de 6 000 (régularisation négative).
+    expect(find.text('Régularisation : ${formatFcfa(-6000)} sur le compte de JDU'),
         findsOneWidget);
     await tester.tap(find.text('Enregistrer la correction'));
     await tester.pumpAndSettle();
     expect(finance.adminUpdated['ac1']!['actualMinutes'], 120);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets(
+      'admin : correction sans rien changer → aucune régularisation (même facture, même '
+      'compte)', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.categories = {'u1': UserCategory.gap};
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ac1b', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aucune régularisation.'), findsOneWidget);
+  });
+
+  testWidgets(
+      'admin : correction d\'un vol clôturé avec changement de compte débité → deux lignes de '
+      'régularisation (remboursement de l\'ancien, débit du nouveau)', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.directory = [...a.directory, member('b', 'BBB', 'eleve')];
+    a.categories = {'u1': UserCategory.gap, 'b': UserCategory.gap};
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ac2', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1', 'b'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    // Mettre B (deuxième de l'équipage) en premier : nouveau compte débité.
+    await tester.tap(find.byTooltip('Mettre en premier'));
+    await tester.pumpAndSettle();
+    expect(find.text('Régularisation : +${formatFcfa(15000)} sur le compte de JDU'),
+        findsOneWidget);
+    expect(find.text('Régularisation : ${formatFcfa(-15000)} sur le compte de BBB'),
+        findsOneWidget);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ac2'], isNotNull);
+  });
+
+  testWidgets(
+      'admin : retirer le passager pendant une correction réinitialise « Montant différent »',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.categories = {'u1': UserCategory.gap};
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ac3', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 5000, billedTo: 'off_app',
+        passengers: const ['Paul']);
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('correct-custom-check')), findsOneWidget);
+    await tester.tap(find.byTooltip('Retirer le passager'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('correct-custom-check')), findsNothing);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ac3']!;
+    expect(payload.containsKey('customAmount'), isFalse);
+    expect(payload['pricingMode'], 'standard');
+  });
+
+  testWidgets(
+      'admin : correction d\'un vol clôturé (branche standard) → payload minimal, sans '
+      'pricingMode ni shortFlightAmount/customAmount', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.categories = {'u1': UserCategory.ext};
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ac4', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 70000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    // Catégorie non-GAP : aucun choix de mode proposé, rien n'a changé ici.
+    expect(find.byKey(const Key('f-fuel')), findsNothing);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ac4']!;
+    expect(payload.containsKey('pricingMode'), isFalse);
+    expect(payload.containsKey('shortFlightAmount'), isFalse);
+    expect(payload.containsKey('customAmount'), isFalse);
+    expect(payload['actualMinutes'], 90);
+  });
+
+  testWidgets(
+      'admin : correction d\'un vol clôturé (branche montant différent) → customAmount envoyé, '
+      'sans pricingMode ni shortFlightAmount', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.categories = {'u1': UserCategory.gap};
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ac5', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        passengers: const ['Paul']);
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('correct-custom-check')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('correct-custom-amount')), '5000');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ac5']!;
+    expect(payload['customAmount'], 5000);
+    expect(payload.containsKey('pricingMode'), isFalse);
+    expect(payload.containsKey('shortFlightAmount'), isFalse);
   });
 
   testWidgets(

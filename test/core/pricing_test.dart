@@ -49,6 +49,25 @@ void main() {
     });
   }
 
+  for (final c in (fx['adjustments'] as List).cast<Map<String, dynamic>>()) {
+    test('régularisation : ${c['name']}', () {
+      BillLeg leg(Map<String, dynamic> m) => (
+            billedTo: m['billedTo'] as String?,
+            payerUid: m['payerUid'] as String?,
+            amount: m['amount'] as int,
+          );
+      final result = adjustments(
+        leg(c['before'] as Map<String, dynamic>),
+        leg(c['after'] as Map<String, dynamic>),
+      );
+      final expected = (c['expected'] as List).cast<Map<String, dynamic>>();
+      expect(
+        result.map((r) => {'uid': r.uid, 'amount': r.amount}).toList(),
+        expected,
+      );
+    });
+  }
+
   test('estimatedCost : jamais null pour une durée prévue suffisante', () {
     expect(estimatedCost('standard', 60, UserCategory.gap, defaultPricing), 12000);
     expect(estimatedCost('fuel_only', 60, UserCategory.gap, defaultPricing), 12000);
