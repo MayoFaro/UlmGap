@@ -67,6 +67,7 @@ AppUser testUser({
   String? profile = 'eleve',
   String category = 'EXT',
   String shortName = 'JDU',
+  int balance = 0,
 }) =>
     AppUser.fromMap(uid, {
       'displayName': 'Jean Dupont',
@@ -76,7 +77,7 @@ AppUser testUser({
       'category': category,
       'isAdmin': isAdmin,
       'active': active,
-      'balance': 0,
+      'balance': balance,
     });
 
 // --- ajouts Task 8 ---
@@ -144,6 +145,10 @@ Flight testFlight({
   String pricingMode = 'standard',
   String? refusalReason,
   bool deleted = false,
+  bool isClosed = false,
+  int? actualFlightMinutes,
+  int? billedAmount,
+  String? billedTo,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -159,8 +164,11 @@ Flight testFlight({
     'refusalReason': refusalReason,
     'createdBy': createdBy,
     'pricingMode': pricingMode,
-    'isClosed': false,
+    'isClosed': isClosed,
     'deleted': deleted,
+    'actualFlightMinutes': actualFlightMinutes,
+    'billedAmount': billedAmount,
+    'billedTo': billedTo,
   });
 }
 

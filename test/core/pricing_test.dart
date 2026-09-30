@@ -67,6 +67,16 @@ void main() {
     expect(p.flatFee[UserCategory.gap], defaultPricing.flatFee[UserCategory.gap]);
   });
 
+  test('Pricing.fromMap : cartes imbriquées typées Map<Object?, Object?> (Task 9)', () {
+    // Reproduit une carte Firestore imbriquée non typée Map<String, dynamic>
+    // (observé selon la plateforme) : le décodage ne doit pas planter.
+    final nested = <Object?, Object?>{'GAP': 99000, 'GR': 30000, 'MIL': 50000, 'EXT': 70000};
+    final p = Pricing.fromMap({'flatFee': nested});
+    expect(p.flatFee[UserCategory.gap], 99000);
+    expect(p.flatFee[UserCategory.ext], 70000);
+    expect(p.overtimeHourly, defaultPricing.overtimeHourly);
+  });
+
   test('Pricing.toMap / fromMap : aller-retour', () {
     final round = Pricing.fromMap(defaultPricing.toMap());
     expect(round.toMap(), defaultPricing.toMap());

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/flight_rules.dart';
 import '../../core/formats.dart';
+import '../../core/money.dart';
+import '../../core/pricing.dart';
 import '../../core/profile_badge.dart';
 import '../../core/profiles.dart';
 import '../../data/aircraft.dart';
 import '../../data/app_user.dart';
 import '../../data/crew_member.dart';
+import '../../data/finance_api.dart';
 import '../../data/flight.dart';
 import '../../data/flight_api.dart';
 import '../../data/services.dart';
@@ -60,6 +63,15 @@ class _FlightScreenState extends State<FlightScreen> {
   List<Flight> _flights = [];
   List<String> _destinations = [];
   bool _listening = false;
+
+  // --- Task 9 (finances) : coût estimé, crédit disponible, clôture ---
+  Pricing _pricing = defaultPricing;
+  Map<String, AppUser> _accounts = {};
+  /// null si l'écran n'a pas de FinanceApi (tests d'autres fonctionnalités
+  /// qui n'en fournissent pas) : le bloc coût/crédit est alors entièrement
+  /// masqué, sans quoi un solde par défaut à 0 bloquerait localement tout
+  /// enregistrement.
+  FinanceApi? _finance;
 
   AppUser get _me => widget.me;
 
@@ -133,6 +145,15 @@ class _FlightScreenState extends State<FlightScreen> {
     api.recentDestinations().then((d) {
       if (mounted) setState(() => _destinations = d);
     }, onError: (Object _) {});
+    // Task 9 : tarifs courants et, pour un instructeur/admin, tous les
+    // comptes (nécessaires pour lire le solde d'un compte débité autre que
+    // le sien). Un élève non concerné ne lit que le sien (_me.balance).
+    _finance = AppServices.of(context).finance;
+    final finance = _finance;
+    if (finance != null) {
+      listen(finance.watchPricing(), (p) => _pricing = p);
+      if (_isStaff) listen(finance.watchAccounts(), (l) => _accounts = {for (final u in l) u.uid: u});
+    }
   }
 
   @override
@@ -224,6 +245,97 @@ class _FlightScreenState extends State<FlightScreen> {
       _Mode.edit => 'Sera enregistré (validé)',
       _Mode.create || _Mode.view => 'Sera créé (validé)',
     };
+  }
+
+  // --- Task 9 (finances) : coût estimé, crédit disponible ---
+
+  /// Compte débité. Pour un vol existant non en cours d'édition (mode
+  /// `view`), on lit le champ stocké (`payerUid`, absent avant le plan 3, cas
+  /// où il peut différer de `crew.first` — cf. CLAUDE.md) ; sinon (création,
+  /// édition, validation), c'est la première personne de l'équipage en
+  /// cours de saisie.
+  String get _debitedUid {
+    final f = widget.flight;
+    return (f != null && !_fieldsEditable) ? (f.payerUidField ?? f.crew.first) : _crew.first;
+  }
+
+  /// Tarifs à utiliser pour le coût du vol en cours (règle du contrôleur,
+  /// miroir de planFlight côté serveur) : le `pricingSnapshot` figé s'il
+  /// reste `valide`, sinon les tarifs courants.
+  Pricing get _pricingForCost {
+    final f = widget.flight;
+    if (f != null && f.status == FlightStatus.valide && _decision.status == 'valide') {
+      return f.pricingSnapshot ?? _pricing;
+    }
+    return _pricing;
+  }
+
+  /// null si l'appartenance du compte débité n'est pas connue ici (élève ou
+  /// lâché consultant le vol d'un autre compte : `watchCategories` n'est pas
+  /// écouté hors validation/instructeur/admin, spec §3).
+  int? get _estimatedCost {
+    if (_finance == null) return null;
+    final category = _category(_debitedUid);
+    if (category == null) return null;
+    return computedCost(_pricingMode, _end.difference(_start).inMinutes, category, _pricingForCost);
+  }
+
+  /// Coût estimé des autres vols `valide`, non clôturés, du même compte
+  /// débité (spec §4.4), sur les vols déjà chargés par l'écran.
+  List<int> get _otherCosts {
+    final category = _category(_debitedUid);
+    if (category == null) return const [];
+    return [
+      for (final o in _flights)
+        if (o.id != widget.flight?.id &&
+            o.status == FlightStatus.valide &&
+            !o.isClosed &&
+            !o.deleted &&
+            (o.payerUidField ?? o.crew.first) == _debitedUid &&
+            (o.pricingMode == 'standard' || o.pricingMode == 'fuel_only'))
+          estimatedCost(o.pricingMode, o.end.difference(o.start).inMinutes, category,
+              o.pricingSnapshot ?? _pricing),
+    ];
+  }
+
+  /// Spec §4.4/décision utilisateur 1 : le solde n'est lisible ici que pour
+  /// son propre compte, ou par un instructeur/admin (watchAccounts).
+  bool get _canSeeCredit => _debitedUid == _me.uid || _isStaff;
+
+  int? get _debitedBalance =>
+      _debitedUid == _me.uid ? _me.balance : _accounts[_debitedUid]?.balance;
+
+  int? get _availableCredit {
+    if (!_canSeeCredit) return null;
+    final balance = _debitedBalance;
+    if (balance == null) return null;
+    return availableCredit(balance, _otherCosts);
+  }
+
+  /// Lignes « Coût estimé » / « Crédit disponible », affichées dans l'aperçu
+  /// (saisie) ou en tête de fiche (consultation d'un vol non clôturé).
+  List<Widget> _financeLines(BuildContext context) {
+    final cost = _estimatedCost;
+    if (cost == null) return const [];
+    final widgets = <Widget>[Text('Coût estimé : ${formatFcfa(cost)}')];
+    if (_canSeeCredit) {
+      final credit = _availableCredit;
+      if (credit != null) {
+        final insufficient = credit < cost;
+        final errorColor = Theme.of(context).colorScheme.error;
+        widgets.add(Text(
+          'Crédit disponible de ${_short(_debitedUid)} : ${formatFcfa(credit)}',
+          style: insufficient ? TextStyle(color: errorColor) : null,
+        ));
+        if (insufficient) {
+          widgets.add(Text(
+            'Crédit insuffisant : il manque ${formatFcfa(cost - credit)}.',
+            style: TextStyle(color: errorColor),
+          ));
+        }
+      }
+    }
+    return widgets;
   }
 
   // --- saisie ---
@@ -334,6 +446,14 @@ class _FlightScreenState extends State<FlightScreen> {
       );
       if (payerError != null) return payerError;
     }
+    // Décision utilisateur 1 : contrôle du crédit dès la demande (blocage
+    // local uniquement quand le solde est lisible ici, cf. _canSeeCredit ;
+    // sinon le serveur refusera l'action avec le même message).
+    final cost = _estimatedCost;
+    final credit = _availableCredit;
+    if (cost != null && credit != null && credit < cost) {
+      return 'Crédit insuffisant : il manque ${formatFcfa(cost - credit)}.';
+    }
     return null;
   }
 
@@ -419,6 +539,35 @@ class _FlightScreenState extends State<FlightScreen> {
     await _run(() => api.cancel(widget.flight!.id));
   }
 
+  /// Clôture (Task 9, spec §4.3) : durée réelle, montant si nécessaire, puis
+  /// `closeFlight` et retour au planning (via _run).
+  Future<void> _openClosing() async {
+    final f = _current!;
+    final category = _category(_debitedUid);
+    if (category == null) {
+      _snack('Catégorie du compte débité indisponible.');
+      return;
+    }
+    final result = await showDialog<_ClosingResult>(
+      context: context,
+      builder: (_) => _ClosingDialog(
+        plannedMinutes: f.end.difference(f.start).inMinutes,
+        mode: f.pricingMode,
+        category: category,
+        pricing: _pricingForCost,
+        hasPassenger: f.passengers.isNotEmpty,
+      ),
+    );
+    if (result == null || !mounted) return;
+    final finance = AppServices.of(context).finance!;
+    await _run(() => finance.closeFlight(
+          f.id,
+          actualMinutes: result.actualMinutes,
+          shortFlightAmount: result.shortFlightAmount,
+          customAmount: result.customAmount,
+        ));
+  }
+
   // --- affichage ---
 
   @override
@@ -452,6 +601,10 @@ class _FlightScreenState extends State<FlightScreen> {
       ],
       if (_actions.contains(FlightAction.cancel))
         TextButton(onPressed: _saving ? null : _cancel, child: const Text('Annuler le vol')),
+      if (_actions.contains(FlightAction.close))
+        FilledButton(
+            key: const Key('close-flight'), onPressed: _saving ? null : _openClosing,
+            child: const Text('Clôturer')),
     ];
 
     return Scaffold(
@@ -460,6 +613,18 @@ class _FlightScreenState extends State<FlightScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           if (f != null) ...[
+            // Task 9 : un vol clôturé n'affiche plus qu'un bilan, en tête de
+            // fenêtre, et aucune autre action (flightActions le ferme déjà).
+            if (f.isClosed)
+              ListTile(
+                key: const Key('closed-summary'),
+                title: Text(closedSummary(
+                  actualMinutes: f.actualFlightMinutes ?? 0,
+                  billedAmount: f.billedAmount ?? 0,
+                  billedTo: f.billedTo ?? 'account',
+                  debitedShortName: _short(_debitedUid),
+                )),
+              ),
             ListTile(
               title: const Text('Statut'),
               subtitle: Text(
@@ -472,6 +637,17 @@ class _FlightScreenState extends State<FlightScreen> {
             if (f.instructorUid != null)
               ListTile(title: Text('Instructeur désigné : ${_short(f.instructorUid!)}')),
             ListTile(title: const Text('Tarification'), subtitle: Text(pricingModeLabel(f.pricingMode))),
+            // Task 9 : coût estimé / crédit disponible d'un vol non clôturé,
+            // hors mode saisie (l'aperçu ci-dessous les affiche alors à la
+            // place, avec les valeurs du brouillon en cours).
+            if (!f.isClosed && !_fieldsEditable)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _financeLines(context),
+                ),
+              ),
             const Divider(),
           ],
           ListTile(
@@ -605,6 +781,7 @@ class _FlightScreenState extends State<FlightScreen> {
                   Text(_statusText(decision)),
                   Text('$debitedLabel : ${_short(_crew.first)}'),
                   Text('Mode : ${pricingModeLabel(_pricingMode)}'),
+                  ..._financeLines(context),
                   if (conflict != null)
                     Text(
                       describeConflict(
@@ -714,6 +891,183 @@ class _RefuseDialogState extends State<_RefuseDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Retour')),
         FilledButton(
             onPressed: () => Navigator.pop(context, _c.text), child: const Text('Refuser')),
+      ],
+    );
+  }
+}
+
+/// Saisie validée du dialogue de clôture, prête pour FinanceApi.closeFlight.
+class _ClosingResult {
+  const _ClosingResult(this.actualMinutes, this.shortFlightAmount, this.customAmount);
+  final int actualMinutes;
+  final int? shortFlightAmount;
+  final int? customAmount;
+}
+
+/// Dialogue « Clôturer le vol » (Task 9, spec §4.3) : durée réelle
+/// (préremplie avec la durée prévue), montant à facturer si le vol est plus
+/// court que le minimum tarifaire, montant différent si un passager sans
+/// compte est à bord, aperçu du montant calculé par [closingBill] et plafond
+/// local de 200 000 FCFA sur les montants saisis (décision 5).
+class _ClosingDialog extends StatefulWidget {
+  const _ClosingDialog({
+    required this.plannedMinutes,
+    required this.mode,
+    required this.category,
+    required this.pricing,
+    required this.hasPassenger,
+  });
+
+  final int plannedMinutes;
+  final String mode; // 'standard' | 'fuel_only'
+  final UserCategory category;
+  final Pricing pricing;
+  final bool hasPassenger;
+
+  @override
+  State<_ClosingDialog> createState() => _ClosingDialogState();
+}
+
+class _ClosingDialogState extends State<_ClosingDialog> {
+  late final _minutes = TextEditingController(text: '${widget.plannedMinutes}');
+  final _shortAmount = TextEditingController();
+  final _customAmount = TextEditingController();
+  bool _customChecked = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _minutes.dispose();
+    _shortAmount.dispose();
+    _customAmount.dispose();
+    super.dispose();
+  }
+
+  int? get _actualMinutes => int.tryParse(_minutes.text.trim());
+
+  /// Mode standard et durée réelle sous le minimum tarifaire (spec §4.3) :
+  /// un vol carburant seulement est toujours calculé à la minute.
+  bool get _needsShortAmount {
+    final m = _actualMinutes;
+    return widget.mode == 'standard' && m != null && m < widget.pricing.minPlannedMinutes;
+  }
+
+  /// Aperçu indicatif (pas d'erreur tant que les champs requis manquent :
+  /// celle-ci n'apparaît qu'à la validation, dans [_submit]).
+  int? get _preview {
+    final m = _actualMinutes;
+    if (m == null) return null;
+    final shortAmount = _needsShortAmount ? parseAmount(_shortAmount.text) : null;
+    if (_needsShortAmount && shortAmount == null) return null;
+    final customAmount = _customChecked ? parseAmount(_customAmount.text) : null;
+    if (_customChecked && customAmount == null) return null;
+    try {
+      return closingBill(
+        mode: widget.mode,
+        actualMinutes: m,
+        category: widget.category,
+        pricing: widget.pricing,
+        shortFlightAmount: shortAmount,
+        customAmount: customAmount,
+        hasPassenger: widget.hasPassenger,
+      ).billedAmount;
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  void _submit() {
+    final m = _actualMinutes;
+    if (m == null || m < 1 || m > 720) {
+      setState(() => _error = 'Durée réelle invalide (1 à 720 min).');
+      return;
+    }
+    int? shortAmount;
+    if (_needsShortAmount) {
+      shortAmount = parseAmount(_shortAmount.text);
+      if (shortAmount == null) {
+        setState(() => _error = 'Montant à facturer obligatoire pour un vol de moins de '
+            '${widget.pricing.minPlannedMinutes} min.');
+        return;
+      }
+      if (shortAmount > maxManualAmount) {
+        setState(() => _error = 'Montant trop élevé (200 000 FCFA au maximum).');
+        return;
+      }
+    }
+    int? customAmount;
+    if (_customChecked) {
+      customAmount = parseAmount(_customAmount.text);
+      if (customAmount == null) {
+        setState(() => _error = 'Indiquez le montant.');
+        return;
+      }
+      if (customAmount > maxManualAmount) {
+        setState(() => _error = 'Montant trop élevé (200 000 FCFA au maximum).');
+        return;
+      }
+    }
+    Navigator.pop(context, _ClosingResult(m, shortAmount, customAmount));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _preview;
+    return AlertDialog(
+      title: const Text('Clôturer le vol'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              key: const Key('closing-minutes'),
+              controller: _minutes,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Durée réelle (minutes)'),
+              onChanged: (_) => setState(() {}),
+            ),
+            if (_needsShortAmount) ...[
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('closing-short-amount'),
+                controller: _shortAmount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Montant à facturer'),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+            if (widget.hasPassenger) ...[
+              CheckboxListTile(
+                key: const Key('closing-custom-check'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Montant différent (facturé hors app)'),
+                value: _customChecked,
+                onChanged: (v) => setState(() => _customChecked = v ?? false),
+              ),
+              if (_customChecked)
+                TextField(
+                  key: const Key('closing-custom-amount'),
+                  controller: _customAmount,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Montant'),
+                  onChanged: (_) => setState(() {}),
+                ),
+            ],
+            const SizedBox(height: 12),
+            if (preview != null) Text('Montant : ${formatFcfa(preview)}'),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child:
+                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        FilledButton(onPressed: _submit, child: const Text('Clôturer')),
       ],
     );
   }

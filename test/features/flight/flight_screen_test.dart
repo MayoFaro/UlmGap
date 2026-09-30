@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/core/money.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
+import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/services.dart';
@@ -22,24 +24,26 @@ void _seedFlight(FakeFlightApi api, Flight? flight) {
   }
 }
 
-Widget host(FakeFlightApi api, AppUser me, {Flight? flight}) {
+Widget host(FakeFlightApi api, AppUser me, {Flight? flight, FinanceApi? finance}) {
   _seedFlight(api, flight);
   return AppServices(
     auth: FakeAuthService(),
     users: FakeUserRepository(),
     flights: api,
+    finance: finance,
     child: MaterialApp(home: FlightScreen(me: me, flight: flight, now: () => now)),
   );
 }
 
 /// Héberge l'écran derrière un planning minimal, pour vérifier qu'une action
 /// referme l'écran et ramène au planning (brief Task 3, Step 1).
-Widget pushHost(FakeFlightApi api, AppUser me, {Flight? flight}) {
+Widget pushHost(FakeFlightApi api, AppUser me, {Flight? flight, FinanceApi? finance}) {
   _seedFlight(api, flight);
   return AppServices(
     auth: FakeAuthService(),
     users: FakeUserRepository(),
     flights: api,
+    finance: finance,
     child: MaterialApp(
       home: Builder(
         builder: (c) => Scaffold(
@@ -567,5 +571,162 @@ void main() {
     expect(a.created.single['destination'], 'Lomé');
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  // --- Task 9 (finances) : coût estimé, crédit disponible, clôture ---
+
+  testWidgets('aperçu : coût estimé EXT 60 min = 70 000 FCFA', (tester) async {
+    _useTallView(tester);
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(host(
+        api(), testUser(uid: 'u1', profile: 'instructeur', category: 'EXT', balance: 100000),
+        finance: finance));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    expect(preview(tester), contains('Coût estimé : ${formatFcfa(70000)}'));
+  });
+
+  testWidgets('aperçu : crédit insuffisant → message, aucun appel à l\'enregistrement',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(host(
+        a, testUser(uid: 'u1', profile: 'instructeur', category: 'EXT', balance: 50000),
+        finance: finance));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await tester.pumpAndSettle();
+    final expected = 'Crédit insuffisant : il manque ${formatFcfa(20000)}.';
+    expect(preview(tester), contains(expected));
+    await save(tester);
+    expect(a.created, isEmpty);
+    expect(find.text(expected), findsWidgets);
+  });
+
+  testWidgets('aperçu : crédit masqué pour un élève qui voit le vol d\'un autre compte',
+      (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'other', start: DateTime(2026, 10, 13, 9), crew: ['lac'], createdBy: 'lac');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(
+        host(api(), testUser(uid: 'u1', profile: 'eleve'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Crédit disponible'), findsNothing);
+  });
+
+  testWidgets(
+      'clôture : 90 min GAP → aperçu 15 000 FCFA, closeFlight(actualMinutes: 90) puis retour '
+      'au planning', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(
+        pushHost(api(), testUser(uid: 'u1', category: 'GAP'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Clôturer'), findsOneWidget);
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('closing-minutes')), findsOneWidget);
+    expect(find.text('Montant : ${formatFcfa(15000)}'), findsOneWidget);
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(finance.closed.single['flightId'], 'c1');
+    expect(finance.closed.single['actualMinutes'], 90);
+    expect(finance.closed.single['shortFlightAmount'], isNull);
+    expect(finance.closed.single['customAmount'], isNull);
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets('clôture : vol standard de 30 min → montant à facturer exigé', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c2', start: start, end: start.add(const Duration(hours: 1)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(api(), testUser(uid: 'u1'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('closing-minutes')), '30');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('closing-short-amount')), findsOneWidget);
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Montant à facturer obligatoire'), findsOneWidget);
+    expect(finance.closed, isEmpty);
+  });
+
+  testWidgets('clôture : passager sans compte → montant différent envoyé en customAmount',
+      (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c3', start: start, end: start.add(const Duration(hours: 1)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', passengers: const ['Paul']);
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(api(), testUser(uid: 'u1'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Montant différent (facturé hors app)'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('closing-custom-check')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('closing-custom-amount')), '5000');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(finance.closed.single['customAmount'], 5000);
+    expect(finance.closed.single['shortFlightAmount'], isNull);
+  });
+
+  testWidgets('clôture : montant saisi supérieur à 200 000 → refusé localement', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c4', start: start, end: start.add(const Duration(hours: 1)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(api(), testUser(uid: 'u1'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('closing-minutes')), '30');
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('closing-short-amount')), '250000');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Montant trop élevé (200 000 FCFA au maximum).'), findsOneWidget);
+    expect(finance.closed, isEmpty);
+  });
+
+  testWidgets('vol clôturé : ligne « Clôturé », aucun bouton pour un non-admin', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Clôturé : 1 h 30, ${formatFcfa(15000)} débité sur le compte de JDU'),
+        findsOneWidget);
+    expect(find.text('Clôturer'), findsNothing);
+    expect(find.text('Enregistrer'), findsNothing);
   });
 }

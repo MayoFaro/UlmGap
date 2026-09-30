@@ -25,7 +25,10 @@ class Pricing {
     if (m == null) return defaultPricing;
 
     Map<UserCategory, int> categoryMap(Object? v, Map<UserCategory, int> fallback) {
-      final raw = v as Map<String, dynamic>?;
+      // Défensif (Task 9) : sur certaines plateformes, une carte Firestore
+      // imbriquée peut arriver typée `Map<Object?, Object?>` plutôt que
+      // `Map<String, dynamic>` ; un cast direct lèverait alors une exception.
+      final raw = (v as Map?)?.cast<String, dynamic>();
       return {
         for (final c in UserCategory.values)
           c: (raw?[c.code] as num?)?.toInt() ?? fallback[c]!,
