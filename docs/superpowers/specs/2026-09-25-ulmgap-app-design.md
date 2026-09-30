@@ -196,7 +196,7 @@ En `demande`, `instructorUid` = l'instructeur de l'équipage.
 | `refuseFlight` (motif facultatif) | L'instructeur désigné, ou un admin | `demande` → `refuse` |
 | `updateFlight` | Le créateur, avant le départ | Mêmes règles qu'à la création. Si un non-instructeur modifie un vol avec instructeur, il redevient `demande`. Un vol `refuse` modifié repart en `demande` |
 | `cancelFlight` | Le créateur, l'instructeur désigné ou un admin, avant le départ | `deleted: true` |
-| `closeFlight` (minutes réelles) | Tout membre de `crew`, une fois le vol effectué | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
+| `closeFlight` (minutes réelles) | Tout membre de `crew` ou un admin, une fois le vol effectué | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
 | `adminUpdateFlight` | Admin, à tout moment, vols clôturés compris | Modification libre, sans matrice mais avec conflits. Sur un vol clôturé, régularisation automatique (§4.5) |
 
 ### 3.4 Contrôles communs
@@ -283,9 +283,14 @@ Exemples (`standard`) :
 - **Crédit disponible** du payeur = `balance` − somme des coûts **estimés**
   (durée prévue) de ses autres vols `valide`, non clôturés, non supprimés,
   imputés sur son solde.
-- À **chaque passage en `valide`**, pour un vol imputé sur un solde
-  (`standard` ou `fuel_only`), si le crédit disponible est inférieur au coût
-  estimé, l'action est **refusée**, avec le montant manquant affiché.
+- À **chaque création, modification ou validation** d'un vol imputé sur un
+  solde (`standard` ou `fuel_only`), **dès la demande** (révision du
+  2026-09-29), si le crédit disponible est inférieur au coût estimé, l'action
+  est **refusée**, avec le montant manquant affiché. L'admin est soumis à la
+  même règle.
+- Plafond de 200 000 FCFA pour les montants saisis à la clôture (« Montant à
+  facturer », « Montant différent ») ; aucun plafond pour les crédits et
+  corrections.
 - À la **clôture** : coût réel calculé sur `actualFlightMinutes` (ou
   `shortFlightAmount` sous 45 min), puis débit (transaction `flight`) ; le
   solde peut devenir négatif. En `custom`, `billedAmount` est enregistré sans

@@ -10,6 +10,7 @@ doivent jamais accéder à AppGAP.
 - Plan 1, le socle (terminé) : `docs/superpowers/plans/2026-09-25-ulmgap-01-socle.md`
 - Plan 2, vols et matrice de droits (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02-vols.md`
 - Plan 2b, retours de recette du plan 2 (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02b-retours-recette.md`
+- Plan 3, finances (terminé) : `docs/superpowers/plans/2026-09-29-ulmgap-03-finances.md`
 - Découpage prévu des plans suivants :
   2. vols et matrice de droits ;
   3. finances (forfaits, crédit FCFA, relevé) ;
@@ -48,44 +49,49 @@ d'où le JDK d'Android Studio.
 **Disque presque plein** (environ 6 Go libres) : éviter les builds inutiles.
 `build/` peut être supprimé, il est régénérable.
 
-## État au 2026-09-28
+## État au 2026-09-30
 
-- Plans 1, 2 et 2b terminés. `feature/socle` est fusionnée dans `main` ; les plans 2 et 2b
-  sont sur la branche `feature/vols` (non fusionnée).
-- Points mineurs M1 à M9 du plan 1 soldés au plan 2.
-- En dev : Authentication activé, premier admin créé (DPS), règles et
-  Functions du plan 2 déployées (`createFlight`, `updateFlight`,
-  `validateFlight`, `refuseFlight`, `cancelFlight` et les fonctions admin).
+- Plans 1, 2, 2b et 3 terminés. `main` contient les plans 1, 2 et 2b ; le
+  plan 3 est sur `feature/finances` (non fusionnée).
+- En dev : Authentication activé, premier admin (DPS), règles et Functions du
+  plan 3 déployées (vols, finances : `closeFlight`, `creditAccount`,
+  `correctAccount`, `adminUpdateFlight`, `adminDeleteFlight`,
+  `adminUpdatePricing`). Crédit initial de 500 000 FCFA versé aux 4 comptes
+  de dev (transaction « Crédit initial (tests) »).
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Premier admin à
   créer ensuite (`cd functions && npm run build && node
   scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
   activer (e-mail et mot de passe, création de compte par l'utilisateur
   désactivée).
-- Plan 2b déployé en dev : compte débité imposé, « carburant seulement »
-  conservé, fenêtre unique par vol, planning en colonnes par appareil.
+- **Node.js 20 retiré par Google Cloud le 30/10/2026** : après cette date,
+  plus aucun déploiement de Functions possible sans passer à Node 22
+  (`functions/package.json` → `engines.node`) et sans mettre à jour
+  `firebase-functions`. À faire avant.
 - Comptes de test en dev (e-mails `test-…@ulmgap.invalid`, déjà vérifiés) :
-  `cd functions && npm run build && node scripts/seed-test-users.js --project ulmgap-dev --password <8 car. min.>`
-  (refusé pour tout autre projet).
+  `cd functions && npm run build && node scripts/seed-test-users.js --project ulmgap-dev --password <8 car. min.>`.
+  Crédit initial (une fois par compte) :
+  `node scripts/seed-dev-credit.js --project ulmgap-dev [--amount 500000]`.
+  Les deux scripts refusent tout autre projet.
 - Android : toujours passer `--flavor` et `--dart-define=ENV` ensemble ; une
   discordance bloque l'app au démarrage.
+- Tests d'intégration : exécutés fichier par fichier (`--test-concurrency=1`),
+  car ils modifient le document global `settings/pricing`.
 
-### À reprendre au plan 3
+### À reprendre aux plans suivants
 
-- `pricingSnapshot` vaut `null` sur les vols validés pendant le plan 2 :
-  prévoir un repli sur les tarifs courants.
-- `MIN_PLANNED_MINUTES` (serveur) et `minPlannedMinutes` (Dart) sont codés en
-  dur à 45 : les lire dans `settings/pricing`. La durée prévue maximale
-  (12 h) et l'horizon de réservation (366 jours) sont aussi en dur.
-- Aperçu du formulaire : ajouter le coût estimé et le crédit disponible du
-  payeur ; contrôle du crédit à la validation (§4.4).
-- `adminUpdateFlight` : correction d'un vol passé ou déjà commencé (un admin
-  peut déjà créer après coup un vol passé via `createFlight`).
-- Une demande expirée reste `demande` en base (statut calculé côté app) : le
-  pont AppGAP ne copie que les vols `valide`, donc aucun impact.
+- Plan 4 (compteurs) : base = `actualFlightMinutes` des vols clôturés, non
+  supprimés.
+- Plan 5 (notifications) : rappels de clôture ; tant qu'ils n'existent pas,
+  des vols validés passés restent non clôturés et pèsent sur le crédit
+  disponible.
+- La durée prévue maximale (12 h) et l'horizon de réservation (366 jours)
+  restent codés en dur ; `minPlannedMinutes` est dans `settings/pricing`.
+- Une demande expirée reste `demande` en base (statut calculé côté app).
 - Pour les vols validés avant le plan 2b, le compte débité peut ne pas être
-  le créateur : un créateur non instructeur doit alors retirer puis rajouter
-  l'autre membre pour modifier le vol (données de dev seulement).
+  le créateur (données de dev seulement).
+- Export CSV du relevé : vérifié par tests unitaires ; le téléchargement dans
+  le navigateur reste à contrôler en recette web.
 
 ### Rappel côté AppGAP (plan 6)
 
