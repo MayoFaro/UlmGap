@@ -9,6 +9,7 @@ import '../../core/csv.dart';
 import '../../core/download.dart';
 import '../../core/formats.dart';
 import '../../core/money.dart';
+import '../../core/period_bar.dart';
 import '../../data/crew_member.dart';
 import '../../data/flight.dart';
 import '../../data/services.dart';
@@ -76,26 +77,6 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
 
   DateTime get _lastIncludedDay => _to.subtract(const Duration(days: 1));
 
-  Future<void> _pickFrom() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _from,
-      firstDate: DateTime(2020),
-      lastDate: _lastIncludedDay,
-    );
-    if (d != null) setState(() => _from = DateTime(d.year, d.month, d.day));
-  }
-
-  Future<void> _pickTo() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _lastIncludedDay,
-      firstDate: _from,
-      lastDate: DateTime(2100),
-    );
-    if (d != null) setState(() => _to = DateTime(d.year, d.month, d.day + 1));
-  }
-
   void _export(List<Flight> flights, Map<String, CrewMember> dir) {
     final csv = buildCsv(billingCsvHeaders, billingCsvRows(flights, dir));
     final filename = 'releve_${_fileDatePart(_from)}_${_fileDatePart(_lastIncludedDay)}.csv';
@@ -110,23 +91,13 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
       appBar: AppBar(title: const Text('Relevé des vols facturés')),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _pickFrom,
-                  child: Text('Du ${formatDay(_from)}'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _pickTo,
-                  child: Text('Au ${formatDay(_lastIncludedDay)}'),
-                ),
-              ),
-            ]),
+          PeriodBar(
+            from: _from,
+            to: _to,
+            onChanged: (f, t) => setState(() {
+              _from = f;
+              _to = t;
+            }),
           ),
           Expanded(
             child: StreamBuilder<List<CrewMember>>(
