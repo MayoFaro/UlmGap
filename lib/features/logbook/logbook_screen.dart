@@ -1,0 +1,271 @@
+// Carnet de vol (spec §5, révision du 2026-09-30) : tous les vols effectués,
+// tous appareils confondus, avec le temps de vol total de la période en
+// haut (vols clôturés). Seul accès aux vols passés, donc à la clôture
+// (l'action « Clôturer » est dans FlightScreen).
+import 'package:flutter/material.dart';
+
+import '../../core/async_state.dart';
+import '../../core/formats.dart';
+import '../../data/app_user.dart';
+import '../../data/crew_member.dart';
+import '../../data/finance_api.dart';
+import '../../data/flight.dart';
+import '../../data/services.dart';
+import '../flight/flight_screen.dart';
+import '../flight/flight_texts.dart';
+import 'logbook.dart';
+import 'logbook_flight_tile.dart';
+
+/// Choix d'une période précise : début et fin, bornes incluses.
+typedef RangePicker = Future<DateTimeRange?> Function(
+    BuildContext context, DateTimeRange? initial);
+
+class LogbookScreen extends StatefulWidget {
+  const LogbookScreen({
+    super.key,
+    required this.me,
+    this.now = DateTime.now,
+    this.onOpen,
+    this.pickRange,
+  });
+
+  final AppUser me;
+  final DateTime Function() now;
+
+  /// Ouverture d'un vol ; par défaut, FlightScreen.
+  final void Function(Flight flight)? onOpen;
+
+  /// Calendrier de période précise ; par défaut, showDateRangePicker.
+  final RangePicker? pickRange;
+
+  @override
+  State<LogbookScreen> createState() => _LogbookScreenState();
+}
+
+class _LogbookScreenState extends State<LogbookScreen> {
+  late int _year;
+  late int _month; // 1 à 12, ou 0 pour l'année entière
+  DateTimeRange? _custom; // période précise, bornes incluses
+  String? _pilotUid; // null : tous les pilotes (instructeurs et admins)
+  bool _onlyToClose = false;
+
+  FinanceApi? _finance;
+  Stream<List<Flight>>? _periodFlights;
+  Stream<List<Flight>>? _unclosed;
+  Stream<List<CrewMember>>? _dir;
+
+  bool get _canChoosePilot => widget.me.isAdmin || widget.me.isInstructor;
+
+  /// Bornes [from, to[ de la période affichée.
+  ({DateTime from, DateTime to}) get _period {
+    final c = _custom;
+    if (c == null) return monthPeriod(_year, _month);
+    return (
+      from: dayOf(c.start),
+      to: DateTime(c.end.year, c.end.month, c.end.day + 1),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final n = widget.now();
+    _year = n.year;
+    _month = n.month;
+    _pilotUid = widget.me.uid;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final services = AppServices.of(context);
+    final finance = services.finance!;
+    if (!identical(_finance, finance)) {
+      _finance = finance;
+      _periodFlights = _watchPeriod();
+      _unclosed = finance.watchValidUnclosedFlights();
+      _dir = services.flights!.watchDirectory();
+    }
+  }
+
+  Stream<List<Flight>> _watchPeriod() {
+    final p = _period;
+    return _finance!.watchFlightsBetween(p.from, p.to);
+  }
+
+  /// Change la période ; quitte l'affichage « à clôturer ».
+  void _setPeriod({int? year, int? month, DateTimeRange? custom}) => setState(() {
+        if (year != null) _year = year;
+        if (month != null) _month = month;
+        _custom = custom;
+        _onlyToClose = false;
+        _periodFlights = _watchPeriod();
+      });
+
+  Future<void> _pickCustom() async {
+    final today = dayOf(widget.now());
+    final p = _period;
+    final lastIncluded = DateTime(p.to.year, p.to.month, p.to.day - 1);
+    final initial = p.from.isAfter(today)
+        ? null
+        : DateTimeRange(start: p.from, end: lastIncluded.isAfter(today) ? today : lastIncluded);
+    final pick = widget.pickRange ??
+        (context, initial) => showDateRangePicker(
+              context: context,
+              firstDate: DateTime(firstLogbookYear),
+              lastDate: today,
+              initialDateRange: initial,
+            );
+    final r = await pick(context, initial);
+    if (r != null && mounted) _setPeriod(custom: r);
+  }
+
+  void _open(Flight f) {
+    final onOpen = widget.onOpen;
+    if (onOpen != null) return onOpen(f);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FlightScreen(me: widget.me, flight: f),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Carnet de vol')),
+        body: StreamBuilder<List<CrewMember>>(
+          stream: _dir,
+          builder: (context, dirSnap) {
+            final dir = dirSnap.data ?? const <CrewMember>[];
+            return StreamBuilder<List<Flight>>(
+              stream: _unclosed,
+              builder: (context, unclosedSnap) => StreamBuilder<List<Flight>>(
+                stream: _periodFlights,
+                builder: (context, periodSnap) => _body(dir, unclosedSnap, periodSnap),
+              ),
+            );
+          },
+        ),
+      );
+
+  Widget _periodSelectors() {
+    final c = _custom;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        DropdownButton<int>(
+          key: const Key('month-select'),
+          value: c == null ? _month : null,
+          hint: const Text('Mois'),
+          onChanged: (m) => _setPeriod(month: m),
+          items: [
+            for (var m = 1; m <= 12; m++)
+              DropdownMenuItem(value: m, child: Text(formatMonth(m))),
+            const DropdownMenuItem(value: 0, child: Text('Année')),
+          ],
+        ),
+        DropdownButton<int>(
+          key: const Key('year-select'),
+          value: _year,
+          onChanged: (y) => _setPeriod(year: y),
+          items: [
+            for (final y in logbookYears(widget.now()))
+              DropdownMenuItem(value: y, child: Text('$y')),
+          ],
+        ),
+        OutlinedButton.icon(
+          key: const Key('custom-period'),
+          icon: const Icon(Icons.date_range),
+          label: Text(c == null
+              ? 'Période précise'
+              : 'Du ${formatShortDate(c.start)} au ${formatShortDate(c.end)}'),
+          onPressed: _pickCustom,
+        ),
+      ],
+    );
+  }
+
+  Widget _pilotFilter(List<CrewMember> dir) {
+    final me = widget.me;
+    // Annuaire pas encore chargé (ou sans ce compte) : une entrée de repli
+    // pour le compte connecté, plutôt qu'une assertion de DropdownButton.
+    final missingMe = _pilotUid == me.uid && !dir.any((m) => m.uid == me.uid);
+    return DropdownButton<String?>(
+      key: const Key('pilot-filter'),
+      value: _pilotUid,
+      onChanged: (v) => setState(() => _pilotUid = v),
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('Tous les pilotes')),
+        if (missingMe) DropdownMenuItem<String?>(value: me.uid, child: Text(me.shortName)),
+        for (final m in dir)
+          DropdownMenuItem<String?>(value: m.uid, child: Text('${m.shortName} · ${m.displayName}')),
+      ],
+    );
+  }
+
+  Widget _body(List<CrewMember> dir, AsyncSnapshot<List<Flight>> unclosedSnap,
+      AsyncSnapshot<List<Flight>> periodSnap) {
+    final now = widget.now();
+    final me = widget.me;
+    final pilotUid = _canChoosePilot ? _pilotUid : me.uid;
+    final periodList = logbookList(periodSnap.data ?? const <Flight>[],
+        me: me, now: now, pilotUid: pilotUid);
+    final toClose = logbookList(unclosedSnap.data ?? const <Flight>[],
+            me: me, now: now, pilotUid: pilotUid)
+        .where((f) => needsClosing(f, now))
+        .toList();
+    final shown = _onlyToClose ? toClose : periodList;
+    final state = asyncState(
+      _onlyToClose ? unclosedSnap : periodSnap,
+      isEmpty: shown.isEmpty,
+      empty: _onlyToClose ? 'Aucun vol à clôturer.' : 'Aucun vol sur cette période.',
+    );
+    final dirMap = {for (final m in dir) m.uid: m};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: _periodSelectors(),
+        ),
+        if (_canChoosePilot)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(alignment: Alignment.centerLeft, child: _pilotFilter(dir)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            'Temps de vol : ${formatDurationHm(totalMinutes(periodList))}',
+            key: const Key('logbook-total'),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+        if (toClose.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                key: const Key('to-close-count'),
+                label: Text(toCloseCountText(toClose.length),
+                    style: TextStyle(color: toCloseColor, fontWeight: FontWeight.bold)),
+                side: BorderSide(color: toCloseColor),
+                selected: _onlyToClose,
+                onSelected: (v) => setState(() => _onlyToClose = v),
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: state ??
+              ListView(children: [
+                for (final f in shown)
+                  LogbookFlightTile(flight: f, dir: dirMap, now: now, onTap: () => _open(f)),
+              ]),
+        ),
+      ],
+    );
+  }
+}

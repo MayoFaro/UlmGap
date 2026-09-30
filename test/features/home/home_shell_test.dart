@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/services.dart';
-import 'package:ulmgap/features/performed/performed_flights_screen.dart';
-import 'package:ulmgap/features/counters/counters_screen.dart';
+import 'package:ulmgap/features/logbook/logbook_screen.dart';
 import 'package:ulmgap/features/account/account_screen.dart';
 import 'package:ulmgap/features/admin/billing_report_screen.dart';
 import 'package:ulmgap/features/admin/pricing_admin_screen.dart';
@@ -75,29 +74,23 @@ void main() {
     expect(find.byType(BillingReportScreen), findsOneWidget);
   });
 
-  testWidgets('icône Vols effectués : visible pour tous, ouvre le panneau', (tester) async {
+  testWidgets('icône Carnet de vol : visible pour tous, ouvre le carnet', (tester) async {
     await tester.pumpWidget(host(testUser(profile: 'eleve')));
     await tester.pump();
-    await tester.tap(find.byTooltip('Vols effectués'));
+    await tester.tap(find.byTooltip('Carnet de vol'));
     await tester.pumpAndSettle();
-    expect(find.byType(PerformedFlightsScreen), findsOneWidget);
-  });
-
-  testWidgets('icône Compteurs : visible pour tous, ouvre CountersScreen', (tester) async {
-    await tester.pumpWidget(host(testUser(profile: 'eleve')));
-    await tester.pump();
-    await tester.tap(find.byTooltip('Compteurs'));
-    await tester.pumpAndSettle();
-    expect(find.byType(CountersScreen), findsOneWidget);
+    expect(find.byType(LogbookScreen), findsOneWidget);
   });
 
   testWidgets('plus de « Se déconnecter » dans la barre d\'accueil', (tester) async {
     await tester.pumpWidget(host(testUser(isAdmin: true)));
     await tester.pump();
     expect(find.byTooltip('Se déconnecter'), findsNothing);
+    expect(find.byTooltip('Vols effectués'), findsNothing);
+    expect(find.byTooltip('Compteurs'), findsNothing);
   });
 
-  testWidgets('admin sur 360 px de large : pas de débordement, 5 icônes accessibles',
+  testWidgets('admin sur 360 px de large : pas de débordement, 4 icônes accessibles',
       (tester) async {
     tester.view.physicalSize = const Size(360, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -106,7 +99,7 @@ void main() {
     await tester.pumpWidget(host(testUser(profile: 'instructeur', isAdmin: true)));
     await tester.pump();
     expect(tester.takeException(), isNull);
-    for (final t in ['Vols effectués', 'Compteurs', 'Mon compte', 'Instructeurs', 'Administration']) {
+    for (final t in ['Carnet de vol', 'Mon compte', 'Instructeurs', 'Administration']) {
       expect(find.byTooltip(t).hitTestable(), findsOneWidget, reason: t);
     }
   });

@@ -4,12 +4,12 @@ import '../../core/formats.dart';
 import '../../data/crew_member.dart';
 import '../../data/flight.dart';
 import '../flight/flight_texts.dart';
-import 'performed.dart';
+import 'logbook.dart';
 
-/// Une ligne du panneau « Vols effectués » ; surlignée en orange quand le
+/// Une ligne du carnet de vol ; surlignée en orange quand le
 /// vol est à clôturer.
-class PerformedFlightTile extends StatelessWidget {
-  const PerformedFlightTile({
+class LogbookFlightTile extends StatelessWidget {
+  const LogbookFlightTile({
     super.key,
     required this.flight,
     required this.dir,
@@ -32,7 +32,7 @@ class PerformedFlightTile extends StatelessWidget {
             ? statusColor(FlightStatus.valide)
             : Colors.grey;
     final tile = ListTile(
-      key: Key('performed-${f.id}'),
+      key: Key('logbook-${f.id}'),
       onTap: onTap,
       title: Text('${formatDay(f.start)} · ${formatRange(f.start, f.end)}'),
       subtitle: Text('${f.aircraft} · ${crewText(f.crew, f.passengers, dir)} → ${f.destination}'),

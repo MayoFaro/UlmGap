@@ -11,12 +11,13 @@ doivent jamais accéder à AppGAP.
 - Plan 2, vols et matrice de droits (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02-vols.md`
 - Plan 2b, retours de recette du plan 2 (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02b-retours-recette.md`
 - Plan 3, finances (terminé) : `docs/superpowers/plans/2026-09-29-ulmgap-03-finances.md`
-- Plan 4, compteurs et vols effectués (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
+- Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
+  (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
+  par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
 - Découpage prévu des plans suivants :
   2. vols et matrice de droits ;
   3. finances (forfaits, crédit FCFA, relevé) ;
-  4. compteurs pilote et appareil, et panneau « Vols effectués » (clôturés
-     ou non, date ≤ aujourd'hui) : c'est là qu'on clôture les vols ;
+  4. carnet de vol (vols effectués, temps de vol total, clôture) ;
   5. notifications et rappels de clôture ;
   6. adaptation du pont AppGAP (dans le repo `~/StudioProjects/app_gap`).
 

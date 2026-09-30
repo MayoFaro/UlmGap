@@ -1847,3 +1847,34 @@ git commit -m "feat(app): home access to performed flights and counters, sign-ou
 - « Compteurs » : comparer le total d'un appareil au relevé des vols facturés
   sur la même période.
 - Se déconnecter depuis « Mon compte ».
+
+---
+
+## Révision du 2026-09-30 : un seul écran « Carnet de vol »
+
+Retour de l'utilisateur après exécution : les écrans « Vols effectués » et
+« Compteurs » (Tasks 5 et 6) sont remplacés par un **unique écran « Carnet
+de vol »** (`lib/features/logbook/`). La distinction par appareil n'a pas de
+sens ici.
+
+Décisions de l'utilisateur :
+- Tous les vols effectués, tous appareils confondus ; le temps de vol total
+  de la période choisie en haut, calculé sur les vols clôturés.
+- Période : menu des mois (janvier à décembre, plus « Année »), menu de
+  l'année (année en cours par défaut), bouton « Période précise » (calendrier,
+  début puis fin). Mois en cours par défaut.
+- Un pilote voit ses vols ; un instructeur ou un admin a un menu « Pilote »
+  (lui-même par défaut, un autre pilote, ou « Tous les pilotes »).
+- Vols à clôturer en orange, avec le compteur « N vols à clôturer » sur
+  toutes les périodes ; un appui dessus les affiche.
+
+Conséquences :
+- Supprimés : `performed_flights_screen.dart`, `counters_screen.dart`, le
+  compteur par appareil (`aircraftMinutes`), le filtre appareil.
+- `performed.dart` et `counters.dart` sont fusionnés dans `logbook.dart`
+  (`logbookList(…, pilotUid)`, `totalMinutes`, `monthPeriod`,
+  `logbookYears`) ; la tuile devient `LogbookFlightTile`.
+- Accueil : une seule icône « Carnet de vol » (4 icônes pour un admin).
+- `formats.dart` : `formatMonth` (« Janvier ») et `formatShortDate`
+  (« 03/09/2026 », libellé de la période précise).
+- `PeriodBar` reste utilisé par le relevé des vols facturés.

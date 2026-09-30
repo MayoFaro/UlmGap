@@ -7,10 +7,9 @@ import '../admin/aircraft_admin_screen.dart';
 import '../admin/billing_report_screen.dart';
 import '../admin/pricing_admin_screen.dart';
 import '../admin/users_admin_screen.dart';
-import '../counters/counters_screen.dart';
 import '../flight/flight_screen.dart';
 import '../instructors/instructors_screen.dart';
-import '../performed/performed_flights_screen.dart';
+import '../logbook/logbook_screen.dart';
 import '../planning/planning_screen.dart';
 
 class HomeShell extends StatelessWidget {
@@ -32,17 +31,10 @@ class HomeShell extends StatelessWidget {
             ]),
           ),
           IconButton(
-            tooltip: 'Vols effectués',
-            icon: const Icon(Icons.history),
+            tooltip: 'Carnet de vol',
+            icon: const Icon(Icons.menu_book),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => PerformedFlightsScreen(me: user),
-            )),
-          ),
-          IconButton(
-            tooltip: 'Compteurs',
-            icon: const Icon(Icons.timer),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => CountersScreen(me: user),
+              builder: (_) => LogbookScreen(me: user),
             )),
           ),
           IconButton(

@@ -21,7 +21,8 @@ avec :
 - un blocage des doubles réservations d'appareil ou d'équipage ;
 - un **crédit en FCFA** par compte, qui conditionne la validation et est débité
   à la clôture ;
-- des compteurs d'heures **par pilote** et **par appareil** ;
+- un **carnet de vol** avec le temps de vol total par pilote (révision du
+  2026-09-30 : plus de compteur par appareil) ;
 - un relevé admin de tout ce qui a été facturé.
 
 ## Décisions structurantes
@@ -42,7 +43,7 @@ avec :
 - Planning, astreintes et tout autre module d'AppGAP.
 - Paiement en ligne. Les crédits sont saisis par les instructeurs et les
   admins ; les montants « hors app » sont réglés en dehors.
-- Suivi d'entretien des appareils (le compteur par appareil fournit les heures).
+- Suivi d'entretien des appareils.
 - Toute remontée d'information d'AppGAP vers UlmGap.
 - *Flavors* Android/iOS distincts dev/prod : à ajouter seulement si l'on veut
   installer les deux versions sur le même téléphone.
@@ -350,34 +351,29 @@ Identiques sur mobile et sur web.
   permet de saisir le montant : le vol passe alors en `custom` et aucun solde
   n'est débité.
 
-**Vols effectués** (ajout du 2026-09-30, prévu au plan 4)
-- Panneau complet listant tous les vols **effectués**, c'est-à-dire dont la
-  date est antérieure ou égale à la date du jour, **clôturés ou non**.
-- C'est l'endroit pour **clôturer** les vols : un vol non clôturé s'y ouvre
-  dans la fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage
-  et admins, §3.3).
+**Carnet de vol** (révision du 2026-09-30 : remplace les écrans « Vols
+effectués » et « Compteurs »)
+- Un seul écran, ouvert par l'icône « Carnet de vol » de l'accueil. Il liste
+  les vols **effectués** (date ≤ aujourd'hui, clôturés ou non), **tous
+  appareils confondus**, du plus récent au plus ancien. Seuls les vols
+  validés et non supprimés y figurent.
+- En haut, le **temps de vol total** de la période choisie, calculé sur
+  `actualFlightMinutes` des vols clôturés, non supprimés. Chaque vol compte
+  une fois ; dans un vol à deux, chaque membre de `crew` le cumule sur son
+  carnet. Les passagers sans compte ne comptent pas.
+- Période : un menu des mois (janvier à décembre, plus « Année »), un menu
+  de l'année (année en cours par défaut), et un bouton « Période précise »
+  qui ouvre un calendrier où l'on choisit le début puis la fin. Par défaut :
+  le mois en cours.
+- Un pilote voit ses vols (ceux où il est dans l'équipage) et son total.
+  Un instructeur ou un admin a en plus un menu « Pilote » : lui-même par
+  défaut, un autre pilote, ou « Tous les pilotes » (tous les vols du club).
+- C'est l'endroit pour **clôturer** : un vol non clôturé s'ouvre dans la
+  fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage et
+  admins, §3.3). Les vols à clôturer (date du jour ou avant, sans condition
+  d'heure) sont surlignés en orange. Un compteur « N vols à clôturer » les
+  compte sur toutes les périodes ; un appui dessus les affiche.
 - Le planning (accueil) reste limité aux vols à venir.
-- Précisions du plan 4 (2026-09-30) :
-  - un pilote voit les vols dont il est membre de l'équipage ; les
-    instructeurs et les admins voient tout ;
-  - seuls les vols validés et non supprimés apparaissent, du plus récent au
-    plus ancien ;
-  - filtres : période (mois en cours par défaut), appareil, « À clôturer
-    seulement » ;
-  - les vols à clôturer (date du jour ou avant, non clôturés, sans
-    condition d'heure) sont surlignés en orange. Le compteur « N vols à
-    clôturer » et le filtre portent sur toutes les périodes.
-
-**Compteurs**
-- **Pilote** : une période, un total. Chacun voit le sien ; les instructeurs
-  et les admins choisissent le pilote.
-- **Appareil** : un appareil et une période, par exemple « total 154h45 »,
-  visible par tous.
-- Base de calcul : `actualFlightMinutes` des vols clôturés, non supprimés.
-- Chaque membre de `crew` cumule les minutes du vol (instructeur et élève) ;
-  les passagers sans compte ne comptent pas.
-- Période par défaut : l'année civile en cours. Accès par l'icône
-  « Compteurs » de l'accueil, avec deux onglets, « Pilote » et « Appareil ».
 
 **Mon compte**
 - Solde, historique, profil (badge), appartenance.
@@ -454,7 +450,7 @@ et `users/{uid}.active == true`.
 - `lib/core/` : profils et badges, calcul de coût (miroir du serveur, pour
   l'aperçu), formats.
 - `lib/data/` : lecture Firestore, appels des Functions.
-- `lib/features/` : `planning`, `flight`, `counters`, `account`,
+- `lib/features/` : `planning`, `flight`, `logbook`, `account`,
   `instructors`, `admin`.
 - `functions/src/rules/` : **module pur** (matrice, payeur, coût, crédit
   disponible, conflits), sans accès à Firestore.
@@ -476,7 +472,7 @@ et `users/{uid}.active == true`.
   transaction, première clôture l'emporte, régularisation) et la tâche de
   rappel (gen caduque, relance).
 - **Dart** : calcul de coût client (cas partagés), badges, formulaire de vol et
-  compteurs (widgets).
+  carnet de vol (widgets).
 - **Recette dans `ulmgap-dev`** avec un compte de test par profil et par
   appartenance.
 

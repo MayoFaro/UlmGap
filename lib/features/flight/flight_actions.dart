@@ -1,6 +1,6 @@
 import '../../data/app_user.dart';
 import '../../data/flight.dart';
-import '../performed/performed.dart';
+import '../logbook/logbook.dart';
 
 enum FlightAction { validate, refuse, edit, cancel, close, adminEdit, adminDelete }
 
