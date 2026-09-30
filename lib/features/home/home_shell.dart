@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../core/profile_badge.dart';
 import '../../data/app_user.dart';
 import '../../data/services.dart';
+import '../account/account_screen.dart';
 import '../admin/aircraft_admin_screen.dart';
 import '../admin/users_admin_screen.dart';
 import '../flight/flight_screen.dart';
+import '../instructors/instructors_screen.dart';
 import '../planning/planning_screen.dart';
 
 class HomeShell extends StatelessWidget {
@@ -26,6 +28,21 @@ class HomeShell extends StatelessWidget {
               ProfileBadge(profile: user.profile, compact: true),
             ]),
           ),
+          IconButton(
+            tooltip: 'Mon compte',
+            icon: const Icon(Icons.account_balance_wallet),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => AccountScreen(me: user),
+            )),
+          ),
+          if (user.isInstructor || user.isAdmin)
+            IconButton(
+              tooltip: 'Instructeurs',
+              icon: const Icon(Icons.groups),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const InstructorsScreen(),
+              )),
+            ),
           if (user.isAdmin)
             PopupMenuButton<String>(
               tooltip: 'Administration',

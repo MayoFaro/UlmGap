@@ -16,6 +16,11 @@ void main() {
     expect(parseAmount('12000'), 12000);
   });
 
+  test('parseAmount : signe négatif accepté (montant signé d’une correction)', () {
+    expect(parseAmount('-5000'), -5000);
+    expect(parseAmount('-5 000'), -5000);
+  });
+
   test('parseAmount : entrée invalide ou décimale → null', () {
     expect(parseAmount('abc'), isNull);
     expect(parseAmount('12,5'), isNull);
