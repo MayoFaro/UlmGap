@@ -8,7 +8,7 @@ import { Caller, requireAdmin } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { designatedInstructor, PricingMode } from "../rules/flights";
-import { adjustments, closingBill, Pricing, toCategory } from "../rules/pricing";
+import { adjustments, closingBill, computedCost, Pricing, toCategory } from "../rules/pricing";
 import { planFlight, touchLocks } from "./core";
 import { checkHorizon, validateAdminUpdate, validateFlightId } from "./validation";
 
@@ -71,12 +71,17 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       throw new HttpsError("failed-precondition", "Réservé aux vols clôturés.");
     }
 
-    // Mode : celui demandé ; un montant différent seul vaut « custom » ; sinon inchangé.
+    // Mode : celui demandé par l'admin est imposé ; un montant différent seul
+    // vaut « custom » ; un vol « custom » le reste. Sinon, le mode est
+    // recalculé (spec §4.1) : un vol carburant dont l'équipage n'est plus
+    // tout GAP repasse en standard.
     const previousMode = f.get("pricingMode") as PricingMode;
-    const mode: PricingMode = v.pricingMode ?? (v.customAmount != null ? "custom" : previousMode);
+    const mode: PricingMode | undefined = v.pricingMode ??
+      (v.customAmount != null || previousMode === "custom" ? "custom" : undefined);
     const createdBy = (f.get("createdBy") as string | undefined) ?? "";
     const p = await planFlight(tx, db, {
       id: ref.id, input: v.input, mayChoose: true,
+      previousMode,
       forcedMode: mode === "custom" ? "standard" : mode,
       skipActiveChecks: true,
       skipCredit: closed,
@@ -111,13 +116,16 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     const shortFlightAmount = v.shortFlightAmount !== undefined
       ? v.shortFlightAmount
       : (f.get("shortFlightAmount") as number | null | undefined) ?? null;
+    const billMode = p.fields.pricingMode as "standard" | "fuel_only";
+    const category = toCategory(accounts.users.get(newPayer)!.get("category"));
+    const pricing = p.fields.pricingSnapshot as Pricing;
     let bill;
     try {
       bill = closingBill({
-        mode: mode === "custom" ? "standard" : mode,
+        mode: billMode,
         actualMinutes,
-        category: toCategory(accounts.users.get(newPayer)!.get("category")),
-        pricing: p.fields.pricingSnapshot as Pricing,
+        category,
+        pricing,
         shortFlightAmount,
         customAmount,
         hasPassenger: v.input.passengers.length > 0,
@@ -150,7 +158,10 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       billedTo: bill.billedTo,
       pricingMode: bill.pricingMode,
       customAmount,
-      shortFlightAmount,
+      // Montant à facturer conservé seulement s'il sert (vol standard sous la
+      // durée minimale), jamais périmé.
+      shortFlightAmount: bill.pricingMode !== "custom" &&
+        computedCost(billMode, actualMinutes, category, pricing) === null ? shortFlightAmount : null,
     });
   });
 }

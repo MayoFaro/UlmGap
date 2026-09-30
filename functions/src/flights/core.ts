@@ -42,7 +42,7 @@ export interface PlanArgs {
   skipActiveChecks?: boolean;
   /** Correction admin d'un vol clôturé : la régularisation remplace le contrôle du crédit. */
   skipCredit?: boolean;
-  /** Correction admin : mode choisi librement, resolvePricingMode non appliqué. */
+  /** Correction admin : mode imposé explicitement par l'admin (resolvePricingMode non appliqué). */
   forcedMode?: "standard" | "fuel_only";
 }
 
@@ -165,7 +165,11 @@ async function checkCredit(
     out = [...out, lockRef];
   }
   const category = toCategory(a.category);
-  const snap = await tx.get(db.collection("flights").where("payerUid", "==", a.payerUid));
+  // Égalités seules (pas d'index composite) : on ne lit ni ne verrouille
+  // l'historique des vols clôturés (createFlight écrit toujours isClosed).
+  const snap = await tx.get(db.collection("flights")
+    .where("payerUid", "==", a.payerUid)
+    .where("isClosed", "==", false));
   const otherCosts = snap.docs
     .filter((d) =>
       d.id !== a.id &&

@@ -125,12 +125,20 @@ test("validateCorrection : montant invalide (zéro, décimal, manquant)", () => 
   }
 });
 
-test("validateCorrection : motif obligatoire (absent, vide, trop long)", () => {
-  for (const bad of [undefined, null, "", "   ", "x".repeat(201)]) {
+test("validateCorrection : motif obligatoire (absent, vide)", () => {
+  for (const bad of [undefined, null, "", "   "]) {
     assert.throws(
       () => validateCorrection({ userUid: "u1", amount: 100, reason: bad }),
       (e: unknown) => e instanceof ValidationError && e.message === "Motif obligatoire pour une correction.",
       JSON.stringify(bad),
     );
   }
+});
+
+test("validateCorrection : motif de plus de 200 caractères → message distinct", () => {
+  assert.throws(
+    () => validateCorrection({ userUid: "u1", amount: 100, reason: "x".repeat(201) }),
+    (e: unknown) => e instanceof ValidationError && e.message === "Motif trop long (200 caractères au maximum).",
+  );
+  assert.equal(validateCorrection({ userUid: "u1", amount: 100, reason: "x".repeat(200) }).reason.length, 200);
 });

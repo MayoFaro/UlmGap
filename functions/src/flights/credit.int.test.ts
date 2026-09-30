@@ -163,8 +163,8 @@ test("concurrence : deux créations simultanées du même compte débité, le cr
   assert.equal(code(rejected.reason), "failed-precondition");
 });
 
-// Régression : un vol sans compte (crew vide impossible en pratique, mais un
-// vol seedé sans payerUid) ne doit jamais planter la requête `where`.
+// Outil de test : seedFlight renseigne payerUid (premier de l'équipage), sur
+// lequel porte la requête du contrôle de crédit.
 test("seedFlight : payerUid par défaut = premier de l'équipage", async () => {
   const p = await seedUser({ profile: "instructeur" });
   const id = await seedFlight({

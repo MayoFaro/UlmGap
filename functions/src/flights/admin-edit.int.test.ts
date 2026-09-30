@@ -242,3 +242,80 @@ test("suppression d'un vol déjà commencé mais non clôturé : autorisée, san
   assert.equal((await flightTx(id)).length, 0);
   assert.equal(await balance(pilot.uid), 1_000_000);
 });
+
+test("vol clôturé GAP + passager (carburant) : pilote remplacé par un EXT sans mode → standard, régularisé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const gap = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const ext = await seedUser({ profile: "lache_toute_mission", category: "EXT" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss,
+    { crew: [gap.uid], passengers: ["Paul"], pricingMode: "fuel_only", aircraftId: a },
+    { actualMinutes: 90 });
+  assert.equal((await getFlight(id)).billedAmount, 18_000);
+
+  // Condition « tous GAP » perdue → standard (spec §4.1), même sans pricingMode.
+  await adminUpdateFlight(boss, await correction(id, { crew: [ext.uid] }));
+
+  // EXT, 90 min : 70 000 + 30 000 × 15 / 60 = 77 500.
+  const f = await getFlight(id);
+  assert.equal(f.pricingMode, "standard");
+  assert.equal(f.billedAmount, 77_500);
+  assert.equal(f.payerUid, ext.uid);
+  assert.equal(await balance(gap.uid), 1_000_000);
+  assert.equal(await balance(ext.uid), 1_000_000 - 77_500);
+  await assertInvariant(id);
+});
+
+test("vol non clôturé GAP + passager (carburant) : pilote remplacé par un EXT sans mode → standard", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const gap = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const ext = await seedUser({ profile: "lache_toute_mission", category: "EXT" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(30), end: at(31), crew: [gap.uid], passengers: ["Paul"], pricingMode: "fuel_only",
+    aircraftId: a, createdBy: gap.uid,
+  });
+
+  await adminUpdateFlight(boss, await correction(id, { crew: [ext.uid] }));
+
+  const f = await getFlight(id);
+  assert.equal(f.pricingMode, "standard");
+  assert.equal(f.payerUid, ext.uid);
+});
+
+test("vol clôturé court (montant à facturer) corrigé à 90 min : shortFlightAmount effacé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a },
+    { actualMinutes: 30, shortFlightAmount: 10_000 });
+  assert.equal((await getFlight(id)).shortFlightAmount, 10_000);
+
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 90 }));
+
+  const f = await getFlight(id);
+  assert.equal(f.billedAmount, 15_000);
+  assert.equal(f.shortFlightAmount, null);
+  await assertInvariant(id);
+
+  // Retour à 30 min : le montant à facturer redevient obligatoire, puis conservé.
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 30, shortFlightAmount: 9_000 }));
+  const g = await getFlight(id);
+  assert.equal(g.billedAmount, 9_000);
+  assert.equal(g.shortFlightAmount, 9_000);
+  await assertInvariant(id);
+});
+
+test("vol refusé : correction admin refusée", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(40), end: at(41), crew: [pilot.uid], aircraftId: a, status: "refuse", createdBy: pilot.uid,
+  });
+  await assert.rejects(
+    adminUpdateFlight(boss, await correction(id, { destination: "Kara" })),
+    (e) => code(e) === "failed-precondition" &&
+      (e as Error).message === "Un vol refusé ne peut pas être corrigé.",
+  );
+});

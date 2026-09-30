@@ -78,8 +78,7 @@ export function validateCorrection(data: unknown): { userUid: string; amount: nu
   const amount = amountInt(d.amount);
   if (amount === 0) throw new ValidationError("Montant invalide.");
   const reason = typeof d.reason === "string" ? d.reason.trim() : "";
-  if (!reason || reason.length > 200) {
-    throw new ValidationError("Motif obligatoire pour une correction.");
-  }
+  if (!reason) throw new ValidationError("Motif obligatoire pour une correction.");
+  if (reason.length > 200) throw new ValidationError("Motif trop long (200 caractères au maximum).");
   return { userUid, amount, reason };
 }

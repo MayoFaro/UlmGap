@@ -1,8 +1,8 @@
 // Lancé par `npm run test:int` (émulateurs Auth + Firestore, projet demo-ulmgap).
-// Les tarifs par défaut valent 45 min ; on utilise ici 50 min pour rester
-// au-dessous des durées de 60 min employées par les autres tests d'intégration
-// de vols (edit.int.test.ts, actions.int.test.ts), qui peuvent s'exécuter en
-// parallèle et lisent le même document settings/pricing.
+// Les tarifs par défaut valent 45 min ; on utilise ici 50 min, qui reste
+// au-dessous des durées de 60 min employées par les tests de vols. Les
+// fichiers d'intégration s'exécutent l'un après l'autre (run-tests.js,
+// --test-concurrency=1) : settings/pricing est supprimé à la fin (after).
 import { after, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { createFlight } from "../flights/edit";
