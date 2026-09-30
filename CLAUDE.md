@@ -14,7 +14,8 @@ doivent jamais accéder à AppGAP.
 - Découpage prévu des plans suivants :
   2. vols et matrice de droits ;
   3. finances (forfaits, crédit FCFA, relevé) ;
-  4. compteurs pilote et appareil ;
+  4. compteurs pilote et appareil, et panneau « Vols effectués » (clôturés
+     ou non, date ≤ aujourd'hui) : c'est là qu'on clôture les vols ;
   5. notifications et rappels de clôture ;
   6. adaptation du pont AppGAP (dans le repo `~/StudioProjects/app_gap`).
 
@@ -81,7 +82,9 @@ d'où le JDK d'Android Studio.
 ### À reprendre aux plans suivants
 
 - Plan 4 (compteurs) : base = `actualFlightMinutes` des vols clôturés, non
-  supprimés.
+  supprimés. Plan 4 aussi : panneau « Vols effectués » (spec §5), seul accès
+  aux vols passés et donc à la clôture ; d'ici là, les vols passés non
+  clôturés sont invisibles mais réservent le crédit du compte débité.
 - Plan 5 (notifications) : rappels de clôture ; tant qu'ils n'existent pas,
   des vols validés passés restent non clôturés et pèsent sur le crédit
   disponible.

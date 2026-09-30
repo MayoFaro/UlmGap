@@ -348,6 +348,17 @@ Identiques sur mobile et sur web.
   permet de saisir le montant : le vol passe alors en `custom` et aucun solde
   n'est débité.
 
+**Vols effectués** (ajout du 2026-09-30, prévu au plan 4)
+- Panneau complet listant tous les vols **effectués**, c'est-à-dire dont la
+  date est antérieure ou égale à la date du jour, **clôturés ou non**.
+- C'est l'endroit pour **clôturer** les vols : un vol non clôturé s'y ouvre
+  dans la fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage
+  et admins, §3.3).
+- Le planning (accueil) reste limité aux vols à venir.
+- À préciser au plan 4 : quels vols chaque utilisateur voit (les siens ou
+  tous), les filtres (période, appareil, clôturés ou non) et la mise en
+  évidence des vols à clôturer.
+
 **Compteurs**
 - **Pilote** : une période, un total. Chacun voit le sien ; les instructeurs
   et les admins choisissent le pilote.
