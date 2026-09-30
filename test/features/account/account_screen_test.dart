@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/money.dart';
@@ -21,9 +23,9 @@ AppUser _user({required int balance}) => AppUser(
       balance: balance,
     );
 
-Widget host(FakeFinanceApi finance, AppUser me) => AppServices(
+Widget host(FakeFinanceApi finance, AppUser me, {FakeUserRepository? users}) => AppServices(
       auth: FakeAuthService(),
-      users: FakeUserRepository(),
+      users: users ?? FakeUserRepository(),
       finance: finance,
       child: MaterialApp(home: AccountScreen(me: me)),
     );
@@ -95,5 +97,22 @@ void main() {
     await tester.pumpWidget(host(FakeFinanceApi(), me));
     await tester.pump();
     expect(find.text('Aucun mouvement.'), findsOneWidget);
+  });
+
+  // Fix round 1 (revue de la Task 11) : le solde de l'en-tête doit suivre le
+  // flux utilisateur en direct (watchUser), pas rester figé sur l'AppUser
+  // passé à la navigation.
+  testWidgets('solde en direct : mis à jour après un événement de watchUser',
+      (tester) async {
+    final me = _user(balance: 0);
+    final users = FakeUserRepository()..live = StreamController<AppUser?>();
+    await tester.pumpWidget(host(FakeFinanceApi(), me, users: users));
+    await tester.pump();
+    expect(find.text('Solde : ${formatFcfa(0)}'), findsOneWidget);
+
+    users.live!.add(_user(balance: 20000));
+    await tester.pump();
+    expect(find.text('Solde : ${formatFcfa(20000)}'), findsOneWidget);
+    expect(find.text('Solde : ${formatFcfa(0)}'), findsNothing);
   });
 }

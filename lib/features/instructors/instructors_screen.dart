@@ -54,36 +54,55 @@ class InstructorsScreen extends StatelessWidget {
 /// la liste ci-dessus.
 class _AccountDetailScreen extends StatelessWidget {
   const _AccountDetailScreen({required this.account});
-  final AppUser account;
+  final AppUser account; // valeur initiale, tant que le flux n'a pas émis.
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(account.displayName)),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Solde : ${formatFcfa(account.balance)}',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: account.balance < 0 ? Theme.of(context).colorScheme.error : null,
-                  ),
+    final finance = AppServices.of(context).finance!;
+    // Fix round 1 (revue de la Task 11) : le solde de l'en-tête venait de
+    // l'AppUser figé au moment de la navigation, en désaccord avec
+    // MovementsList (en direct) après un crédit ou une correction. On relit
+    // désormais `watchAccounts()`, filtré sur ce compte, avec repli sur
+    // `account` tant que le flux n'a pas encore émis.
+    return StreamBuilder<List<AppUser>>(
+      stream: finance.watchAccounts(),
+      builder: (context, snap) {
+        AppUser? found;
+        for (final a in snap.data ?? const <AppUser>[]) {
+          if (a.uid == account.uid) {
+            found = a;
+            break;
+          }
+        }
+        final current = found ?? account;
+        return Scaffold(
+          appBar: AppBar(title: Text(current.displayName)),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Solde : ${formatFcfa(current.balance)}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: current.balance < 0 ? Theme.of(context).colorScheme.error : null,
+                      ),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(child: MovementsList(uid: current.uid)),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            icon: const Icon(Icons.payments),
+            label: const Text('Créditer / corriger'),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => CreditDialog(uid: current.uid),
             ),
           ),
-          const Divider(height: 1),
-          Expanded(child: MovementsList(uid: account.uid)),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.payments),
-        label: const Text('Créditer / corriger'),
-        onPressed: () => showDialog<void>(
-          context: context,
-          builder: (_) => CreditDialog(uid: account.uid),
-        ),
-      ),
+        );
+      },
     );
   }
 }

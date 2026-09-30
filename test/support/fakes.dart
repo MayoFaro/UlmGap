@@ -13,6 +13,14 @@ import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/user_repository.dart';
 
+/// Émet [initial] puis relaie [rest] (même schéma que FakeAuthService.changes :
+/// une valeur de départ suivie d'un flux contrôlable, pour simuler une
+/// écoute Firestore qui reçoit sa valeur courante puis les mises à jour).
+Stream<T> _seeded<T>(T initial, Stream<T> rest) async* {
+  yield initial;
+  yield* rest;
+}
+
 class FakeAuthService implements AuthService {
   final _ctrl = StreamController<AuthSnapshot?>.broadcast();
   AuthSnapshot? current;
@@ -272,6 +280,11 @@ class FakeFinanceApi implements FinanceApi {
   int balance = 0; // rendu par credit/correct
   Object? failWith; // si défini, les actions échouent
 
+  /// Si défini, watchAccounts reste en direct (fix round 1, Task 11) : chaque
+  /// abonnement reçoit d'abord `accounts`, puis les émissions ajoutées ici
+  /// (mêmes solde/liste pour tous les écrans, comme un flux Firestore).
+  StreamController<List<AppUser>>? accountsLive;
+
   Pricing? updatedPricing;
   final credited = <Map<String, dynamic>>[];
   final corrected = <Map<String, dynamic>>[];
@@ -297,7 +310,11 @@ class FakeFinanceApi implements FinanceApi {
       Stream.value(movements[uid] ?? const []);
 
   @override
-  Stream<List<AppUser>> watchAccounts() => Stream.value(accounts);
+  Stream<List<AppUser>> watchAccounts() {
+    final ctrl = accountsLive;
+    if (ctrl == null) return Stream.value(accounts);
+    return _seeded(accounts, ctrl.stream);
+  }
 
   @override
   Future<int> credit(String uid, int amount, String? reason) async {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/money.dart';
@@ -140,5 +142,24 @@ void main() {
     expect(finance.corrected.single,
         {'uid': 'u1', 'amount': -10000, 'reason': 'Erreur de saisie'});
     expect(find.text('Nouveau solde : ${formatFcfa(0)}'), findsOneWidget);
+  });
+
+  // Fix round 1 (revue de la Task 11) : le solde de l'en-tête du détail doit
+  // suivre watchAccounts() en direct, pas rester figé sur l'AppUser passé à
+  // la navigation (sinon il se désaccorde de MovementsList après un crédit).
+  testWidgets('solde du détail mis à jour en direct (watchAccounts)', (tester) async {
+    final finance = FakeFinanceApi()
+      ..accounts = [_account('u1', 'Jean Dupont', balance: 0)]
+      ..accountsLive = StreamController<List<AppUser>>.broadcast();
+    await tester.pumpWidget(host(finance));
+    await tester.pump();
+    await tester.tap(find.text('Jean Dupont'));
+    await tester.pumpAndSettle();
+    expect(find.text('Solde : ${formatFcfa(0)}'), findsOneWidget);
+
+    finance.accountsLive!.add([_account('u1', 'Jean Dupont', balance: 15000)]);
+    await tester.pumpAndSettle();
+    expect(find.text('Solde : ${formatFcfa(15000)}'), findsOneWidget);
+    expect(find.text('Solde : ${formatFcfa(0)}'), findsNothing);
   });
 }
