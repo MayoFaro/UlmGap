@@ -763,4 +763,97 @@ void main() {
     expect(find.text('Clôturer'), findsNothing);
     expect(find.text('Enregistrer'), findsNothing);
   });
+
+  // --- Task 10 (plan 3) : correction et suppression admin ---
+
+  testWidgets(
+      'admin : correction d\'un vol clôturé → adminUpdateFlight(actualMinutes), aperçu de '
+      'régularisation, puis retour au planning', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    a.categories = {'u1': UserCategory.gap};
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ac1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Corriger'), findsOneWidget);
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('correct-minutes')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('correct-minutes')), '120');
+    await tester.pumpAndSettle();
+    // 120 min GAP standard : 12 000 (forfait) + (120-75) min à 12 000/h = 21 000,
+    // contre 15 000 facturés initialement : régularisation de +6 000.
+    expect(find.text('Régularisation : ${formatFcfa(6000)} sur le compte de JDU'),
+        findsOneWidget);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ac1']!['actualMinutes'], 120);
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets(
+      'admin : suppression confirmée d\'un vol clôturé et débité → adminDeleteFlight avec '
+      'mention du remboursement, puis retour au planning', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'ad1', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        api(), testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer le vol'));
+    await tester.pumpAndSettle();
+    expect(find.text('Le montant débité sera remboursé.'), findsOneWidget);
+    await tester.tap(find.text('Oui, supprimer'));
+    await tester.pumpAndSettle();
+    expect(finance.adminDeleted, ['ad1']);
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets('admin : suppression d\'un vol non clôturé → pas de mention de remboursement',
+      (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'ad2', start: DateTime(2026, 10, 13, 9), crew: ['u1'], createdBy: 'u1',
+        status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        api(), testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer le vol'));
+    await tester.pumpAndSettle();
+    expect(find.text('Le montant débité sera remboursé.'), findsNothing);
+    await tester.tap(find.text('Oui, supprimer'));
+    await tester.pumpAndSettle();
+    expect(finance.adminDeleted, ['ad2']);
+  });
+
+  testWidgets('non-admin : ni Corriger ni Supprimer le vol, même sur un vol clôturé',
+      (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'z2', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Corriger'), findsNothing);
+    expect(find.text('Supprimer le vol'), findsNothing);
+  });
 }

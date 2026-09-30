@@ -51,6 +51,13 @@ class _FlightScreenState extends State<FlightScreen> {
   bool _fuelOnly = false;
   bool _saving = false;
 
+  // --- Task 10 (finances) : correction admin d'un vol clôturé ---
+  bool _correcting = false;
+  final _correctMinutes = TextEditingController();
+  final _correctShortAmount = TextEditingController();
+  final _correctCustomAmount = TextEditingController();
+  bool _correctCustomChecked = false;
+
   final _subs = <StreamSubscription<Object?>>[];
   /// Version « live » d'un vol existant (Task 3, retours de recette) : mise à
   /// jour par [FlightApi.watchFlight] pendant la consultation, pour refléter
@@ -89,8 +96,8 @@ class _FlightScreenState extends State<FlightScreen> {
   }
 
   bool get _validating => _mode == _Mode.validate;
-  bool get _fieldsEditable => _mode != _Mode.view;
-  bool get _crewEditable => _mode == _Mode.create || _mode == _Mode.edit;
+  bool get _fieldsEditable => _mode != _Mode.view || _correcting;
+  bool get _crewEditable => _mode == _Mode.create || _mode == _Mode.edit || _correcting;
   bool get _isStaff => _me.isAdmin || _me.isInstructor;
   bool get _mayChoose => _validating || _isStaff;
 
@@ -107,6 +114,14 @@ class _FlightScreenState extends State<FlightScreen> {
       _passenger = f.passengers.isEmpty ? null : f.passengers.first;
       _destination.text = f.destination;
       _fuelOnly = f.pricingMode == 'fuel_only';
+      // Task 10 : préremplissage des champs de clôture pour une correction
+      // admin éventuelle (aperçu de régularisation calculé avant même que le
+      // bouton « Corriger » ne soit pressé n'est pas nécessaire ici : ces
+      // champs ne sont lus que si _correcting devient vrai).
+      _correctMinutes.text = f.actualFlightMinutes?.toString() ?? '';
+      _correctShortAmount.text = f.shortFlightAmount?.toString() ?? '';
+      _correctCustomAmount.text = f.customAmount?.toString() ?? '';
+      _correctCustomChecked = f.billedTo == 'off_app';
     } else {
       final n = widget.now();
       _start = DateTime(n.year, n.month, n.day, n.hour + 1);
@@ -164,6 +179,9 @@ class _FlightScreenState extends State<FlightScreen> {
     }
     _destination.dispose();
     _destinationFocus.dispose();
+    _correctMinutes.dispose();
+    _correctShortAmount.dispose();
+    _correctCustomAmount.dispose();
     super.dispose();
   }
 
@@ -244,7 +262,7 @@ class _FlightScreenState extends State<FlightScreen> {
     return switch (_mode) {
       _Mode.validate => 'Sera validé',
       _Mode.edit => 'Sera enregistré (validé)',
-      _Mode.create || _Mode.view => 'Sera créé (validé)',
+      _Mode.create || _Mode.view => _correcting ? 'Sera corrigé' : 'Sera créé (validé)',
     };
   }
 
@@ -337,6 +355,77 @@ class _FlightScreenState extends State<FlightScreen> {
       }
     }
     return widgets;
+  }
+
+  // --- Task 10 (finances) : correction admin, régularisation d'un vol clôturé ---
+
+  int? get _correctActualMinutes => int.tryParse(_correctMinutes.text.trim());
+
+  /// Miroir de ClosingDialog._needsShortAmount, avec le mode de tarification
+  /// et les tarifs du brouillon en cours de correction.
+  bool get _correctNeedsShortAmount {
+    final m = _correctActualMinutes;
+    return _pricingMode == 'standard' && m != null && m < _pricingForCost.minPlannedMinutes;
+  }
+
+  /// Régularisation locale (indicative) : différence entre l'ancienne facture
+  /// du vol (billedTo/billedAmount stockés) et la nouvelle (calcul local de
+  /// closingBill avec la saisie en cours), sur la part imputée à un compte.
+  /// La répartition exacte entre l'ancien et le nouveau compte débité (s'ils
+  /// diffèrent) reste au serveur (contrôleur : pas nécessaire côté app,
+  /// cf. core/pricing.dart) ; l'aperçu attribue simplement la différence au
+  /// compte débité courant.
+  ({int amount, String uid})? get _regularisation {
+    final f = _current;
+    if (f == null || !f.isClosed) return null;
+    final category = _category(_debitedUid);
+    if (category == null) return null;
+    final minutes = _correctActualMinutes;
+    if (minutes == null) return null;
+    final shortAmount = _correctNeedsShortAmount ? parseAmount(_correctShortAmount.text) : null;
+    if (_correctNeedsShortAmount && shortAmount == null) return null;
+    final customAmount = _correctCustomChecked ? parseAmount(_correctCustomAmount.text) : null;
+    if (_correctCustomChecked && customAmount == null) return null;
+    final ClosingBill bill;
+    try {
+      bill = closingBill(
+        mode: _pricingMode,
+        actualMinutes: minutes,
+        category: category,
+        pricing: _pricingForCost,
+        shortFlightAmount: shortAmount,
+        customAmount: customAmount,
+        hasPassenger: _passenger != null,
+      );
+    } on ArgumentError {
+      return null;
+    }
+    int onAccount(String? billedTo, int? amount) => billedTo == 'account' ? (amount ?? 0) : 0;
+    final oldAmount = onAccount(f.billedTo, f.billedAmount);
+    final newAmount = onAccount(bill.billedTo, bill.billedAmount);
+    return (amount: newAmount - oldAmount, uid: _debitedUid);
+  }
+
+  /// Ligne « Régularisation » affichée dans l'aperçu pendant la correction
+  /// d'un vol clôturé, à la place des lignes coût estimé/crédit disponible
+  /// (sans objet une fois le vol réalisé).
+  Widget? _regularisationLine() {
+    if (_category(_debitedUid) == null) {
+      return const Text('Montant calculé par le serveur à la clôture.');
+    }
+    final r = _regularisation;
+    return r == null
+        ? null
+        : Text('Régularisation : ${formatFcfa(r.amount)} sur le compte de ${_short(r.uid)}');
+  }
+
+  List<Widget> _previewFinanceLines(BuildContext context) {
+    final f = _current;
+    if (_correcting && f != null && f.isClosed) {
+      final line = _regularisationLine();
+      return line == null ? const [] : [line];
+    }
+    return _financeLines(context);
   }
 
   // --- saisie ---
@@ -569,6 +658,110 @@ class _FlightScreenState extends State<FlightScreen> {
         ));
   }
 
+  /// Task 10 (spec §4.5) : correction admin, à tout moment, champs de clôture
+  /// compris sur un vol clôturé (les contrôles de la matrice de droits, de
+  /// compte/appareil actif et d'heure passée ne s'appliquent pas côté
+  /// serveur ; ceux conservés — composition, conflits, crédit hors clôture —
+  /// sont vérifiés localement comme pour un enregistrement normal).
+  String? _correctionError() {
+    if (_aircraftId == null) return 'Choisissez un appareil.';
+    if (_destination.text.trim().isEmpty) return 'Indiquez une destination.';
+    final duration = _end.difference(_start);
+    if (duration.inMinutes < minPlannedMinutes) {
+      return 'Durée prévue minimale : $minPlannedMinutes min.';
+    }
+    if (duration > const Duration(hours: maxPlannedHours)) {
+      return 'Durée prévue maximale : $maxPlannedHours h.';
+    }
+    final f = _current!;
+    if (f.isClosed) {
+      final m = _correctActualMinutes;
+      if (m == null || m < 1 || m > 720) return 'Durée réelle invalide (1 à 720 min).';
+      if (_correctNeedsShortAmount) {
+        final short = parseAmount(_correctShortAmount.text);
+        if (short == null) {
+          return 'Montant à facturer obligatoire pour un vol de moins de '
+              '${_pricingForCost.minPlannedMinutes} min.';
+        }
+        if (short > maxManualAmount) {
+          return 'Montant trop élevé (${formatFcfa(maxManualAmount)} au maximum).';
+        }
+      }
+      if (_correctCustomChecked) {
+        final custom = parseAmount(_correctCustomAmount.text);
+        if (custom == null) return 'Indiquez le montant.';
+        if (custom > maxManualAmount) {
+          return 'Montant trop élevé (${formatFcfa(maxManualAmount)} au maximum).';
+        }
+      }
+    } else {
+      // Décision utilisateur 1 : l'admin est soumis au même contrôle de
+      // crédit (le serveur refuse aussi ; skipCredit ne vaut que pour un vol
+      // déjà clôturé).
+      final cost = _estimatedCost;
+      final credit = _availableCredit;
+      if (cost != null && credit != null && credit < cost) {
+        return 'Crédit insuffisant : il manque ${formatFcfa(cost - credit)}.';
+      }
+    }
+    return null;
+  }
+
+  /// Construit le payload d'`adminUpdateFlight` : les champs du vol comme un
+  /// enregistrement normal, et, sur un vol clôturé, les champs de clôture.
+  /// Le mode de tarification est explicite sur un vol clôturé (jamais
+  /// `null`) : soit omis en faveur de `customAmount` (le serveur en déduit
+  /// `custom`), soit envoyé explicitement pour revenir d'un montant différent
+  /// à une facturation normale.
+  Map<String, dynamic> _correctionPayload() {
+    final payload = _draft().toPayload();
+    final f = _current!;
+    if (!f.isClosed) return payload;
+    payload.remove('pricingMode');
+    payload['actualMinutes'] = _correctActualMinutes;
+    if (_correctNeedsShortAmount) {
+      payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
+    }
+    if (_correctCustomChecked) {
+      payload['customAmount'] = parseAmount(_correctCustomAmount.text);
+    } else {
+      payload['pricingMode'] = _pricingMode;
+    }
+    return payload;
+  }
+
+  Future<void> _saveCorrection() async {
+    final error = _correctionError();
+    if (error != null) {
+      _snack(error);
+      return;
+    }
+    final finance = AppServices.of(context).finance!;
+    await _run(() => finance.adminUpdateFlight(_current!.id, _correctionPayload()));
+  }
+
+  /// Task 10 : suppression admin, à tout moment ; la confirmation mentionne
+  /// le remboursement seulement pour un vol clôturé débité sur un compte
+  /// (adminDeleteFlight rembourse alors automatiquement, côté serveur).
+  Future<void> _deleteFlight() async {
+    final f = _current!;
+    final refund = f.isClosed && f.billedTo == 'account';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer définitivement ce vol ?'),
+        content: refund ? const Text('Le montant débité sera remboursé.') : null,
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Non')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Oui, supprimer')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final finance = AppServices.of(context).finance!;
+    await _run(() => finance.adminDeleteFlight(f.id));
+  }
+
   // --- affichage ---
 
   @override
@@ -606,6 +799,26 @@ class _FlightScreenState extends State<FlightScreen> {
         FilledButton(
             key: const Key('close-flight'), onPressed: _saving ? null : _openClosing,
             child: const Text('Clôturer')),
+      // Task 10 : un admin sans autre droit de modification (vol passé,
+      // clôturé, ou vol d'un autre) peut tout de même tout corriger.
+      if (_actions.contains(FlightAction.adminEdit) && _mode == _Mode.view && !_correcting)
+        OutlinedButton(
+          key: const Key('admin-correct'),
+          onPressed: _saving ? null : () => setState(() => _correcting = true),
+          child: const Text('Corriger'),
+        ),
+      if (_correcting)
+        FilledButton(
+          key: const Key('admin-save-correction'),
+          onPressed: _saving ? null : _saveCorrection,
+          child: const Text('Enregistrer la correction'),
+        ),
+      if (_actions.contains(FlightAction.adminDelete))
+        TextButton(
+          key: const Key('admin-delete'),
+          onPressed: _saving ? null : _deleteFlight,
+          child: const Text('Supprimer le vol'),
+        ),
     ];
 
     return Scaffold(
@@ -615,7 +828,9 @@ class _FlightScreenState extends State<FlightScreen> {
         children: [
           if (f != null) ...[
             // Task 9 : un vol clôturé n'affiche plus qu'un bilan, en tête de
-            // fenêtre, et aucune autre action (flightActions le ferme déjà).
+            // fenêtre, et aucune action pour un non-admin (flightActions le
+            // ferme déjà). Task 10 : un admin y garde « Corriger » et
+            // « Supprimer le vol ».
             if (f.isClosed)
               ListTile(
                 key: const Key('closed-summary'),
@@ -772,6 +987,45 @@ class _FlightScreenState extends State<FlightScreen> {
               value: _fuelOnly,
               onChanged: _fieldsEditable ? (v) => setState(() => _fuelOnly = v ?? false) : null,
             ),
+          // Task 10 : champs de clôture modifiables pendant une correction
+          // admin d'un vol clôturé (durée réelle, montants), en plus des
+          // champs déjà modifiables ci-dessus.
+          if (_correcting && f != null && f.isClosed) ...[
+            const SizedBox(height: 16),
+            Text('Clôture', style: Theme.of(context).textTheme.titleMedium),
+            TextField(
+              key: const Key('correct-minutes'),
+              controller: _correctMinutes,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Durée réelle (minutes)'),
+              onChanged: (_) => setState(() {}),
+            ),
+            if (_correctNeedsShortAmount)
+              TextField(
+                key: const Key('correct-short-amount'),
+                controller: _correctShortAmount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Montant à facturer'),
+                onChanged: (_) => setState(() {}),
+              ),
+            if (_passenger != null) ...[
+              CheckboxListTile(
+                key: const Key('correct-custom-check'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Montant différent (facturé hors app)'),
+                value: _correctCustomChecked,
+                onChanged: (v) => setState(() => _correctCustomChecked = v ?? false),
+              ),
+              if (_correctCustomChecked)
+                TextField(
+                  key: const Key('correct-custom-amount'),
+                  controller: _correctCustomAmount,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Montant'),
+                  onChanged: (_) => setState(() {}),
+                ),
+            ],
+          ],
           if (_fieldsEditable) ...[
             const SizedBox(height: 16),
             Card(
@@ -782,7 +1036,7 @@ class _FlightScreenState extends State<FlightScreen> {
                   Text(_statusText(decision)),
                   Text('$debitedLabel : ${_short(_crew.first)}'),
                   Text('Mode : ${pricingModeLabel(_pricingMode)}'),
-                  ..._financeLines(context),
+                  ..._previewFinanceLines(context),
                   if (conflict != null)
                     Text(
                       describeConflict(
