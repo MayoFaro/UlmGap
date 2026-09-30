@@ -371,4 +371,9 @@ class FakeFinanceApi implements FinanceApi {
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => Stream.value(
         flights.where((f) => f.payerUidField == payerUid && !f.isClosed).toList(),
       );
+
+  @override
+  Stream<List<Flight>> watchValidUnclosedFlights() => Stream.value(
+        flights.where((f) => f.status == FlightStatus.valide && !f.isClosed).toList(),
+      );
 }

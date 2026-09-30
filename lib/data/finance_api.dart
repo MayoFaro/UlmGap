@@ -60,6 +60,11 @@ abstract class FinanceApi {
   /// (crédit disponible, spec §4.4 : même requête que le serveur, égalités
   /// seules, sans index composite).
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid);
+
+  /// Vols validés non clôturés, passés comme à venir : les vols à clôturer
+  /// de toute période (panneau « Vols effectués »). Égalités seules, sans
+  /// index composite.
+  Stream<List<Flight>> watchValidUnclosedFlights();
 }
 
 class FirebaseFinanceApi implements FinanceApi {
@@ -154,6 +159,13 @@ class FirebaseFinanceApi implements FinanceApi {
   @override
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => _flights
       .where('payerUid', isEqualTo: payerUid)
+      .where('isClosed', isEqualTo: false)
+      .snapshots()
+      .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
+
+  @override
+  Stream<List<Flight>> watchValidUnclosedFlights() => _flights
+      .where('status', isEqualTo: 'valide')
       .where('isClosed', isEqualTo: false)
       .snapshots()
       .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
