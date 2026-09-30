@@ -169,6 +169,8 @@ Règle absolue : **le solde n'est jamais modifié sans sa ligne d'historique**,
 - **Vol seul** : 1 personne à bord.
 - **Vol à deux** : 2 personnes à bord.
 - Un vol est **effectué** dès que son heure de départ est passée.
+- Un vol validé se **clôture dès le jour du vol** (date du jour ou avant, à l'heure du
+  club, Africa/Libreville), même avant l'heure de départ (révision du 2026-09-30).
 
 ### 3.2 Création (`createFlight`)
 
@@ -196,7 +198,7 @@ En `demande`, `instructorUid` = l'instructeur de l'équipage.
 | `refuseFlight` (motif facultatif) | L'instructeur désigné, ou un admin | `demande` → `refuse` |
 | `updateFlight` | Le créateur, avant le départ | Mêmes règles qu'à la création. Si un non-instructeur modifie un vol avec instructeur, il redevient `demande`. Un vol `refuse` modifié repart en `demande` |
 | `cancelFlight` | Le créateur, l'instructeur désigné ou un admin, avant le départ | `deleted: true` |
-| `closeFlight` (minutes réelles) | Tout membre de `crew` ou un admin, une fois le vol effectué | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
+| `closeFlight` (minutes réelles) | Tout membre de `crew` ou un admin, dès le jour du vol (§3.1) | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
 | `adminUpdateFlight` | Admin, à tout moment, vols clôturés compris | Modification libre, sans matrice mais avec conflits. Sur un vol clôturé, régularisation automatique (§4.5) |
 
 ### 3.4 Contrôles communs
@@ -355,9 +357,16 @@ Identiques sur mobile et sur web.
   dans la fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage
   et admins, §3.3).
 - Le planning (accueil) reste limité aux vols à venir.
-- À préciser au plan 4 : quels vols chaque utilisateur voit (les siens ou
-  tous), les filtres (période, appareil, clôturés ou non) et la mise en
-  évidence des vols à clôturer.
+- Précisions du plan 4 (2026-09-30) :
+  - un pilote voit les vols dont il est membre de l'équipage ; les
+    instructeurs et les admins voient tout ;
+  - seuls les vols validés et non supprimés apparaissent, du plus récent au
+    plus ancien ;
+  - filtres : période (mois en cours par défaut), appareil, « À clôturer
+    seulement » ;
+  - les vols à clôturer (date du jour ou avant, non clôturés, sans
+    condition d'heure) sont surlignés en orange. Le compteur « N vols à
+    clôturer » et le filtre portent sur toutes les périodes.
 
 **Compteurs**
 - **Pilote** : une période, un total. Chacun voit le sien ; les instructeurs
@@ -365,9 +374,14 @@ Identiques sur mobile et sur web.
 - **Appareil** : un appareil et une période, par exemple « total 154h45 »,
   visible par tous.
 - Base de calcul : `actualFlightMinutes` des vols clôturés, non supprimés.
+- Chaque membre de `crew` cumule les minutes du vol (instructeur et élève) ;
+  les passagers sans compte ne comptent pas.
+- Période par défaut : l'année civile en cours. Accès par l'icône
+  « Compteurs » de l'accueil, avec deux onglets, « Pilote » et « Appareil ».
 
 **Mon compte**
 - Solde, historique, profil (badge), appartenance.
+- Bouton « Se déconnecter » (retiré de la barre d'accueil au plan 4).
 
 **Instructeurs**
 - Liste des comptes avec leur solde, et un bouton « créditer / corriger ».

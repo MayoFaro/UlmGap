@@ -11,6 +11,7 @@ doivent jamais accéder à AppGAP.
 - Plan 2, vols et matrice de droits (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02-vols.md`
 - Plan 2b, retours de recette du plan 2 (terminé) : `docs/superpowers/plans/2026-09-28-ulmgap-02b-retours-recette.md`
 - Plan 3, finances (terminé) : `docs/superpowers/plans/2026-09-29-ulmgap-03-finances.md`
+- Plan 4, compteurs et vols effectués (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
 - Découpage prévu des plans suivants :
   2. vols et matrice de droits ;
   3. finances (forfaits, crédit FCFA, relevé) ;
@@ -52,15 +53,19 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-09-30
 
-- Plans 1, 2, 2b et 3 terminés. `main` contient les plans 1, 2 et 2b ; le
-  plan 3 est sur `feature/finances` (non fusionnée).
+- Plans 1 à 4 terminés. `main` contient les plans 1, 2 et 2b ; le plan 3 est
+  sur `feature/finances`, le plan 4 sur `feature/compteurs` (créée depuis
+  `feature/finances`) ; aucune des deux n'est fusionnée.
 - En dev : Authentication activé, premier admin (DPS), règles et Functions du
   plan 3 déployées (vols, finances : `closeFlight`, `creditAccount`,
   `correctAccount`, `adminUpdateFlight`, `adminDeleteFlight`,
   `adminUpdatePricing`). Crédit initial de 500 000 FCFA versé aux 4 comptes
-  de dev (transaction « Crédit initial (tests) »).
+  de dev (transaction « Crédit initial (tests) »). Plan 4 : `closeFlight`
+  redéployée (clôture dès le jour du vol, à l'heure d'Africa/Libreville).
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
-  25/10/2026**, date d'expiration des règles du mode test. Premier admin à
+  25/10/2026**, date d'expiration des règles du mode test (Functions dans
+  leur version du plan 4 : `closeFlight` a changé ; ni règle ni index
+  nouveau au plan 4). Premier admin à
   créer ensuite (`cd functions && npm run build && node
   scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
   activer (e-mail et mot de passe, création de compte par l'utilisateur
@@ -81,10 +86,6 @@ d'où le JDK d'Android Studio.
 
 ### À reprendre aux plans suivants
 
-- Plan 4 (compteurs) : base = `actualFlightMinutes` des vols clôturés, non
-  supprimés. Plan 4 aussi : panneau « Vols effectués » (spec §5), seul accès
-  aux vols passés et donc à la clôture ; d'ici là, les vols passés non
-  clôturés sont invisibles mais réservent le crédit du compte débité.
 - Plan 5 (notifications) : rappels de clôture ; tant qu'ils n'existent pas,
   des vols validés passés restent non clôturés et pèsent sur le crédit
   disponible.

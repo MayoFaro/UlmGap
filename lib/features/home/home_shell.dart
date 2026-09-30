@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/profile_badge.dart';
 import '../../data/app_user.dart';
-import '../../data/services.dart';
 import '../account/account_screen.dart';
 import '../admin/aircraft_admin_screen.dart';
 import '../admin/billing_report_screen.dart';
 import '../admin/pricing_admin_screen.dart';
 import '../admin/users_admin_screen.dart';
+import '../counters/counters_screen.dart';
 import '../flight/flight_screen.dart';
 import '../instructors/instructors_screen.dart';
+import '../performed/performed_flights_screen.dart';
 import '../planning/planning_screen.dart';
 
 class HomeShell extends StatelessWidget {
@@ -29,6 +30,20 @@ class HomeShell extends StatelessWidget {
               const SizedBox(width: 6),
               ProfileBadge(profile: user.profile, compact: true),
             ]),
+          ),
+          IconButton(
+            tooltip: 'Vols effectués',
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => PerformedFlightsScreen(me: user),
+            )),
+          ),
+          IconButton(
+            tooltip: 'Compteurs',
+            icon: const Icon(Icons.timer),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => CountersScreen(me: user),
+            )),
           ),
           IconButton(
             tooltip: 'Mon compte',
@@ -64,11 +79,6 @@ class HomeShell extends StatelessWidget {
                 PopupMenuItem(value: 'billing', child: Text('Relevé des vols facturés')),
               ],
             ),
-          IconButton(
-            tooltip: 'Se déconnecter',
-            icon: const Icon(Icons.logout),
-            onPressed: AppServices.of(context).auth.signOut,
-          ),
         ],
       ),
       body: PlanningScreen(

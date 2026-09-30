@@ -16,7 +16,23 @@ class AccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final users = AppServices.of(context).users;
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon compte')),
+      appBar: AppBar(
+        title: const Text('Mon compte'),
+        actions: [
+          IconButton(
+            tooltip: 'Se déconnecter',
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              // Service lu avant de démonter l'écran ; retour à la racine
+              // d'abord, sinon cet écran resterait empilé au-dessus de
+              // l'écran de connexion.
+              final auth = AppServices.of(context).auth;
+              Navigator.of(context).popUntil((r) => r.isFirst);
+              auth.signOut();
+            },
+          ),
+        ],
+      ),
       // Fix round 1 (revue de la Task 11) : le solde de l'en-tête vient
       // désormais du flux `watchUser` (déjà en direct dans la porte
       // d'authentification), sinon il restait figé sur la valeur passée à la
