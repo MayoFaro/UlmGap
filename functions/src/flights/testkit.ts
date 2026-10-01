@@ -36,9 +36,9 @@ export async function seedUser(fields: {
   return { uid, token: { email_verified: true } };
 }
 
-export async function seedAircraft(active = true): Promise<string> {
+export async function seedAircraft(active = true, amphibious = false): Promise<string> {
   const ref = db.collection("aircraft").doc();
-  await ref.set({ registration: `F-${uniq().toUpperCase().slice(0, 4)}`, label: "ULM", active });
+  await ref.set({ registration: `F-${uniq().toUpperCase().slice(0, 4)}`, label: "ULM", active, amphibious });
   return ref.id;
 }
 

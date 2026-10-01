@@ -101,7 +101,7 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
 
   const results = await Promise.allSettled([
     creditAccount(instr, { userUid: pilot.uid, amount: 50_000, reason: "Versement" }),
-    closeFlight(pilot, { flightId, actualMinutes: 90 }),
+    closeFlight(pilot, { flightId, actualMinutes: 90, landings: 1 }),
   ]);
   assert.equal(results.filter((r) => r.status === "fulfilled").length, 2);
 

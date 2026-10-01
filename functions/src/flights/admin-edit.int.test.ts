@@ -40,7 +40,7 @@ async function closedFlight(
   const id = await seedFlight({
     start, end, status: "valide", pricingMode: "standard", createdBy: adminCaller.uid, ...fields,
   });
-  await closeFlight(adminCaller, { flightId: id, ...closing });
+  await closeFlight(adminCaller, { landings: 1, flightId: id, ...closing });
   return { id, start, end };
 }
 
