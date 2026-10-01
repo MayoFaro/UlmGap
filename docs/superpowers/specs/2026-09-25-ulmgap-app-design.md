@@ -392,6 +392,9 @@ effectués » et « Compteurs »)
 - Un pilote voit ses vols (ceux où il est dans l'équipage) et son total.
   Un instructeur ou un admin a en plus un menu « Pilote » : lui-même par
   défaut, un autre pilote, ou « Tous les pilotes » (tous les vols du club).
+- Menu « Appareil » pour tous (« Tous les appareils » par défaut, appareils
+  inactifs compris) : il restreint la liste et le total à un appareil. Avec
+  « Tous les pilotes », on obtient le total d'heures de l'appareil.
 - C'est l'endroit pour **clôturer** : un vol non clôturé s'ouvre dans la
   fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage et
   admins, §3.3). Les vols à clôturer (date du jour ou avant, sans condition
@@ -403,15 +406,18 @@ effectués » et « Compteurs »)
 - Solde, historique, profil (badge), appartenance.
 - Bouton « Se déconnecter » (retiré de la barre d'accueil au plan 4).
 
-**Instructeurs**
-- Liste des comptes avec leur solde, et un bouton « créditer / corriger ».
+**Pilotes** (icône « Pilotes », anciennement « Instructeurs » ; instructeurs
+et admins seulement)
+- Liste des comptes avec leur solde et, sur chaque ligne, un bouton
+  « Créditer » qui ouvre « Créditer / corriger ». Un appui sur le nom ouvre
+  la fiche du compte (historique, « Créditer / corriger »).
 
 **Administration**
 - Utilisateurs : création, profil, catégorie, admin, activation.
 - Appareils, tarifs.
 - **Relevé des vols facturés** : sur une période, chaque vol clôturé avec son
-  mode, son montant facturé, son payeur ou « hors app », son appareil et son
-  équipage ; totaux « débité sur comptes » et « facturé hors app » ; export
+  mode, son **temps de vol réel**, son montant facturé, son payeur ou « hors
+  app », son appareil et son équipage ; totaux « débité sur comptes » et « facturé hors app » ; export
   CSV sur le web.
 
 ## 6. Notifications et rappels

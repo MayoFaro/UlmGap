@@ -56,7 +56,7 @@ List<Widget> appNavActions(BuildContext context, AppUser user, {AppDestination? 
     ),
     if (user.isInstructor || user.isAdmin)
       IconButton(
-        tooltip: 'Instructeurs',
+        tooltip: 'Pilotes',
         icon: const Icon(Icons.groups),
         onPressed: go(AppDestination.instructors),
       ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/async_state.dart';
 import '../../core/formats.dart';
+import '../../data/aircraft.dart';
 import '../../data/app_user.dart';
 import '../../data/crew_member.dart';
 import '../../data/finance_api.dart';
@@ -48,12 +49,14 @@ class _LogbookScreenState extends State<LogbookScreen> {
   late int _month; // 1 à 12, ou 0 pour l'année entière
   DateTimeRange? _custom; // période précise, bornes incluses
   String? _pilotUid; // null : tous les pilotes (instructeurs et admins)
+  String? _aircraftId; // null : tous les appareils
   bool _onlyToClose = false;
 
   FinanceApi? _finance;
   Stream<List<Flight>>? _periodFlights;
   Stream<List<Flight>>? _unclosed;
   Stream<List<CrewMember>>? _dir;
+  Stream<List<Aircraft>>? _aircraft;
 
   bool get _canChoosePilot => widget.me.isAdmin || widget.me.isInstructor;
 
@@ -86,6 +89,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
       _periodFlights = _watchPeriod();
       _unclosed = finance.watchValidUnclosedFlights();
       _dir = services.flights!.watchDirectory();
+      _aircraft = services.flights!.watchAircraft();
     }
   }
 
@@ -139,11 +143,15 @@ class _LogbookScreenState extends State<LogbookScreen> {
           stream: _dir,
           builder: (context, dirSnap) {
             final dir = dirSnap.data ?? const <CrewMember>[];
-            return StreamBuilder<List<Flight>>(
-              stream: _unclosed,
-              builder: (context, unclosedSnap) => StreamBuilder<List<Flight>>(
-                stream: _periodFlights,
-                builder: (context, periodSnap) => _body(dir, unclosedSnap, periodSnap),
+            return StreamBuilder<List<Aircraft>>(
+              stream: _aircraft,
+              builder: (context, acSnap) => StreamBuilder<List<Flight>>(
+                stream: _unclosed,
+                builder: (context, unclosedSnap) => StreamBuilder<List<Flight>>(
+                  stream: _periodFlights,
+                  builder: (context, periodSnap) => _body(
+                      dir, acSnap.data ?? const <Aircraft>[], unclosedSnap, periodSnap),
+                ),
               ),
             );
           },
@@ -212,15 +220,29 @@ class _LogbookScreenState extends State<LogbookScreen> {
       ? 'Atterrissages : ${t.landings} · Amerrissages : ${t.waterLandings}'
       : 'Atterrissages : ${t.landings}';
 
-  Widget _body(List<CrewMember> dir, AsyncSnapshot<List<Flight>> unclosedSnap,
-      AsyncSnapshot<List<Flight>> periodSnap) {
+  /// Tous les appareils, inactifs compris (historique) ; appareil disparu
+  /// de la liste : retour à « Tous les appareils ».
+  Widget _aircraftFilter(List<Aircraft> aircraft) => DropdownButton<String?>(
+        key: const Key('aircraft-filter'),
+        value: aircraft.any((a) => a.id == _aircraftId) ? _aircraftId : null,
+        onChanged: (v) => setState(() => _aircraftId = v),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Tous les appareils')),
+          for (final a in aircraft)
+            DropdownMenuItem<String?>(value: a.id, child: Text('${a.label} (${a.registration})')),
+        ],
+      );
+
+  Widget _body(List<CrewMember> dir, List<Aircraft> aircraft,
+      AsyncSnapshot<List<Flight>> unclosedSnap, AsyncSnapshot<List<Flight>> periodSnap) {
     final now = widget.now();
     final me = widget.me;
     final pilotUid = _canChoosePilot ? _pilotUid : me.uid;
+    final aircraftId = aircraft.any((a) => a.id == _aircraftId) ? _aircraftId : null;
     final periodList = logbookList(periodSnap.data ?? const <Flight>[],
-        me: me, now: now, pilotUid: pilotUid);
+        me: me, now: now, pilotUid: pilotUid, aircraftId: aircraftId);
     final toClose = logbookList(unclosedSnap.data ?? const <Flight>[],
-            me: me, now: now, pilotUid: pilotUid)
+            me: me, now: now, pilotUid: pilotUid, aircraftId: aircraftId)
         .where((f) => needsClosing(f, now))
         .toList();
     final shown = _onlyToClose ? toClose : periodList;
@@ -238,11 +260,13 @@ class _LogbookScreenState extends State<LogbookScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: _periodSelectors(),
         ),
-        if (_canChoosePilot)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(alignment: Alignment.centerLeft, child: _pilotFilter(dir)),
-          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Wrap(spacing: 12, children: [
+            if (_canChoosePilot) _pilotFilter(dir),
+            _aircraftFilter(aircraft),
+          ]),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Text(

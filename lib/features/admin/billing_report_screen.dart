@@ -163,6 +163,7 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
                 DataColumn(label: Text('Date')),
                 DataColumn(label: Text('Appareil')),
                 DataColumn(label: Text('Équipage')),
+                DataColumn(label: Text('Temps de vol')),
                 DataColumn(label: Text('Mode')),
                 DataColumn(label: Text('Montant')),
                 DataColumn(label: Text('Imputation')),
@@ -173,6 +174,9 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
                     DataCell(Text(formatDay(f.start))),
                     DataCell(Text(f.aircraft)),
                     DataCell(Text(crewText(f.crew, f.passengers, dir))),
+                    DataCell(Text(f.actualFlightMinutes == null
+                        ? '—'
+                        : formatDurationHm(f.actualFlightMinutes!))),
                     DataCell(Text(pricingModeLabel(f.pricingMode))),
                     DataCell(Text(formatFcfa(f.billedAmount ?? 0))),
                     DataCell(Text(f.billedTo == 'off_app'

@@ -28,19 +28,21 @@ bool visibleTo(Flight f, AppUser me) =>
     me.isAdmin || me.isInstructor || f.crew.contains(me.uid);
 
 /// Vols du carnet visibles par [me] ; [pilotUid] restreint à un membre de
-/// l'équipage (null : tous les pilotes, pour un instructeur ou un admin).
-/// Du plus récent au plus ancien.
+/// l'équipage (null : tous les pilotes, pour un instructeur ou un admin),
+/// [aircraftId] à un appareil (null : tous). Du plus récent au plus ancien.
 List<Flight> logbookList(
   Iterable<Flight> flights, {
   required AppUser me,
   required DateTime now,
   required String? pilotUid,
+  String? aircraftId,
 }) =>
     flights
         .where((f) =>
             isPerformed(f, now) &&
             visibleTo(f, me) &&
-            (pilotUid == null || f.crew.contains(pilotUid)))
+            (pilotUid == null || f.crew.contains(pilotUid)) &&
+            (aircraftId == null || f.aircraftId == aircraftId))
         .toList()
       ..sort((a, b) => b.start.compareTo(a.start));
 

@@ -30,27 +30,27 @@ void main() {
     expect(find.byType(AccountScreen), findsOneWidget);
   });
 
-  testWidgets('icône Instructeurs : absente pour un élève', (tester) async {
+  testWidgets('icône Pilotes : absente pour un élève', (tester) async {
     await tester.pumpWidget(host(testUser(profile: 'eleve')));
     await tester.pump();
-    expect(find.byTooltip('Instructeurs'), findsNothing);
+    expect(find.byTooltip('Pilotes'), findsNothing);
   });
 
-  testWidgets('icône Instructeurs : présente pour un instructeur, ouvre InstructorsScreen',
+  testWidgets('icône Pilotes : présente pour un instructeur, ouvre InstructorsScreen',
       (tester) async {
     await tester.pumpWidget(host(testUser(profile: 'instructeur')));
     await tester.pump();
-    expect(find.byTooltip('Instructeurs'), findsOneWidget);
-    await tester.tap(find.byTooltip('Instructeurs'));
+    expect(find.byTooltip('Pilotes'), findsOneWidget);
+    await tester.tap(find.byTooltip('Pilotes'));
     await tester.pumpAndSettle();
     expect(find.byType(InstructorsScreen), findsOneWidget);
   });
 
-  testWidgets('icône Instructeurs : présente pour un admin non instructeur',
+  testWidgets('icône Pilotes : présente pour un admin non instructeur',
       (tester) async {
     await tester.pumpWidget(host(testUser(profile: 'eleve', isAdmin: true)));
     await tester.pump();
-    expect(find.byTooltip('Instructeurs'), findsOneWidget);
+    expect(find.byTooltip('Pilotes'), findsOneWidget);
   });
 
   testWidgets('menu Administration : Tarifs ouvre PricingAdminScreen', (tester) async {
@@ -99,7 +99,7 @@ void main() {
     await tester.pumpWidget(host(testUser(profile: 'instructeur', isAdmin: true)));
     await tester.pump();
     expect(tester.takeException(), isNull);
-    for (final t in ['Carnet de vol', 'Mon compte', 'Instructeurs', 'Administration']) {
+    for (final t in ['Carnet de vol', 'Mon compte', 'Pilotes', 'Administration']) {
       expect(find.byTooltip(t).hitTestable(), findsOneWidget, reason: t);
     }
   });

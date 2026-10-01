@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/crew_member.dart';
 import 'package:ulmgap/data/flight.dart';
@@ -22,8 +23,12 @@ Widget host(
       users: FakeUserRepository(),
       finance: FakeFinanceApi()..flights = flights,
       flights: FakeFlightApi()
-        ..directory = directory ??
-            [member('u1', 'DPS', 'instructeur'), member('u2', 'LDX', 'eleve')],
+        ..directory = (directory ??
+            [member('u1', 'DPS', 'instructeur'), member('u2', 'LDX', 'eleve')])
+        ..aircraft = const [
+          Aircraft(id: 'a1', registration: 'F-JABC', label: 'ULM 1', active: true),
+          Aircraft(id: 'a2', registration: 'F-JXYZ', label: 'ULM 2', active: false),
+        ],
       child: MaterialApp(
         home: LogbookScreen(
           me: me,
@@ -196,5 +201,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<Text>(find.byKey(const Key('logbook-landings'))).data,
         'Atterrissages : 3 · Amerrissages : 2');
+  });
+
+  testWidgets('par appareil : pilote, ses vols sur l\'appareil choisi et leur total',
+      (tester) async {
+    await tester.pumpWidget(host(eleve, flights));
+    await tester.pumpAndSettle();
+    expect(find.text('Tous les appareils'), findsOneWidget);
+    await choose(tester, 'aircraft-filter', 'ULM 2 (F-JXYZ)'); // inactif, proposé quand même
+    expect(tileOf('oct-other-ac'), findsOneWidget);
+    expect(tileOf('oct-closed'), findsNothing);
+    expect(total(tester), 'Temps de vol : 1 h 00');
+  });
+
+  testWidgets('par appareil : instructeur, tous les pilotes = total de l\'appareil',
+      (tester) async {
+    await tester.pumpWidget(host(instructeur, flights));
+    await tester.pumpAndSettle();
+    await choose(tester, 'pilot-filter', 'Tous les pilotes');
+    await choose(tester, 'aircraft-filter', 'ULM 1 (F-JABC)');
+    expect(tileOf('oct-other-ac'), findsNothing);
+    expect(total(tester), 'Temps de vol : 2 h 05'); // oct-closed 75 + oct-dps 50
   });
 }

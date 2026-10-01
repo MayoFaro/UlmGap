@@ -22,7 +22,7 @@ class InstructorsScreen extends StatelessWidget {
     final finance = AppServices.of(context).finance!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Instructeurs'),
+        title: const Text('Pilotes'),
         actions: me == null ? null : appNavActions(context, me!, current: AppDestination.instructors),
       ),
       body: StreamBuilder<List<AppUser>>(
@@ -38,13 +38,26 @@ class InstructorsScreen extends StatelessWidget {
                   leading: ProfileBadge(profile: a.profile, compact: true),
                   title: Text(a.displayName),
                   subtitle: Text('${a.shortName} · ${a.category.code}'),
-                  trailing: Text(
-                    formatFcfa(a.balance),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: a.balance < 0 ? Theme.of(context).colorScheme.error : null,
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(
+                      formatFcfa(a.balance),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: a.balance < 0 ? Theme.of(context).colorScheme.error : null,
+                      ),
                     ),
-                  ),
+                    // Écran réservé aux instructeurs et aux admins (icône
+                    // « Pilotes ») ; le serveur refuse le crédit à tout autre.
+                    IconButton(
+                      key: Key('credit-${a.uid}'),
+                      tooltip: 'Créditer',
+                      icon: const Icon(Icons.payments),
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (_) => CreditDialog(uid: a.uid),
+                      ),
+                    ),
+                  ]),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => _AccountDetailScreen(account: a, me: me),
                   )),

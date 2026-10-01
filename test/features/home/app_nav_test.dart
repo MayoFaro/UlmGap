@@ -65,7 +65,7 @@ void main() {
     await tester.pumpWidget(host(admin));
     await tester.pump();
 
-    await tapTooltip(tester, 'Instructeurs');
+    await tapTooltip(tester, 'Pilotes');
     expect(find.byType(InstructorsScreen), findsOneWidget);
     await openAdmin(tester, 'Tarifs');
     expect(find.byType(PricingAdminScreen), findsOneWidget);
@@ -73,7 +73,7 @@ void main() {
     expect(find.byType(UsersAdminScreen), findsOneWidget);
     await tapTooltip(tester, 'Carnet de vol');
     expect(find.byType(LogbookScreen), findsOneWidget);
-    await tapTooltip(tester, 'Instructeurs');
+    await tapTooltip(tester, 'Pilotes');
     expect(find.byType(InstructorsScreen), findsOneWidget);
 
     // Un seul écran au-dessus de l'accueil.
@@ -93,7 +93,7 @@ void main() {
     await tester.pump();
     await tapTooltip(tester, 'Mon compte');
     expect(tester.takeException(), isNull);
-    for (final t in ['Carnet de vol', 'Instructeurs', 'Administration', 'Se déconnecter']) {
+    for (final t in ['Carnet de vol', 'Pilotes', 'Administration', 'Se déconnecter']) {
       expect(find.byTooltip(t).hitTestable(), findsOneWidget, reason: t);
     }
   });

@@ -155,4 +155,17 @@ void main() {
     expect(performedLabel(counted('b', landings: 1, water: 2), now), 'Clôturé · 1 h 00 · 1 att. · 2 am.');
     expect(performedLabel(counted('old'), now), 'Clôturé · 1 h 00');
   });
+
+  test('logbookList : filtre appareil, combiné au pilote', () {
+    final me = testUser(uid: 'u9', profile: 'instructeur');
+    final flights = [
+      testFlight(id: 'a1-u1', start: DateTime(2026, 10, 2, 9), crew: ['u1'], aircraftId: 'a1'),
+      testFlight(id: 'a2-u1', start: DateTime(2026, 10, 3, 9), crew: ['u1'], aircraftId: 'a2'),
+      testFlight(id: 'a1-u2', start: DateTime(2026, 10, 4, 9), crew: ['u2'], aircraftId: 'a1'),
+    ];
+    expect(logbookList(flights, me: me, now: now, pilotUid: null, aircraftId: 'a1').map((f) => f.id),
+        ['a1-u2', 'a1-u1']);
+    expect(logbookList(flights, me: me, now: now, pilotUid: 'u1', aircraftId: 'a1').map((f) => f.id),
+        ['a1-u1']);
+  });
 }

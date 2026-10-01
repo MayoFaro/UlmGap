@@ -204,4 +204,20 @@ void main() {
     final field = tester.widget<TextField>(find.byKey(const Key('credit-reason')));
     expect(field.maxLength, 200);
   });
+
+  testWidgets('titre « Pilotes » et bouton Créditer sur chaque ligne', (tester) async {
+    final finance = FakeFinanceApi()
+      ..accounts = [
+        _account('u1', 'Jean Dupont', balance: -3000),
+        _account('u2', 'Alice Martin', balance: 5000),
+      ];
+    await tester.pumpWidget(host(finance));
+    await tester.pump();
+    expect(find.text('Pilotes'), findsOneWidget);
+    expect(find.byTooltip('Créditer'), findsNWidgets(2));
+    await tester.tap(find.byKey(const Key('credit-u2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Créditer / corriger'), findsOneWidget); // dialogue ouvert
+    expect(find.text('Alice Martin'), findsWidgets); // toujours sur la liste
+  });
 }
