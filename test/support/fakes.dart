@@ -328,9 +328,9 @@ class FakeFinanceApi implements FinanceApi {
   }
 
   @override
-  Future<int> correct(String uid, int amount, String reason) async {
+  Future<int> correct(String uid, int newBalance, String reason) async {
     _fail();
-    corrected.add({'uid': uid, 'amount': amount, 'reason': reason});
+    corrected.add({'uid': uid, 'newBalance': newBalance, 'reason': reason});
     return balance;
   }
 

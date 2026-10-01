@@ -48,17 +48,17 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
 
   void _prefill(Pricing p) {
     for (final c in UserCategory.values) {
-      _flatFee[c]!.text = p.flatFee[c]!.toString();
-      _overtimeHourly[c]!.text = p.overtimeHourly[c]!.toString();
+      _flatFee[c]!.text = formatAmountInput(p.flatFee[c]!);
+      _overtimeHourly[c]!.text = formatAmountInput(p.overtimeHourly[c]!);
     }
     _includedMinutes.text = p.includedMinutes.toString();
     _minPlannedMinutes.text = p.minPlannedMinutes.toString();
-    _fuelHourlyRate.text = p.fuelHourlyRate.toString();
+    _fuelHourlyRate.text = formatAmountInput(p.fuelHourlyRate);
   }
 
   // Plages identiques au serveur (functions/src/finance/validation.ts).
   String? _validateAmount(String? v) {
-    final n = int.tryParse((v ?? '').trim());
+    final n = parseAmount(v ?? '');
     if (n == null) return 'Nombre entier requis.';
     if (n < 0 || n > 1000000) return 'Entre 0 et ${formatFcfa(1000000)}.';
     return null;
@@ -74,13 +74,13 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     final pricing = Pricing(
-      flatFee: {for (final c in UserCategory.values) c: int.parse(_flatFee[c]!.text.trim())},
+      flatFee: {for (final c in UserCategory.values) c: parseAmount(_flatFee[c]!.text)!},
       includedMinutes: int.parse(_includedMinutes.text.trim()),
       minPlannedMinutes: int.parse(_minPlannedMinutes.text.trim()),
       overtimeHourly: {
-        for (final c in UserCategory.values) c: int.parse(_overtimeHourly[c]!.text.trim())
+        for (final c in UserCategory.values) c: parseAmount(_overtimeHourly[c]!.text)!
       },
-      fuelHourlyRate: int.parse(_fuelHourlyRate.text.trim()),
+      fuelHourlyRate: parseAmount(_fuelHourlyRate.text)!,
     );
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _saving = true);
@@ -124,6 +124,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                       key: Key('flatFee-${c.code}'),
                       controller: _flatFee[c],
                       keyboardType: TextInputType.number,
+                      inputFormatters: const [AmountInputFormatter()],
                       decoration: InputDecoration(labelText: 'Forfait ${c.code} (FCFA)'),
                       validator: _validateAmount,
                     ),
@@ -138,6 +139,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                       key: Key('overtime-${c.code}'),
                       controller: _overtimeHourly[c],
                       keyboardType: TextInputType.number,
+                      inputFormatters: const [AmountInputFormatter()],
                       decoration: InputDecoration(labelText: 'Dépassement ${c.code} (FCFA/h)'),
                       validator: _validateAmount,
                     ),
@@ -163,6 +165,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   key: const Key('fuelHourlyRate'),
                   controller: _fuelHourlyRate,
                   keyboardType: TextInputType.number,
+                      inputFormatters: const [AmountInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Carburant (FCFA/h)'),
                   validator: _validateAmount,
                 ),

@@ -39,8 +39,9 @@ abstract class FinanceApi {
   /// Rend le nouveau solde.
   Future<int> credit(String uid, int amount, String? reason);
 
-  /// Rend le nouveau solde.
-  Future<int> correct(String uid, int amount, String reason);
+  /// Correction : [newBalance] est le nouveau solde voulu (l'écart est
+  /// calculé par le serveur). Rend le nouveau solde.
+  Future<int> correct(String uid, int newBalance, String reason);
 
   Future<void> closeFlight(
     String flightId, {
@@ -119,10 +120,10 @@ class FirebaseFinanceApi implements FinanceApi {
   }
 
   @override
-  Future<int> correct(String uid, int amount, String reason) async {
+  Future<int> correct(String uid, int newBalance, String reason) async {
     final data = (await _call('correctAccount', {
       'userUid': uid,
-      'amount': amount,
+      'newBalance': newBalance,
       'reason': reason,
     })) as Map;
     return (data['balance'] as num).toInt();

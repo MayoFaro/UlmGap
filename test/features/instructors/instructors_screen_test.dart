@@ -93,7 +93,7 @@ void main() {
 
     await tester.tap(find.text('Corriger'));
     await tester.pump();
-    await tester.enterText(find.byKey(const Key('credit-amount')), '-5000');
+    await tester.enterText(find.byKey(const Key('credit-amount')), '5000');
     await tester.tap(find.text('Valider'));
     await tester.pump();
 
@@ -122,7 +122,8 @@ void main() {
     expect(find.text('Nouveau solde : ${formatFcfa(1000000)}'), findsOneWidget);
   });
 
-  testWidgets('correction avec motif : appel avec le montant signé', (tester) async {
+  testWidgets('correction : on saisit le nouveau solde, pré-rempli avec le solde actuel',
+      (tester) async {
     final finance = FakeFinanceApi()
       ..accounts = [_account('u1', 'Jean Dupont', balance: 10000)]
       ..balance = 0;
@@ -135,13 +136,19 @@ void main() {
 
     await tester.tap(find.text('Corriger'));
     await tester.pump();
-    await tester.enterText(find.byKey(const Key('credit-amount')), '-10000');
+    expect(find.text('Solde actuel : ${formatFcfa(10000)}'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const Key('credit-amount'))).controller!.text,
+        '10\u00a0000');
+    expect(find.text('Nouveau solde'), findsOneWidget); // libellé du champ
+    await tester.enterText(find.byKey(const Key('credit-amount')), '350000');
+    expect(tester.widget<TextField>(find.byKey(const Key('credit-amount'))).controller!.text,
+        '350\u00a0000');
     await tester.enterText(find.byKey(const Key('credit-reason')), 'Erreur de saisie');
     await tester.tap(find.text('Valider'));
     await tester.pumpAndSettle();
 
     expect(finance.corrected.single,
-        {'uid': 'u1', 'amount': -10000, 'reason': 'Erreur de saisie'});
+        {'uid': 'u1', 'newBalance': 350000, 'reason': 'Erreur de saisie'});
     expect(find.text('Nouveau solde : ${formatFcfa(0)}'), findsOneWidget);
   });
 
@@ -219,5 +226,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Créditer / corriger'), findsOneWidget); // dialogue ouvert
     expect(find.text('Alice Martin'), findsWidgets); // toujours sur la liste
+  });
+
+  testWidgets('correction : nouveau solde égal au solde actuel, refusé', (tester) async {
+    final finance = FakeFinanceApi()..accounts = [_account('u1', 'Jean Dupont', balance: 10000)];
+    await tester.pumpWidget(host(finance));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('credit-u1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('credit-reason')), 'Motif');
+    await tester.tap(find.text('Valider'));
+    await tester.pump();
+    expect(finance.corrected, isEmpty);
+    expect(find.text('Le solde est déjà de ${formatFcfa(10000)}.'), findsOneWidget);
   });
 }

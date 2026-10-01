@@ -133,8 +133,10 @@ class _FlightScreenState extends State<FlightScreen> {
       // bouton « Corriger » ne soit pressé n'est pas nécessaire ici : ces
       // champs ne sont lus que si _correcting devient vrai).
       _correctMinutes.text = f.actualFlightMinutes?.toString() ?? '';
-      _correctShortAmount.text = f.shortFlightAmount?.toString() ?? '';
-      _correctCustomAmount.text = f.customAmount?.toString() ?? '';
+      _correctShortAmount.text =
+          f.shortFlightAmount == null ? '' : formatAmountInput(f.shortFlightAmount!);
+      _correctCustomAmount.text =
+          f.customAmount == null ? '' : formatAmountInput(f.customAmount!);
       _correctCustomChecked = f.billedTo == 'off_app';
       // Vol clôturé avant le plan 4b (sans nombres) : 1 et 0.
       _correctLandings.text = '${f.landings ?? 1}';
@@ -1111,6 +1113,7 @@ class _FlightScreenState extends State<FlightScreen> {
                 key: const Key('correct-short-amount'),
                 controller: _correctShortAmount,
                 keyboardType: TextInputType.number,
+                inputFormatters: const [AmountInputFormatter()],
                 decoration: const InputDecoration(labelText: 'Montant à facturer'),
                 onChanged: (_) => setState(() {}),
               ),
@@ -1127,6 +1130,7 @@ class _FlightScreenState extends State<FlightScreen> {
                   key: const Key('correct-custom-amount'),
                   controller: _correctCustomAmount,
                   keyboardType: TextInputType.number,
+                inputFormatters: const [AmountInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Montant'),
                   onChanged: (_) => setState(() {}),
                 ),

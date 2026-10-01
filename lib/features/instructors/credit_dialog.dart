@@ -1,6 +1,6 @@
-// Dialogue « Créditer / corriger » (écran Instructeurs) : crédit (montant
-// positif, motif facultatif) ou correction (montant signé non nul, motif
-// obligatoire), sans plafond (décision utilisateur : pas de plafond sur les
+// Dialogue « Créditer / corriger » (écran Pilotes) : crédit (montant
+// positif, motif facultatif) ou correction (nouveau solde, pré-rempli avec
+// le solde actuel, motif obligatoire ; révision du 2026-10-01), sans plafond (décision utilisateur : pas de plafond sur les
 // versements, ni sur les corrections pour pouvoir annuler un versement
 // erroné en une seule fois). Appelle l'API lui-même et affiche le nouveau
 // solde par SnackBar une fois le dialogue refermé.
@@ -13,8 +13,11 @@ import '../../data/services.dart';
 enum _Mode { credit, correction }
 
 class CreditDialog extends StatefulWidget {
-  const CreditDialog({super.key, required this.uid});
+  const CreditDialog({super.key, required this.uid, required this.balance});
   final String uid;
+
+  /// Solde actuel : affiché et pré-rempli en mode « Corriger ».
+  final int balance;
 
   @override
   State<CreditDialog> createState() => _CreditDialogState();
@@ -43,8 +46,12 @@ class _CreditDialogState extends State<CreditDialog> {
         return;
       }
     } else {
-      if (amount == null || amount == 0) {
-        setState(() => _error = 'Montant invalide (non nul).');
+      if (amount == null) {
+        setState(() => _error = 'Nouveau solde invalide.');
+        return;
+      }
+      if (amount == widget.balance) {
+        setState(() => _error = 'Le solde est déjà de ${formatFcfa(widget.balance)}.');
         return;
       }
       if (reason.isEmpty) {
@@ -92,21 +99,30 @@ class _CreditDialogState extends State<CreditDialog> {
               ChoiceChip(
                 label: const Text('Créditer'),
                 selected: _mode == _Mode.credit,
-                onSelected: (_) => setState(() => _mode = _Mode.credit),
+                onSelected: (_) => setState(() {
+                  _mode = _Mode.credit;
+                  _amount.clear();
+                }),
               ),
               ChoiceChip(
                 label: const Text('Corriger'),
                 selected: _mode == _Mode.correction,
-                onSelected: (_) => setState(() => _mode = _Mode.correction),
+                onSelected: (_) => setState(() {
+                  _mode = _Mode.correction;
+                  _amount.text = formatAmountInput(widget.balance);
+                }),
               ),
             ]),
             const SizedBox(height: 12),
+            if (_mode == _Mode.correction)
+              Text('Solde actuel : ${formatFcfa(widget.balance)}'),
             TextField(
               key: const Key('credit-amount'),
               controller: _amount,
               keyboardType: const TextInputType.numberWithOptions(signed: true),
+              inputFormatters: const [AmountInputFormatter()],
               decoration: InputDecoration(
-                labelText: _mode == _Mode.credit ? 'Montant' : 'Montant (signé)',
+                labelText: _mode == _Mode.credit ? 'Montant' : 'Nouveau solde',
               ),
             ),
             const SizedBox(height: 8),

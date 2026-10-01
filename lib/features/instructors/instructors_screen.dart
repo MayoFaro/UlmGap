@@ -54,7 +54,7 @@ class InstructorsScreen extends StatelessWidget {
                       icon: const Icon(Icons.payments),
                       onPressed: () => showDialog<void>(
                         context: context,
-                        builder: (_) => CreditDialog(uid: a.uid),
+                        builder: (_) => CreditDialog(uid: a.uid, balance: a.balance),
                       ),
                     ),
                   ]),
@@ -122,7 +122,7 @@ class _AccountDetailScreen extends StatelessWidget {
             label: const Text('Créditer / corriger'),
             onPressed: () => showDialog<void>(
               context: context,
-              builder: (_) => CreditDialog(uid: current.uid),
+              builder: (_) => CreditDialog(uid: current.uid, balance: current.balance),
             ),
           ),
         );

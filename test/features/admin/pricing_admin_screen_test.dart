@@ -35,15 +35,15 @@ void main() {
     await tester.pumpWidget(host(api));
     await tester.pump();
 
-    expect(fieldText(tester, 'flatFee-GAP'), '12000');
-    expect(fieldText(tester, 'flatFee-GR'), '30000');
-    expect(fieldText(tester, 'flatFee-MIL'), '50000');
-    expect(fieldText(tester, 'flatFee-EXT'), '70000');
-    expect(fieldText(tester, 'overtime-GAP'), '12000');
-    expect(fieldText(tester, 'overtime-MIL'), '30000');
+    expect(fieldText(tester, 'flatFee-GAP'), '12\u00a0000');
+    expect(fieldText(tester, 'flatFee-GR'), '30\u00a0000');
+    expect(fieldText(tester, 'flatFee-MIL'), '50\u00a0000');
+    expect(fieldText(tester, 'flatFee-EXT'), '70\u00a0000');
+    expect(fieldText(tester, 'overtime-GAP'), '12\u00a0000');
+    expect(fieldText(tester, 'overtime-MIL'), '30\u00a0000');
     expect(fieldText(tester, 'includedMinutes'), '75');
     expect(fieldText(tester, 'minPlannedMinutes'), '45');
-    expect(fieldText(tester, 'fuelHourlyRate'), '12000');
+    expect(fieldText(tester, 'fuelHourlyRate'), '12\u00a0000');
   });
 
   testWidgets('Enregistrer envoie les nouvelles valeurs et confirme par une SnackBar',

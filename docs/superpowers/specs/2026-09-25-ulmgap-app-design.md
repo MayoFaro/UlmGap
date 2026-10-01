@@ -316,7 +316,7 @@ Exemples (`standard`) :
 | Action | Qui | Règle |
 |---|---|---|
 | `creditAccount` (montant > 0, motif facultatif) | Instructeurs et admins | Transaction `credit` |
-| `correctAccount` (montant ±, motif obligatoire) | Instructeurs et admins | Transaction `correction` |
+| `correctAccount` (**nouveau solde**, motif obligatoire ; révision du 2026-10-01) | Instructeurs et admins | Transaction `correction` de l'écart entre le nouveau solde et le solde lu dans la transaction ; refusée si le solde est déjà celui demandé |
 | Régularisation | Automatique, sur `adminUpdateFlight` d'un vol clôturé | Vol imputé sur un solde : transaction `flight_adjustment` pour la différence entre l'ancien et le nouveau coût. Hors app : mise à jour de `billedAmount` |
 
 ### 4.6 Visibilité
@@ -411,6 +411,10 @@ et admins seulement)
 - Liste des comptes avec leur solde et, sur chaque ligne, un bouton
   « Créditer » qui ouvre « Créditer / corriger ». Un appui sur le nom ouvre
   la fiche du compte (historique, « Créditer / corriger »).
+- « Corriger » : on saisit le nouveau solde total (pré-rempli avec le solde
+  actuel), pas un écart.
+- Champs de montant : chiffres regroupés par milliers pendant la saisie
+  (« 350 000 »).
 
 **Administration**
 - Utilisateurs : création, profil, catégorie, admin, activation.
