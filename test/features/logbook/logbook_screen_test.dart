@@ -180,4 +180,21 @@ void main() {
     expect(find.text('Aucun vol sur cette période.'), findsOneWidget);
     expect(total(tester), 'Temps de vol : 0 h 00');
   });
+
+  testWidgets('plan 4b : atterrissages en haut, amerrissages seulement s\'il y en a',
+      (tester) async {
+    Flight closed(String id, int day, int landings, int water) => Flight.fromMap(id, {
+          'start': DateTime(2026, 10, day, 9), 'end': DateTime(2026, 10, day, 10),
+          'crew': ['u2'], 'status': 'valide', 'isClosed': true, 'deleted': false,
+          'actualFlightMinutes': 60, 'landings': landings, 'waterLandings': water,
+        });
+    await tester.pumpWidget(host(eleve, [closed('a', 3, 2, 0), closed('b', 4, 1, 0)]));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.byKey(const Key('logbook-landings'))).data, 'Atterrissages : 3');
+
+    await tester.pumpWidget(host(eleve, [closed('c', 3, 2, 0), closed('d', 4, 1, 2)]));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.byKey(const Key('logbook-landings'))).data,
+        'Atterrissages : 3 · Amerrissages : 2');
+  });
 }

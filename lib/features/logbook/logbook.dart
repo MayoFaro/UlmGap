@@ -53,6 +53,19 @@ int countedMinutes(Flight f) =>
 int totalMinutes(Iterable<Flight> flights) =>
     flights.fold(0, (sum, f) => sum + countedMinutes(f));
 
+/// Plan 4b : atterrissages et amerrissages des vols clôturés non supprimés
+/// (0 pour un vol clôturé avant le plan 4b).
+({int landings, int waterLandings}) totalLandings(Iterable<Flight> flights) {
+  var landings = 0;
+  var waterLandings = 0;
+  for (final f in flights) {
+    if (!f.isClosed || f.deleted) continue;
+    landings += f.landings ?? 0;
+    waterLandings += f.waterLandings ?? 0;
+  }
+  return (landings: landings, waterLandings: waterLandings);
+}
+
 /// Bornes [from, to[ d'un mois (1 à 12) de [year], ou de l'année entière
 /// si [month] vaut 0.
 ({DateTime from, DateTime to}) monthPeriod(int year, int month) => month == 0
@@ -68,8 +81,11 @@ List<int> logbookYears(DateTime now) => [
     ];
 
 /// Mention à droite de chaque vol du carnet.
-String performedLabel(Flight f, DateTime now) => f.isClosed
-    ? 'Clôturé · ${formatDurationHm(f.actualFlightMinutes ?? 0)}'
-    : 'À clôturer';
+String performedLabel(Flight f, DateTime now) {
+  if (!f.isClosed) return 'À clôturer';
+  final base = 'Clôturé · ${formatDurationHm(f.actualFlightMinutes ?? 0)}';
+  final counts = landingsText(f.landings, f.waterLandings);
+  return counts.isEmpty ? base : '$base · $counts';
+}
 
 String toCloseCountText(int n) => n == 1 ? '1 vol à clôturer' : '$n vols à clôturer';

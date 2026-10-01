@@ -203,6 +203,11 @@ class _LogbookScreenState extends State<LogbookScreen> {
     );
   }
 
+  /// « Atterrissages : 3 », complété des amerrissages s'il y en a (plan 4b).
+  String _landingsLine(({int landings, int waterLandings}) t) => t.waterLandings > 0
+      ? 'Atterrissages : ${t.landings} · Amerrissages : ${t.waterLandings}'
+      : 'Atterrissages : ${t.landings}';
+
   Widget _body(List<CrewMember> dir, AsyncSnapshot<List<Flight>> unclosedSnap,
       AsyncSnapshot<List<Flight>> periodSnap) {
     final now = widget.now();
@@ -241,6 +246,10 @@ class _LogbookScreenState extends State<LogbookScreen> {
             key: const Key('logbook-total'),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Text(_landingsLine(totalLandings(periodList)), key: const Key('logbook-landings')),
         ),
         if (toClose.isNotEmpty)
           Padding(

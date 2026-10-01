@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/features/logbook/logbook.dart';
 
 import '../../support/fakes.dart';
@@ -128,5 +129,30 @@ void main() {
   test('toCloseCountText : singulier et pluriel', () {
     expect(toCloseCountText(1), '1 vol à clôturer');
     expect(toCloseCountText(3), '3 vols à clôturer');
+  });
+
+  Flight counted(String id, {int? landings, int? water, bool closed = true, bool deleted = false}) =>
+      Flight.fromMap(id, {
+        'start': DateTime(2026, 10, 10, 9), 'end': DateTime(2026, 10, 10, 10), 'crew': ['u1'],
+        'status': 'valide', 'isClosed': closed, 'deleted': deleted, 'actualFlightMinutes': 60,
+        'landings': landings, 'waterLandings': water,
+      });
+
+  test('plan 4b : totalLandings, vols clôturés non supprimés, null = 0', () {
+    final t = totalLandings([
+      counted('a', landings: 2, water: 1),
+      counted('b', landings: 1),
+      counted('old'), // clôturé avant le plan 4b
+      counted('open', landings: 5, closed: false),
+      counted('del', landings: 5, water: 5, deleted: true),
+    ]);
+    expect(t.landings, 3);
+    expect(t.waterLandings, 1);
+  });
+
+  test('plan 4b : performedLabel avec les nombres', () {
+    expect(performedLabel(counted('a', landings: 2), now), 'Clôturé · 1 h 00 · 2 att.');
+    expect(performedLabel(counted('b', landings: 1, water: 2), now), 'Clôturé · 1 h 00 · 1 att. · 2 am.');
+    expect(performedLabel(counted('old'), now), 'Clôturé · 1 h 00');
   });
 }
