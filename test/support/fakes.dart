@@ -11,6 +11,7 @@ import 'package:ulmgap/data/crew_member.dart';
 import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
+import 'package:ulmgap/data/push_service.dart';
 import 'package:ulmgap/data/user_repository.dart';
 
 /// Émet [initial] puis relaie [rest] (même schéma que FakeAuthService.changes :
@@ -66,6 +67,37 @@ class FakeUserRepository implements UserRepository {
     watchCalls++;
     return live?.stream ?? Stream.value(users[uid]);
   }
+
+  /// Plan 5 : jetons enregistrés, dans l'ordre ({uid, token}).
+  final savedTokens = <({String uid, String? token})>[];
+
+  @override
+  Future<void> saveFcmToken(String uid, String? token) async =>
+      savedTokens.add((uid: uid, token: token));
+}
+
+// --- ajouts plan 5 (notifications) ---
+class FakePushService implements PushService {
+  String? nextToken = 'tok-1';
+  Object? tokenError; // si défini, token() échoue
+  int tokenCalls = 0;
+  int deleteCalls = 0;
+  final refreshCtrl = StreamController<String>.broadcast();
+  final messagesCtrl = StreamController<({String title, String body})>.broadcast();
+
+  @override
+  Future<String?> token() async {
+    tokenCalls++;
+    if (tokenError != null) throw tokenError!;
+    return nextToken;
+  }
+
+  @override
+  Stream<String> get onTokenRefresh => refreshCtrl.stream;
+  @override
+  Stream<({String title, String body})> get onForegroundMessage => messagesCtrl.stream;
+  @override
+  Future<void> deleteToken() async => deleteCalls++;
 }
 
 AppUser testUser({
