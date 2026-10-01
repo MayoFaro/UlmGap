@@ -47,6 +47,8 @@ abstract class FinanceApi {
     required int actualMinutes,
     int? shortFlightAmount,
     int? customAmount,
+    required int landings,
+    int waterLandings = 0,
   });
 
   Future<void> adminUpdateFlight(String flightId, Map<String, dynamic> payload);
@@ -132,10 +134,14 @@ class FirebaseFinanceApi implements FinanceApi {
     required int actualMinutes,
     int? shortFlightAmount,
     int? customAmount,
+    required int landings,
+    int waterLandings = 0,
   }) =>
       _call('closeFlight', {
         'flightId': flightId,
         'actualMinutes': actualMinutes,
+        'landings': landings,
+        'waterLandings': waterLandings,
         if (shortFlightAmount != null) 'shortFlightAmount': shortFlightAmount,
         if (customAmount != null) 'customAmount': customAmount,
       });

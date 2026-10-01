@@ -340,11 +340,15 @@ class FakeFinanceApi implements FinanceApi {
     required int actualMinutes,
     int? shortFlightAmount,
     int? customAmount,
+    required int landings,
+    int waterLandings = 0,
   }) async {
     _fail();
     closed.add({
       'flightId': flightId,
       'actualMinutes': actualMinutes,
+      'landings': landings,
+      'waterLandings': waterLandings,
       'shortFlightAmount': shortFlightAmount,
       'customAmount': customAmount,
     });

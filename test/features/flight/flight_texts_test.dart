@@ -19,4 +19,26 @@ void main() {
     expect(describeConflict(info('crew', const ['ral']), dir),
         'Conflit : RAL est déjà sur le vol du mercredi 30 septembre, 15:00–16:00 (TR-KJP, HIL/RAL).');
   });
+
+  test('plan 4b : landingsText', () {
+    expect(landingsText(null, null), '');
+    expect(landingsText(2, 0), '2 att.');
+    expect(landingsText(2, null), '2 att.');
+    expect(landingsText(1, 3), '1 att. · 3 am.');
+  });
+
+  test('plan 4b : closedSummary avec atterrissages et amerrissages', () {
+    expect(
+        closedSummary(actualMinutes: 75, billedAmount: 15000, billedTo: 'account',
+            debitedShortName: 'DPS', landings: 2, waterLandings: 1),
+        endsWith(', 2 att., 1 am.'));
+    expect(
+        closedSummary(actualMinutes: 75, billedAmount: 15000, billedTo: 'account',
+            debitedShortName: 'DPS', landings: 2, waterLandings: 0),
+        endsWith('DPS, 2 att.'));
+    expect(
+        closedSummary(actualMinutes: 75, billedAmount: 15000, billedTo: 'account',
+            debitedShortName: 'DPS'),
+        endsWith('le compte de DPS'));
+  });
 }

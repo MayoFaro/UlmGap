@@ -656,6 +656,8 @@ void main() {
     expect(finance.closed.single['actualMinutes'], 90);
     expect(finance.closed.single['shortFlightAmount'], isNull);
     expect(finance.closed.single['customAmount'], isNull);
+    expect(finance.closed.single['landings'], 1);
+    expect(finance.closed.single['waterLandings'], 0);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
   });
@@ -856,6 +858,9 @@ void main() {
     await tester.tap(find.text('Enregistrer la correction'));
     await tester.pumpAndSettle();
     expect(finance.adminUpdated['ac1']!['actualMinutes'], 120);
+    // Vol clôturé avant le plan 4b (sans nombres) : pré-rempli à 1 et 0.
+    expect(finance.adminUpdated['ac1']!['landings'], 1);
+    expect(finance.adminUpdated['ac1']!['waterLandings'], 0);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
   });
@@ -1061,5 +1066,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Corriger'), findsNothing);
     expect(find.text('Supprimer le vol'), findsNothing);
+  });
+
+  // --- plan 4b ---
+
+  testWidgets('clôture sur un appareil amphibie : amerrissages saisis et transmis',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..aircraft = [
+        Aircraft.fromMap('a1',
+            {'registration': 'F-JABC', 'label': 'ULM 1', 'active': true, 'amphibious': true}),
+      ];
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'w1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(
+        pushHost(a, testUser(uid: 'u1', category: 'GAP'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('closing-water-landings')), '2');
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(finance.closed.single['landings'], 1);
+    expect(finance.closed.single['waterLandings'], 2);
+  });
+
+  testWidgets('correction admin : nombres stockés pré-remplis, amerrissages si amphibie',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..categories = {'u1': UserCategory.gap}
+      ..aircraft = [
+        Aircraft.fromMap('a1',
+            {'registration': 'F-JABC', 'label': 'ULM 1', 'active': true, 'amphibious': true}),
+      ];
+    final start = DateTime(2026, 10, 12, 5);
+    final f = Flight.fromMap('ac9', {
+      'start': start, 'end': start.add(const Duration(minutes: 90)), 'destination': 'Lomé',
+      'aircraftId': 'a1', 'aircraft': 'F-JABC', 'crew': ['u1'], 'passengers': <String>[],
+      'status': 'valide', 'createdBy': 'u1', 'pricingMode': 'standard', 'isClosed': true,
+      'deleted': false, 'actualFlightMinutes': 90, 'billedAmount': 15000, 'billedTo': 'account',
+      'landings': 3, 'waterLandings': 2,
+    });
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('3 att., 2 am.'), findsOneWidget);
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-landings'))).controller!.text, '3');
+    await tester.enterText(find.byKey(const Key('correct-water-landings')), '4');
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ac9']!['landings'], 3);
+    expect(finance.adminUpdated['ac9']!['waterLandings'], 4);
   });
 }

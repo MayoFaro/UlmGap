@@ -48,7 +48,7 @@ class AircraftAdminScreen extends StatelessWidget {
                   textColor: a.active ? null : Theme.of(context).disabledColor,
                   leading: const Icon(Icons.airplanemode_active),
                   title: Text(a.label),
-                  subtitle: Text(a.registration),
+                  subtitle: Text(a.amphibious ? '${a.registration} · amphibie' : a.registration),
                   trailing: a.active ? null : const Chip(label: Text('Inactif')),
                   onTap: () async {
                     final input = await showAircraftFormDialog(context, aircraft: a);

@@ -57,6 +57,9 @@ class _FlightScreenState extends State<FlightScreen> {
   final _correctShortAmount = TextEditingController();
   final _correctCustomAmount = TextEditingController();
   bool _correctCustomChecked = false;
+  // Plan 4b : nombres saisis à la clôture, corrigeables par un admin.
+  final _correctLandings = TextEditingController();
+  final _correctWaterLandings = TextEditingController();
 
   final _subs = <StreamSubscription<Object?>>[];
   /// Version « live » d'un vol existant (Task 3, retours de recette) : mise à
@@ -128,6 +131,9 @@ class _FlightScreenState extends State<FlightScreen> {
       _correctShortAmount.text = f.shortFlightAmount?.toString() ?? '';
       _correctCustomAmount.text = f.customAmount?.toString() ?? '';
       _correctCustomChecked = f.billedTo == 'off_app';
+      // Vol clôturé avant le plan 4b (sans nombres) : 1 et 0.
+      _correctLandings.text = '${f.landings ?? 1}';
+      _correctWaterLandings.text = '${f.waterLandings ?? 0}';
     } else {
       final n = widget.now();
       _start = DateTime(n.year, n.month, n.day, n.hour + 1);
@@ -187,6 +193,8 @@ class _FlightScreenState extends State<FlightScreen> {
     _destination.dispose();
     _destinationFocus.dispose();
     _correctMinutes.dispose();
+    _correctLandings.dispose();
+    _correctWaterLandings.dispose();
     _correctShortAmount.dispose();
     _correctCustomAmount.dispose();
     super.dispose();
@@ -387,6 +395,12 @@ class _FlightScreenState extends State<FlightScreen> {
   // --- Task 10 (finances) : correction admin, régularisation d'un vol clôturé ---
 
   int? get _correctActualMinutes => int.tryParse(_correctMinutes.text.trim());
+  int? get _correctLandingsValue => int.tryParse(_correctLandings.text.trim());
+
+  /// 0 sur un appareil non amphibie : efface d'éventuels amerrissages quand
+  /// l'admin passe le vol sur un autre appareil.
+  int? get _correctWaterLandingsValue =>
+      _isAmphibious(_aircraftId) ? int.tryParse(_correctWaterLandings.text.trim()) : 0;
 
   /// Miroir de ClosingDialog._needsShortAmount, avec le mode de tarification
   /// et les tarifs du brouillon en cours de correction.
@@ -684,6 +698,11 @@ class _FlightScreenState extends State<FlightScreen> {
   /// un admin clôture, même sans connaître l'appartenance d'un compte débité
   /// qui n'est pas le sien) : le dialogue s'ouvre quand même, seul son
   /// aperçu local du montant est alors indisponible.
+  /// Plan 4b : appareil amphibie (amerrissages saisis), d'après la liste des
+  /// appareils ; faux tant qu'elle n'est pas chargée.
+  bool _isAmphibious(String? aircraftId) =>
+      _aircraft.any((a) => a.id == aircraftId && a.amphibious);
+
   Future<void> _openClosing() async {
     final f = _current!;
     final category = _category(_debitedUid);
@@ -695,6 +714,7 @@ class _FlightScreenState extends State<FlightScreen> {
         category: category,
         pricing: _pricingForCost,
         hasPassenger: f.passengers.isNotEmpty,
+        amphibious: _isAmphibious(f.aircraftId),
       ),
     );
     if (result == null || !mounted) return;
@@ -704,6 +724,8 @@ class _FlightScreenState extends State<FlightScreen> {
           actualMinutes: result.actualMinutes,
           shortFlightAmount: result.shortFlightAmount,
           customAmount: result.customAmount,
+          landings: result.landings,
+          waterLandings: result.waterLandings,
         ));
   }
 
@@ -719,6 +741,8 @@ class _FlightScreenState extends State<FlightScreen> {
     if (f.isClosed) {
       final m = _correctActualMinutes;
       if (m == null || m < 1 || m > 720) return 'Durée réelle invalide (1 à 720 min).';
+      final countError = landingsError(_correctLandingsValue, _correctWaterLandingsValue);
+      if (countError != null) return countError;
       if (_correctNeedsShortAmount) {
         final short = parseAmount(_correctShortAmount.text);
         if (short == null) {
@@ -755,6 +779,8 @@ class _FlightScreenState extends State<FlightScreen> {
     final f = _current!;
     if (!f.isClosed) return payload;
     payload['actualMinutes'] = _correctActualMinutes;
+    payload['landings'] = _correctLandingsValue;
+    payload['waterLandings'] = _correctWaterLandingsValue;
     if (_correctNeedsShortAmount) {
       payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
     }
@@ -876,6 +902,8 @@ class _FlightScreenState extends State<FlightScreen> {
                   billedAmount: f.billedAmount ?? 0,
                   billedTo: f.billedTo ?? 'account',
                   debitedShortName: _short(_debitedUid),
+                  landings: f.landings,
+                  waterLandings: f.waterLandings,
                 )),
               ),
             ListTile(
@@ -1043,6 +1071,19 @@ class _FlightScreenState extends State<FlightScreen> {
               decoration: const InputDecoration(labelText: 'Durée réelle (minutes)'),
               onChanged: (_) => setState(() {}),
             ),
+            TextField(
+              key: const Key('correct-landings'),
+              controller: _correctLandings,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Atterrissages'),
+            ),
+            if (_isAmphibious(_aircraftId))
+              TextField(
+                key: const Key('correct-water-landings'),
+                controller: _correctWaterLandings,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Amerrissages'),
+              ),
             if (_correctNeedsShortAmount)
               TextField(
                 key: const Key('correct-short-amount'),

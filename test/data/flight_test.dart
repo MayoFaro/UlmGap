@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/flight.dart';
 
 import '../support/fakes.dart';
@@ -40,5 +41,23 @@ void main() {
       'crew': ['u1'],
       'passengers': <String>[],
     });
+  });
+
+  test('plan 4b : landings et waterLandings lus, null si absents', () {
+    final f = testFlight(isClosed: true);
+    expect(f.landings, isNull);
+    expect(f.waterLandings, isNull);
+    final g = Flight.fromMap('g', {
+      'start': DateTime(2026, 10, 1, 9), 'end': DateTime(2026, 10, 1, 10),
+      'crew': ['u1'], 'landings': 2, 'waterLandings': 1,
+    });
+    expect(g.landings, 2);
+    expect(g.waterLandings, 1);
+  });
+
+  test('plan 4b : Aircraft.amphibious, faux par défaut', () {
+    expect(Aircraft.fromMap('a', {'registration': 'F-JA', 'label': 'x', 'active': true}).amphibious,
+        isFalse);
+    expect(Aircraft.fromMap('a', {'amphibious': true}).amphibious, isTrue);
   });
 }

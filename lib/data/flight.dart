@@ -44,6 +44,8 @@ class Flight {
     this.shortFlightAmount,
     this.closedBy,
     this.closedAt,
+    this.landings,
+    this.waterLandings,
   });
 
   final String id;
@@ -77,6 +79,10 @@ class Flight {
   final String? closedBy;
   final DateTime? closedAt;
 
+  /// Plan 4b : saisis à la clôture ; null pour un vol clôturé avant.
+  final int? landings;
+  final int? waterLandings;
+
   String get payerUid => crew.first;
 
   factory Flight.fromMap(String id, Map<String, dynamic> m) => Flight(
@@ -106,6 +112,8 @@ class Flight {
         shortFlightAmount: (m['shortFlightAmount'] as num?)?.toInt(),
         closedBy: m['closedBy'] as String?,
         closedAt: _dateOrNull(m['closedAt']),
+        landings: (m['landings'] as num?)?.toInt(),
+        waterLandings: (m['waterLandings'] as num?)?.toInt(),
       );
 
   /// Demande non validée à l'heure du départ : considérée comme refusée.
