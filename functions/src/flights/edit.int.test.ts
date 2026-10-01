@@ -69,7 +69,7 @@ test("départ passé : failed-precondition (non admin)", async () => {
     (e) => code(e) === "failed-precondition");
 });
 
-test("admin : saisie après coup d'un vol passé → valide, conflits toujours contrôlés", async () => {
+test("admin : saisie après coup d'un vol passé → valide, sans contrôle de conflit (conduite)", async () => {
   const adm = await seedUser({ profile: null, isAdmin: true });
   const pilot = await seedUser({ profile: "lache_toute_mission" });
   const a = await seedAircraft();
@@ -77,9 +77,10 @@ test("admin : saisie après coup d'un vol passé → valide, conflits toujours c
   const { id, status } = await createFlight(adm, draft(a, [pilot.uid], past));
   assert.equal(status, "valide");
   assert.equal((await get(id)).start.toMillis(), past.start);
+  // Révision du 2026-10-01 : un vol passé relève de la conduite, jamais bloqué.
   const other = await seedUser({ profile: "instructeur" });
-  await assert.rejects(createFlight(adm, draft(a, [other.uid], past)),
-    (e) => code(e) === "failed-precondition");
+  const second = await createFlight(adm, draft(a, [other.uid], past));
+  assert.equal(second.status, "valide");
 });
 
 test("membre inactif ou appareil inactif : failed-precondition, message explicite", async () => {
@@ -244,4 +245,20 @@ test("conflit : la cause (appareil ou personne) est dans les détails", async ()
   await assert.rejects(createFlight(p1, draft(await seedAircraft(), [p1.uid], { start: at(70), end: at(71) })),
     (e) => details(e)?.conflict?.kind === "crew" &&
       JSON.stringify(details(e)?.conflict?.members) === JSON.stringify([p1.uid]));
+});
+
+test("planification : un vol clôturé (même à venir) ne bloque jamais un nouveau vol", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  await seedFlight({ start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, isClosed: true });
+  const r = await createFlight(pilot, draft(a, [pilot.uid], { start: at(10), end: at(11) }));
+  assert.equal((await db.collection("flights").doc(r.id).get()).get("status"), "valide");
+});
+
+test("planification : un vol validé à venir non clôturé bloque toujours", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  await seedFlight({ start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a });
+  await assert.rejects(createFlight(pilot, draft(a, [pilot.uid], { start: at(10), end: at(11) })),
+    (e) => code(e) === "failed-precondition" && details(e)?.conflict !== undefined);
 });

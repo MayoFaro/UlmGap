@@ -1212,4 +1212,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(finance.adminUpdated['ci3']!.containsKey('waterLandings'), isFalse);
   });
+
+  // --- révision du 2026-10-01 : conflits en planification seulement ---
+
+  testWidgets('aperçu : un vol clôturé ne crée jamais de conflit', (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..flights = [
+        testFlight(id: 'o', start: DateTime(2026, 10, 12, 9, 30), crew: ['lac'], aircraft: 'F-JABC',
+            isClosed: true, actualFlightMinutes: 60),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'lache_toute_mission')));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    expect(preview(tester), isNot(contains('Conflit')));
+  });
+
+  testWidgets('correction admin d\'un vol clôturé qui chevauche un autre vol : aucun conflit',
+      (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final a = api()
+      ..categories = {'u1': UserCategory.gap}
+      ..flights = [
+        testFlight(id: 'next', start: DateTime(2026, 10, 12, 6), crew: ['lac'], aircraft: 'F-JABC'),
+      ];
+    final f = testFlight(
+        id: 'cc1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(preview(tester), isNot(contains('Conflit')));
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated.containsKey('cc1'), isTrue);
+  });
 }

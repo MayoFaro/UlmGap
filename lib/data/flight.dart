@@ -131,6 +131,7 @@ class Flight {
         crew: crew,
         status: status.name,
         deleted: deleted,
+        closed: isClosed,
       );
 }
 

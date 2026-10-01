@@ -108,6 +108,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       forcedMode: mode === "custom" ? "standard" : mode,
       skipActiveChecks: true,
       skipCredit: closed,
+      closed,
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
       previousStatus: status,
       decide: (crew) => ({

@@ -264,6 +264,15 @@ class _FlightScreenState extends State<FlightScreen> {
 
   ({RuleFlight candidate, Flight other})? get _conflict {
     if (_aircraftId == null) return null;
+    // Révision du 2026-10-01 : conflits en planification seulement (vol à
+    // venir non clôturé), jamais en conduite.
+    if (!isPlanning(
+      start: _start.millisecondsSinceEpoch,
+      now: widget.now().millisecondsSinceEpoch,
+      closed: _current?.isClosed ?? false,
+    )) {
+      return null;
+    }
     final candidate = RuleFlight(
       id: widget.flight?.id,
       start: _start.millisecondsSinceEpoch,

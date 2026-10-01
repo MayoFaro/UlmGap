@@ -310,3 +310,25 @@ clôturés non supprimés, null = 0), `logbook.dart` `performedLabel`
   CLAUDE.md : plan 4b terminé, Functions redéployées en dev, prod à
   redéployer. Commit `docs: plan 4b in spec and CLAUDE.md`.
 - [ ] Déploiement dev (commande des Global Constraints).
+
+---
+
+## Révision du 2026-10-01 : conflits en planification seulement
+
+Retour de l'utilisateur : « les blocages sont pour la planification, jamais
+pour la conduite ». Un vol décalé (météo) décale les suivants. Une fin
+allongée à la clôture, une correction d'horaires ou de temps de vol ne doit
+jamais rien bloquer.
+
+- `findConflict` (TS et Dart, cas partagés dans `test/fixtures/flight_rules.json`) :
+  un vol clôturé n'est jamais en conflit.
+- `isPlanning(start, now, closed)` : le contrôle de conflit ne s'applique
+  qu'à un vol à venir non clôturé. Il est utilisé par `planFlight` (donc
+  `createFlight`, `updateFlight`, `validateFlight`, `adminUpdateFlight`) et
+  par l'aperçu de `FlightScreen`.
+- Ceci remplace la décision du contrôleur « en correction admin, la fin
+  allongée passe par `planFlight`, qui vérifie les conflits » et le point 5
+  de la Review Focus : une correction qui allonge la fin vers un vol
+  suivant est désormais acceptée.
+- La saisie après coup d'un vol passé par un admin n'est plus soumise aux
+  conflits non plus (avant : « conflits toujours contrôlés »).

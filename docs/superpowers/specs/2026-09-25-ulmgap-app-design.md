@@ -227,6 +227,15 @@ conflit (date, horaire, appareil, équipage). Les **demandes** ne bloquent rien
 et peuvent se chevaucher : l'instructeur arbitre à la validation. Les bornes
 sont ouvertes : une fin égale à un début n'est pas un conflit.
 
+**Planification seulement, jamais la conduite** (révision du 2026-10-01) :
+- le contrôle ne s'applique qu'à un vol **à venir** (départ pas encore
+  atteint) et **non clôturé** ;
+- un vol **clôturé** n'est jamais en conflit avec un autre : ses horaires
+  sont ceux de la conduite (retards, fin allongée à la clôture) ;
+- la clôture, la correction admin d'un vol passé ou clôturé, et la saisie
+  après coup d'un vol passé par un admin ne sont donc jamais bloquées par
+  un chevauchement.
+
 ## 4. Finances
 
 > Révision du 2026-09-25 : le modèle « taux horaire + malus + forfait

@@ -380,13 +380,29 @@ test("total nul après correction : refusé", async () => {
     (e) => code(e) === "invalid-argument" && (e as Error).message === "Au moins un atterrissage ou amerrissage.");
 });
 
-test("fin allongée qui chevauche un autre vol validé du même appareil : conflit", async () => {
+test("conduite : fin allongée qui chevauche un autre vol du même appareil, acceptée", async () => {
   const boss = await seedUser({ profile: null, isAdmin: true });
   const pilot = await seedUser({ profile: "lache_toute_mission" });
   const other = await seedUser({ profile: "lache_toute_mission" });
   const a = await seedAircraft();
-  const { id, end } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
-  await seedFlight({ start: end + 10 * 60_000, end: end + 70 * 60_000, crew: [other.uid], aircraftId: a });
-  await assert.rejects(adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 })),
-    (e) => code(e) === "failed-precondition" && details(e)?.conflict !== undefined);
+  const { id, start, end } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  const next = await seedFlight({ start: end + 10 * 60_000, end: end + 70 * 60_000, crew: [other.uid], aircraftId: a });
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 }));
+  assert.equal((await getFlight(id)).end.toMillis(), start + 120 * 60_000);
+  // Et le vol suivant (passé, non clôturé) se corrige sans conflit avec le vol clôturé.
+  await adminUpdateFlight(boss, await correction(next, { destination: "Kpalimé" }));
+  assert.equal((await getFlight(next)).destination, "Kpalimé");
 });
+
+test("conduite : correction d'un vol passé non clôturé qui chevauche un autre vol passé, acceptée",
+  async () => {
+    const boss = await seedUser({ profile: null, isAdmin: true });
+    const p1 = await seedUser({ profile: "lache_toute_mission" });
+    const p2 = await seedUser({ profile: "lache_toute_mission" });
+    const a = await seedAircraft();
+    const start = Date.now() - 5 * H;
+    const id = await seedFlight({ start, end: start + H, crew: [p1.uid], aircraftId: a, createdBy: boss.uid });
+    await seedFlight({ start: start + 2 * H, end: start + 3 * H, crew: [p2.uid], aircraftId: a });
+    await adminUpdateFlight(boss, await correction(id, { end: start + 150 * 60_000 }));
+    assert.equal((await getFlight(id)).end.toMillis(), start + 150 * 60_000);
+  });

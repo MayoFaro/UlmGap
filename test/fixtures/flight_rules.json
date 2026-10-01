@@ -123,7 +123,16 @@
     { "name": "englobé entièrement",
       "candidate": { "start": 500, "end": 800, "aircraftId": "A", "crew": ["p1"] },
       "others": [{ "id": "o1", "start": 600, "end": 660, "aircraftId": "A", "crew": ["p9"], "status": "valide", "deleted": false }],
-      "expected": "o1", "expectedCause": { "kind": "aircraft", "members": [] } }
+      "expected": "o1", "expectedCause": { "kind": "aircraft", "members": [] } },
+    { "name": "autre vol clôturé qui chevauche : jamais en conflit (conduite, plan 4b)",
+      "candidate": { "start": 600, "end": 660, "aircraftId": "A", "crew": ["p1"] },
+      "others": [{ "id": "o1", "start": 630, "end": 700, "aircraftId": "A", "crew": ["p1"], "status": "valide", "deleted": false, "closed": true }],
+      "expected": null },
+    { "name": "vol clôturé ignoré, vol non clôturé retenu",
+      "candidate": { "start": 600, "end": 660, "aircraftId": "A", "crew": ["p1"] },
+      "others": [{ "id": "c1", "start": 600, "end": 660, "aircraftId": "A", "crew": ["p9"], "status": "valide", "deleted": false, "closed": true },
+                 { "id": "o2", "start": 640, "end": 700, "aircraftId": "B", "crew": ["p1"], "status": "valide", "deleted": false }],
+      "expected": "o2", "expectedCause": { "kind": "crew", "members": ["p1"] } }
   ],
   "payer": [
     { "name": "lâché en premier : ok", "creator": { "uid": "c", "profile": "lache_toute_mission", "isAdmin": false }, "crew": ["c", "x"], "ok": true },
