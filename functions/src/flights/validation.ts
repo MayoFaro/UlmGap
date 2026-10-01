@@ -147,6 +147,19 @@ function actualMinutes(v: unknown): number {
   return v;
 }
 
+/** Nombre d'atterrissages ou d'amerrissages saisi à la clôture (plan 4b). */
+function count(v: unknown, label: string): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 99) {
+    throw new ValidationError(`Nombre ${label} invalide (0 à 99).`);
+  }
+  return v;
+}
+
+/** Plan 4b, décision 3 : au moins un posé au total. */
+export function checkLandingsTotal(landings: number, waterLandings: number): void {
+  if (landings + waterLandings < 1) throw new ValidationError("Au moins un atterrissage ou amerrissage.");
+}
+
 /** Plafond des montants saisis à la clôture (décision 5, spec §2.4). */
 function manualAmount(v: unknown, field: string): number | null {
   if (v === undefined || v === null) return null;
@@ -164,14 +177,21 @@ export function validateClosing(data: unknown): {
   actualMinutes: number;
   shortFlightAmount: number | null;
   customAmount: number | null;
+  landings: number;
+  waterLandings: number;
 } {
   const d = obj(data);
   const flightId = validateFlightId(d);
+  const landings = count(d.landings, "d'atterrissages");
+  const waterLandings = d.waterLandings === undefined ? 0 : count(d.waterLandings, "d'amerrissages");
+  checkLandingsTotal(landings, waterLandings);
   return {
     flightId,
     actualMinutes: actualMinutes(d.actualMinutes),
     shortFlightAmount: manualAmount(d.shortFlightAmount, "Montant à facturer"),
     customAmount: manualAmount(d.customAmount, "Montant différent"),
+    landings,
+    waterLandings,
   };
 }
 
@@ -182,6 +202,8 @@ export interface AdminUpdate {
   actualMinutes?: number;
   shortFlightAmount?: number | null;
   customAmount?: number | null;
+  landings?: number;
+  waterLandings?: number;
 }
 
 /**
@@ -199,6 +221,8 @@ export function validateAdminUpdate(data: unknown): AdminUpdate {
     out.pricingMode = d.pricingMode === "custom" ? "custom" : mode(d.pricingMode);
   }
   if (d.actualMinutes !== undefined) out.actualMinutes = actualMinutes(d.actualMinutes);
+  if (d.landings !== undefined) out.landings = count(d.landings, "d'atterrissages");
+  if (d.waterLandings !== undefined) out.waterLandings = count(d.waterLandings, "d'amerrissages");
   if (d.shortFlightAmount !== undefined) {
     out.shortFlightAmount = manualAmount(d.shortFlightAmount, "Montant à facturer");
   }

@@ -39,14 +39,17 @@ abstract class FinanceApi {
   /// Rend le nouveau solde.
   Future<int> credit(String uid, int amount, String? reason);
 
-  /// Rend le nouveau solde.
-  Future<int> correct(String uid, int amount, String reason);
+  /// Correction : [newBalance] est le nouveau solde voulu (l'écart est
+  /// calculé par le serveur). Rend le nouveau solde.
+  Future<int> correct(String uid, int newBalance, String reason);
 
   Future<void> closeFlight(
     String flightId, {
     required int actualMinutes,
     int? shortFlightAmount,
     int? customAmount,
+    required int landings,
+    int waterLandings = 0,
   });
 
   Future<void> adminUpdateFlight(String flightId, Map<String, dynamic> payload);
@@ -60,6 +63,11 @@ abstract class FinanceApi {
   /// (crédit disponible, spec §4.4 : même requête que le serveur, égalités
   /// seules, sans index composite).
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid);
+
+  /// Vols validés non clôturés, passés comme à venir : les vols à clôturer
+  /// de toute période (panneau « Vols effectués »). Égalités seules, sans
+  /// index composite.
+  Stream<List<Flight>> watchValidUnclosedFlights();
 }
 
 class FirebaseFinanceApi implements FinanceApi {
@@ -112,10 +120,10 @@ class FirebaseFinanceApi implements FinanceApi {
   }
 
   @override
-  Future<int> correct(String uid, int amount, String reason) async {
+  Future<int> correct(String uid, int newBalance, String reason) async {
     final data = (await _call('correctAccount', {
       'userUid': uid,
-      'amount': amount,
+      'newBalance': newBalance,
       'reason': reason,
     })) as Map;
     return (data['balance'] as num).toInt();
@@ -127,10 +135,14 @@ class FirebaseFinanceApi implements FinanceApi {
     required int actualMinutes,
     int? shortFlightAmount,
     int? customAmount,
+    required int landings,
+    int waterLandings = 0,
   }) =>
       _call('closeFlight', {
         'flightId': flightId,
         'actualMinutes': actualMinutes,
+        'landings': landings,
+        'waterLandings': waterLandings,
         if (shortFlightAmount != null) 'shortFlightAmount': shortFlightAmount,
         if (customAmount != null) 'customAmount': customAmount,
       });
@@ -154,6 +166,13 @@ class FirebaseFinanceApi implements FinanceApi {
   @override
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => _flights
       .where('payerUid', isEqualTo: payerUid)
+      .where('isClosed', isEqualTo: false)
+      .snapshots()
+      .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
+
+  @override
+  Stream<List<Flight>> watchValidUnclosedFlights() => _flights
+      .where('status', isEqualTo: 'valide')
       .where('isClosed', isEqualTo: false)
       .snapshots()
       .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());

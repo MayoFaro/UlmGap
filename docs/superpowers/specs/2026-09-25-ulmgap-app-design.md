@@ -21,7 +21,8 @@ avec :
 - un blocage des doubles réservations d'appareil ou d'équipage ;
 - un **crédit en FCFA** par compte, qui conditionne la validation et est débité
   à la clôture ;
-- des compteurs d'heures **par pilote** et **par appareil** ;
+- un **carnet de vol** avec le temps de vol total par pilote (révision du
+  2026-09-30 : plus de compteur par appareil) ;
 - un relevé admin de tout ce qui a été facturé.
 
 ## Décisions structurantes
@@ -42,7 +43,7 @@ avec :
 - Planning, astreintes et tout autre module d'AppGAP.
 - Paiement en ligne. Les crédits sont saisis par les instructeurs et les
   admins ; les montants « hors app » sont réglés en dehors.
-- Suivi d'entretien des appareils (le compteur par appareil fournit les heures).
+- Suivi d'entretien des appareils.
 - Toute remontée d'information d'AppGAP vers UlmGap.
 - *Flavors* Android/iOS distincts dev/prod : à ajouter seulement si l'on veut
   installer les deux versions sur le même téléphone.
@@ -99,7 +100,8 @@ exposer à tous les soldes, e-mails ou catégories.
 
 ### 2.3 `aircraft/{id}`, géré par un admin
 
-`registration` (immatriculation), `label` (« ULM 1 »…), `active`.
+`registration` (immatriculation), `label` (« ULM 1 »…), `active`, `amphibious`
+(révision du 2026-10-01 : amerrissages saisis à la clôture).
 
 ### 2.4 `settings/pricing`, modifiable par un admin
 
@@ -119,7 +121,7 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | Champ | Type | Contenu |
 |---|---|---|
 | `start` **(contrat)** | timestamp | Heure de départ prévue |
-| `end` **(contrat)** | timestamp | Heure de fin prévue, obligatoire, défaut `start` + 1 h, confirmée à la validation |
+| `end` **(contrat)** | timestamp | Heure de fin prévue, obligatoire, défaut `start` + 1 h, confirmée à la validation. À la clôture, allongée à `start` + `actualFlightMinutes` si elle est plus courte, jamais raccourcie (l'appareil a pu rester posé ailleurs) |
 | `destination` **(contrat)** | string | Obligatoire, texte libre |
 | `aircraftId` | string | Référence `aircraft` |
 | `aircraft` **(contrat)** | string | Immatriculation recopiée |
@@ -136,6 +138,8 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | `pricingSnapshot` | map | Tarifs figés au moment du passage en `valide` |
 | `isClosed` **(contrat)** | bool | |
 | `actualFlightMinutes` **(contrat)** | int? | Saisi à la clôture |
+| `landings` | int? | Nombre d'atterrissages, saisi à la clôture (révision du 2026-10-01) |
+| `waterLandings` | int? | Nombre d'amerrissages, saisi à la clôture d'un appareil `amphibious` ; 0 sinon |
 | `closedBy`, `closedAt` | uid, timestamp | |
 | `billedAmount` | int? | Montant final, fixé à la clôture |
 | `billedTo` | string? | `account` (débité sur un solde) / `off_app` (facturé hors app) |
@@ -169,6 +173,8 @@ Règle absolue : **le solde n'est jamais modifié sans sa ligne d'historique**,
 - **Vol seul** : 1 personne à bord.
 - **Vol à deux** : 2 personnes à bord.
 - Un vol est **effectué** dès que son heure de départ est passée.
+- Un vol validé se **clôture dès le jour du vol** (date du jour ou avant, à l'heure du
+  club, Africa/Libreville), même avant l'heure de départ (révision du 2026-09-30).
 
 ### 3.2 Création (`createFlight`)
 
@@ -196,7 +202,7 @@ En `demande`, `instructorUid` = l'instructeur de l'équipage.
 | `refuseFlight` (motif facultatif) | L'instructeur désigné, ou un admin | `demande` → `refuse` |
 | `updateFlight` | Le créateur, avant le départ | Mêmes règles qu'à la création. Si un non-instructeur modifie un vol avec instructeur, il redevient `demande`. Un vol `refuse` modifié repart en `demande` |
 | `cancelFlight` | Le créateur, l'instructeur désigné ou un admin, avant le départ | `deleted: true` |
-| `closeFlight` (minutes réelles) | Tout membre de `crew` ou un admin, une fois le vol effectué | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
+| `closeFlight` (minutes réelles, atterrissages, amerrissages) | Tout membre de `crew` ou un admin, dès le jour du vol (§3.1) | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
 | `adminUpdateFlight` | Admin, à tout moment, vols clôturés compris | Modification libre, sans matrice mais avec conflits. Sur un vol clôturé, régularisation automatique (§4.5) |
 
 ### 3.4 Contrôles communs
@@ -220,6 +226,15 @@ S'il y a conflit, l'action est refusée, avec un message qui cite le vol en
 conflit (date, horaire, appareil, équipage). Les **demandes** ne bloquent rien
 et peuvent se chevaucher : l'instructeur arbitre à la validation. Les bornes
 sont ouvertes : une fin égale à un début n'est pas un conflit.
+
+**Planification seulement, jamais la conduite** (révision du 2026-10-01) :
+- le contrôle ne s'applique qu'à un vol **à venir** (départ pas encore
+  atteint) et **non clôturé** ;
+- un vol **clôturé** n'est jamais en conflit avec un autre : ses horaires
+  sont ceux de la conduite (retards, fin allongée à la clôture) ;
+- la clôture, la correction admin d'un vol passé ou clôturé, et la saisie
+  après coup d'un vol passé par un admin ne sont donc jamais bloquées par
+  un chevauchement.
 
 ## 4. Finances
 
@@ -301,7 +316,7 @@ Exemples (`standard`) :
 | Action | Qui | Règle |
 |---|---|---|
 | `creditAccount` (montant > 0, motif facultatif) | Instructeurs et admins | Transaction `credit` |
-| `correctAccount` (montant ±, motif obligatoire) | Instructeurs et admins | Transaction `correction` |
+| `correctAccount` (**nouveau solde**, motif obligatoire ; révision du 2026-10-01) | Instructeurs et admins | Transaction `correction` de l'écart entre le nouveau solde et le solde lu dans la transaction ; refusée si le solde est déjà celui demandé |
 | Régularisation | Automatique, sur `adminUpdateFlight` d'un vol clôturé | Vol imputé sur un solde : transaction `flight_adjustment` pour la différence entre l'ancien et le nouveau coût. Hors app : mise à jour de `billedAmount` |
 
 ### 4.6 Visibilité
@@ -312,6 +327,12 @@ Exemples (`standard`) :
 ## 5. Écrans
 
 Identiques sur mobile et sur web.
+
+**Navigation** (révision du 2026-10-01) : les icônes de la barre du haut de
+l'accueil (Carnet de vol, Mon compte, Instructeurs, Administration) figurent
+sur tous les écrans. Un appui ouvre directement l'écran voulu, juste
+au-dessus de l'accueil : « retour » ramène toujours à l'accueil. L'icône de
+l'écran affiché est grisée.
 
 **Accès**
 - **Connexion** : e-mail et mot de passe, « mot de passe oublié ».
@@ -342,42 +363,65 @@ Identiques sur mobile et sur web.
 **Détail d'un vol**
 - Toutes les informations, et les actions permises selon le rôle : valider,
   refuser, modifier, annuler, clôturer (durée réelle), corriger (admin).
-- **Clôture** : saisie de la durée réelle. Si elle est inférieure à 45 min,
+- **Clôture** : saisie de la durée réelle et du nombre d'atterrissages
+  (pré-rempli à 1), plus, sur un appareil amphibie, du nombre d'amerrissages
+  (pré-rempli à 0) ; entiers de 0 à 99, au moins 1 posé au total. Si la
+  durée réelle dépasse fin − début, l'heure de fin est allongée d'autant. Si elle est inférieure à 45 min,
   un champ obligatoire « Montant à facturer » apparaît. Pour tout vol avec un
   passager sans compte, une case « Montant différent (facturé hors app) »
   permet de saisir le montant : le vol passe alors en `custom` et aucun solde
   n'est débité.
 
-**Vols effectués** (ajout du 2026-09-30, prévu au plan 4)
-- Panneau complet listant tous les vols **effectués**, c'est-à-dire dont la
-  date est antérieure ou égale à la date du jour, **clôturés ou non**.
-- C'est l'endroit pour **clôturer** les vols : un vol non clôturé s'y ouvre
-  dans la fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage
-  et admins, §3.3).
+**Carnet de vol** (révision du 2026-09-30 : remplace les écrans « Vols
+effectués » et « Compteurs »)
+- Un seul écran, ouvert par l'icône « Carnet de vol » de l'accueil. Il liste
+  les vols **effectués** (date ≤ aujourd'hui, clôturés ou non), **tous
+  appareils confondus**, du plus récent au plus ancien. Seuls les vols
+  validés et non supprimés y figurent.
+- En haut, le nombre d'atterrissages de la période, et celui des
+  amerrissages s'il y en a ; chaque vol clôturé affiche les siens
+  (« Clôturé · 1 h 15 · 2 att. »).
+- En haut, le **temps de vol total** de la période choisie, calculé sur
+  `actualFlightMinutes` des vols clôturés, non supprimés. Chaque vol compte
+  une fois ; dans un vol à deux, chaque membre de `crew` le cumule sur son
+  carnet. Les passagers sans compte ne comptent pas.
+- Période : un menu des mois (janvier à décembre, plus « Année »), un menu
+  de l'année (année en cours par défaut), et un bouton « Période précise »
+  qui ouvre un calendrier où l'on choisit le début puis la fin. Par défaut :
+  le mois en cours.
+- Un pilote voit ses vols (ceux où il est dans l'équipage) et son total.
+  Un instructeur ou un admin a en plus un menu « Pilote » : lui-même par
+  défaut, un autre pilote, ou « Tous les pilotes » (tous les vols du club).
+- Menu « Appareil » pour tous (« Tous les appareils » par défaut, appareils
+  inactifs compris) : il restreint la liste et le total à un appareil. Avec
+  « Tous les pilotes », on obtient le total d'heures de l'appareil.
+- C'est l'endroit pour **clôturer** : un vol non clôturé s'ouvre dans la
+  fenêtre du vol, avec l'action « Clôturer » (membres de l'équipage et
+  admins, §3.3). Les vols à clôturer (date du jour ou avant, sans condition
+  d'heure) sont surlignés en orange. Un compteur « N vols à clôturer » les
+  compte sur toutes les périodes ; un appui dessus les affiche.
 - Le planning (accueil) reste limité aux vols à venir.
-- À préciser au plan 4 : quels vols chaque utilisateur voit (les siens ou
-  tous), les filtres (période, appareil, clôturés ou non) et la mise en
-  évidence des vols à clôturer.
-
-**Compteurs**
-- **Pilote** : une période, un total. Chacun voit le sien ; les instructeurs
-  et les admins choisissent le pilote.
-- **Appareil** : un appareil et une période, par exemple « total 154h45 »,
-  visible par tous.
-- Base de calcul : `actualFlightMinutes` des vols clôturés, non supprimés.
 
 **Mon compte**
 - Solde, historique, profil (badge), appartenance.
+- Bouton « Se déconnecter » (retiré de la barre d'accueil au plan 4).
 
-**Instructeurs**
-- Liste des comptes avec leur solde, et un bouton « créditer / corriger ».
+**Pilotes** (icône « Pilotes », anciennement « Instructeurs » ; instructeurs
+et admins seulement)
+- Liste des comptes avec leur solde et, sur chaque ligne, un bouton
+  « Créditer » qui ouvre « Créditer / corriger ». Un appui sur le nom ouvre
+  la fiche du compte (historique, « Créditer / corriger »).
+- « Corriger » : on saisit le nouveau solde total (pré-rempli avec le solde
+  actuel), pas un écart.
+- Champs de montant : chiffres regroupés par milliers pendant la saisie
+  (« 350 000 »).
 
 **Administration**
 - Utilisateurs : création, profil, catégorie, admin, activation.
 - Appareils, tarifs.
 - **Relevé des vols facturés** : sur une période, chaque vol clôturé avec son
-  mode, son montant facturé, son payeur ou « hors app », son appareil et son
-  équipage ; totaux « débité sur comptes » et « facturé hors app » ; export
+  mode, son **temps de vol réel**, son montant facturé, son payeur ou « hors
+  app », son appareil et son équipage ; totaux « débité sur comptes » et « facturé hors app » ; export
   CSV sur le web.
 
 ## 6. Notifications et rappels
@@ -440,7 +484,7 @@ et `users/{uid}.active == true`.
 - `lib/core/` : profils et badges, calcul de coût (miroir du serveur, pour
   l'aperçu), formats.
 - `lib/data/` : lecture Firestore, appels des Functions.
-- `lib/features/` : `planning`, `flight`, `counters`, `account`,
+- `lib/features/` : `planning`, `flight`, `logbook`, `account`,
   `instructors`, `admin`.
 - `functions/src/rules/` : **module pur** (matrice, payeur, coût, crédit
   disponible, conflits), sans accès à Firestore.
@@ -462,7 +506,7 @@ et `users/{uid}.active == true`.
   transaction, première clôture l'emporte, régularisation) et la tâche de
   rappel (gen caduque, relance).
 - **Dart** : calcul de coût client (cas partagés), badges, formulaire de vol et
-  compteurs (widgets).
+  carnet de vol (widgets).
 - **Recette dans `ulmgap-dev`** avec un compte de test par profil et par
   appartenance.
 

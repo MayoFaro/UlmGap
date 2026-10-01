@@ -8,9 +8,13 @@ import '../../data/admin_api.dart';
 import '../../data/app_user.dart';
 import '../../data/services.dart';
 import 'user_form_dialog.dart';
+import '../home/app_nav.dart';
 
 class UsersAdminScreen extends StatelessWidget {
-  const UsersAdminScreen({super.key});
+  const UsersAdminScreen({super.key, this.me});
+
+  /// Compte connecté : icônes de navigation (absentes si null).
+  final AppUser? me;
 
   Future<void> _guard(BuildContext context, Future<void> Function() action) async {
     void show(String m) {
@@ -35,7 +39,10 @@ class UsersAdminScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = AppServices.of(context).admin!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Comptes')),
+      appBar: AppBar(
+        title: const Text('Comptes'),
+        actions: me == null ? null : appNavActions(context, me!, current: AppDestination.users),
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Nouveau compte',
         child: const Icon(Icons.person_add),

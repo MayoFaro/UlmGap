@@ -88,7 +88,7 @@ export function validateUserPatch(data: unknown): {
 }
 
 export function validateAircraft(data: unknown): {
-  id?: string; registration: string; label: string; active: boolean;
+  id?: string; registration: string; label: string; active: boolean; amphibious: boolean;
 } {
   const d = obj(data);
   const registration = text(d.registration, "Immatriculation", 12).toUpperCase();
@@ -96,10 +96,11 @@ export function validateAircraft(data: unknown): {
   if (!/^[A-Z0-9-]+$/.test(registration)) {
     throw new ValidationError("Immatriculation invalide (lettres, chiffres et tirets).");
   }
-  const out: { id?: string; registration: string; label: string; active: boolean } = {
+  const out: { id?: string; registration: string; label: string; active: boolean; amphibious: boolean } = {
     registration,
     label: text(d.label, "Libellé", 40),
     active: bool(d.active, "Actif", true),
+    amphibious: bool(d.amphibious, "Amphibie", false),
   };
   if (typeof d.id === "string" && d.id.trim()) out.id = d.id.trim();
   return out;

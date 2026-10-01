@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { at, code, db, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, details, H, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { closeFlight } from "./close";
 
@@ -40,7 +40,7 @@ async function closedFlight(
   const id = await seedFlight({
     start, end, status: "valide", pricingMode: "standard", createdBy: adminCaller.uid, ...fields,
   });
-  await closeFlight(adminCaller, { flightId: id, ...closing });
+  await closeFlight(adminCaller, { landings: 1, flightId: id, ...closing });
   return { id, start, end };
 }
 
@@ -319,3 +319,90 @@ test("vol refusé : correction admin refusée", async () => {
       (e as Error).message === "Un vol refusé ne peut pas être corrigé.",
   );
 });
+
+// --- Plan 4b : atterrissages, amerrissages, heure de fin ---
+
+test("correction d'un vol clôturé : atterrissages modifiés, amerrissages conservés", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft(true, true);
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a },
+    { actualMinutes: 90, landings: 1, waterLandings: 2 });
+  await adminUpdateFlight(boss, await correction(id, { landings: 3 }));
+  const f = await getFlight(id);
+  assert.equal(f.landings, 3);
+  assert.equal(f.waterLandings, 2);
+});
+
+test("nombres envoyés sur un vol non clôturé : refusé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: boss.uid,
+  });
+  await assert.rejects(adminUpdateFlight(boss, await correction(id, { landings: 2 })),
+    (e) => code(e) === "failed-precondition" && (e as Error).message === "Réservé aux vols clôturés.");
+});
+
+test("durée réelle corrigée au-delà de fin − début : fin allongée", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id, start } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 }));
+  assert.equal((await getFlight(id)).end.toMillis(), start + 120 * 60_000);
+});
+
+test("amerrissages sur un appareil non amphibie : refusé, y compris après changement d'appareil",
+  async () => {
+    const boss = await seedUser({ profile: null, isAdmin: true });
+    const pilot = await seedUser({ profile: "lache_toute_mission" });
+    const amphib = await seedAircraft(true, true);
+    const plain = await seedAircraft();
+    const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: amphib },
+      { actualMinutes: 90, landings: 1, waterLandings: 1 });
+    await assert.rejects(adminUpdateFlight(boss, await correction(id, { aircraftId: plain })),
+      (e) => code(e) === "failed-precondition" && (e as Error).message === "Cet appareil n'est pas amphibie.");
+    await assert.rejects(adminUpdateFlight(boss, await correction(id, { aircraftId: plain, waterLandings: 2 })),
+      (e) => code(e) === "failed-precondition" && (e as Error).message === "Cet appareil n'est pas amphibie.");
+    // Retirer les amerrissages en changeant d'appareil : accepté.
+    await adminUpdateFlight(boss, await correction(id, { aircraftId: plain, waterLandings: 0 }));
+    assert.equal((await getFlight(id)).aircraftId, plain);
+  });
+
+test("total nul après correction : refusé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await assert.rejects(adminUpdateFlight(boss, await correction(id, { landings: 0 })),
+    (e) => code(e) === "invalid-argument" && (e as Error).message === "Au moins un atterrissage ou amerrissage.");
+});
+
+test("conduite : fin allongée qui chevauche un autre vol du même appareil, acceptée", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const other = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id, start, end } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  const next = await seedFlight({ start: end + 10 * 60_000, end: end + 70 * 60_000, crew: [other.uid], aircraftId: a });
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 }));
+  assert.equal((await getFlight(id)).end.toMillis(), start + 120 * 60_000);
+  // Et le vol suivant (passé, non clôturé) se corrige sans conflit avec le vol clôturé.
+  await adminUpdateFlight(boss, await correction(next, { destination: "Kpalimé" }));
+  assert.equal((await getFlight(next)).destination, "Kpalimé");
+});
+
+test("conduite : correction d'un vol passé non clôturé qui chevauche un autre vol passé, acceptée",
+  async () => {
+    const boss = await seedUser({ profile: null, isAdmin: true });
+    const p1 = await seedUser({ profile: "lache_toute_mission" });
+    const p2 = await seedUser({ profile: "lache_toute_mission" });
+    const a = await seedAircraft();
+    const start = Date.now() - 5 * H;
+    const id = await seedFlight({ start, end: start + H, crew: [p1.uid], aircraftId: a, createdBy: boss.uid });
+    await seedFlight({ start: start + 2 * H, end: start + 3 * H, crew: [p2.uid], aircraftId: a });
+    await adminUpdateFlight(boss, await correction(id, { end: start + 150 * 60_000 }));
+    assert.equal((await getFlight(id)).end.toMillis(), start + 150 * 60_000);
+  });

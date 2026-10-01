@@ -47,18 +47,31 @@ String formatDurationHm(int minutes) {
   return '$h h ${m.toString().padLeft(2, '0')}';
 }
 
-/// En tête de fenêtre pour un vol clôturé (Task 9, spec plan 3 §4.3).
+/// « 2 att. » ou « 2 att. · 1 am. » ; vide pour un vol clôturé avant le
+/// plan 4b (sans nombres).
+String landingsText(int? landings, int? waterLandings, {String separator = ' · '}) {
+  if (landings == null) return '';
+  final water = waterLandings ?? 0;
+  return water > 0 ? '$landings att.$separator$water am.' : '$landings att.';
+}
+
+/// En tête de fenêtre pour un vol clôturé (Task 9, spec plan 3 §4.3 ;
+/// atterrissages et amerrissages au plan 4b).
 String closedSummary({
   required int actualMinutes,
   required int billedAmount,
   required String billedTo,
   required String debitedShortName,
+  int? landings,
+  int? waterLandings,
 }) {
   final duration = formatDurationHm(actualMinutes);
   final amount = formatFcfa(billedAmount);
-  return billedTo == 'off_app'
+  final base = billedTo == 'off_app'
       ? 'Clôturé : $duration, $amount facturé hors app'
       : 'Clôturé : $duration, $amount débité sur le compte de $debitedShortName';
+  final counts = landingsText(landings, waterLandings, separator: ', ');
+  return counts.isEmpty ? base : '$base, $counts';
 }
 
 /// Explique la cause d'un conflit : appareil (prioritaire) ou personne commune.

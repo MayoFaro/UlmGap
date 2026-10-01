@@ -4,8 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   checkPayer, conflictCause, decideStatus, designatedInstructor, findConflict, payerOf,
-  resolvePricingMode,
-} from "./flights";
+  resolvePricingMode, isPlanning } from "./flights";
 
 const fx = JSON.parse(fs.readFileSync(
   path.resolve(__dirname, "../../../test/fixtures/flight_rules.json"), "utf8"));
@@ -66,4 +65,11 @@ test("message élève au vouvoiement", () => {
     [{ uid: "c", profile: "eleve" }], 0);
   assert.deepEqual(d, { ok: false,
     reason: "Impossible de créer un vol à votre profit sans la présence d'un instructeur." });
+});
+
+test("isPlanning : contrôle des conflits pour un vol à venir non clôturé seulement", () => {
+  assert.equal(isPlanning(1000, 999, false), true);
+  assert.equal(isPlanning(1000, 1000, false), false);
+  assert.equal(isPlanning(1000, 2000, false), false);
+  assert.equal(isPlanning(1000, 999, true), false);
 });

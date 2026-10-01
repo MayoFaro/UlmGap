@@ -149,4 +149,33 @@ void main() {
     expect(find.text('Régularisation — vol du lundi 12 octobre'), findsOneWidget);
     expect(find.text('Régularisation — vol du lundi 12 octobre — Annulation du vol'), findsOneWidget);
   });
+
+  testWidgets('Se déconnecter : revient à la racine puis déconnecte', (tester) async {
+    final auth = FakeAuthService();
+    final me = _user(balance: 0);
+    await tester.pumpWidget(AppServices(
+      auth: auth,
+      users: FakeUserRepository(),
+      finance: FakeFinanceApi(),
+      flights: FakeFlightApi(),
+      child: MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AccountScreen(me: me)),
+            ),
+            child: const Text('racine'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('racine'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AccountScreen), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(auth.calls, contains('signOut'));
+    expect(find.byType(AccountScreen), findsNothing);
+  });
 }

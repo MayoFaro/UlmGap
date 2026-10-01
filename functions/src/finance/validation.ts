@@ -68,17 +68,19 @@ export function validateCredit(data: unknown): { userUid: string; amount: number
 }
 
 /**
- * Correction (positive ou négative) d'un compte par un instructeur ou un
- * admin. Aucun plafond, pour pouvoir annuler un versement erroné en une
- * seule fois (décision du contrôleur) ; le motif est obligatoire.
+ * Correction d'un compte par un instructeur ou un admin (révision du
+ * 2026-10-01) : on saisit le **nouveau solde** (entier, nul ou négatif
+ * compris) ; l'écart est calculé dans la transaction. Motif obligatoire.
  */
-export function validateCorrection(data: unknown): { userUid: string; amount: number; reason: string } {
+export function validateCorrection(data: unknown): { userUid: string; newBalance: number; reason: string } {
   const d = obj(data);
   const userUid = accountUid(d.userUid);
-  const amount = amountInt(d.amount);
-  if (amount === 0) throw new ValidationError("Montant invalide.");
+  const newBalance = d.newBalance;
+  if (typeof newBalance !== "number" || !Number.isInteger(newBalance)) {
+    throw new ValidationError("Nouveau solde invalide.");
+  }
   const reason = typeof d.reason === "string" ? d.reason.trim() : "";
   if (!reason) throw new ValidationError("Motif obligatoire pour une correction.");
   if (reason.length > 200) throw new ValidationError("Motif trop long (200 caractères au maximum).");
-  return { userUid, amount, reason };
+  return { userUid, newBalance, reason };
 }

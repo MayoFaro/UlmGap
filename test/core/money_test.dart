@@ -27,4 +27,24 @@ void main() {
     expect(parseAmount('12.5'), isNull);
     expect(parseAmount(''), isNull);
   });
+
+  test('formatAmountInput : groupes de 3 chiffres, sans unité', () {
+    expect(formatAmountInput(40000), '40\u00a0000');
+    expect(formatAmountInput(1250000), '1\u00a0250\u00a0000');
+    expect(formatAmountInput(-5000), '-5\u00a0000');
+    expect(formatAmountInput(0), '0');
+  });
+
+  test('AmountInputFormatter : regroupe à la saisie, garde le signe', () {
+    String fmt(String typed) => const AmountInputFormatter()
+        .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: typed))
+        .text;
+    expect(fmt('40000'), '40\u00a0000');
+    expect(fmt('350 0000'), '3\u00a0500\u00a0000');
+    expect(fmt('-5000'), '-5\u00a0000');
+    expect(fmt('12a3'), '123');
+    expect(fmt(''), '');
+    expect(fmt('-'), '-');
+    expect(parseAmount(fmt('40000')), 40000);
+  });
 }

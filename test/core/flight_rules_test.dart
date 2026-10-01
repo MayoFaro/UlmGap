@@ -56,6 +56,7 @@ void main() {
         crew: (m['crew'] as List).cast<String>(),
         status: (m['status'] as String?) ?? 'valide',
         deleted: (m['deleted'] as bool?) ?? false,
+        closed: (m['closed'] as bool?) ?? false,
       );
 
   for (final c in (fx['conflicts'] as List).cast<Map<String, dynamic>>()) {
@@ -91,4 +92,11 @@ void main() {
       }
     });
   }
+
+  test('isPlanning : contrôle des conflits pour un vol à venir non clôturé seulement', () {
+    expect(isPlanning(start: 1000, now: 999, closed: false), isTrue);
+    expect(isPlanning(start: 1000, now: 1000, closed: false), isFalse); // départ atteint
+    expect(isPlanning(start: 1000, now: 2000, closed: false), isFalse); // conduite
+    expect(isPlanning(start: 1000, now: 999, closed: true), isFalse); // clôturé
+  });
 }

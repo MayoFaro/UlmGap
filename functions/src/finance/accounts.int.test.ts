@@ -8,6 +8,7 @@ import {
 } from "../flights/testkit";
 import { creditAccount, correctAccount } from "./accounts";
 import { closeFlight } from "../flights/close";
+import { formatFcfa } from "../rules/pricing";
 
 const getUser = async (uid: string) => (await db.collection("users").doc(uid).get()).data()!;
 const userTx = async (uid: string) => {
@@ -41,11 +42,11 @@ test("crédit de 1 000 000 (aucun plafond) accepté", async () => {
   assert.deepEqual(r, { balance: 1_000_000 });
 });
 
-test("correction de −10 000 avec motif par un admin : solde et transaction correction", async () => {
+test("correction : nouveau solde 90 000 sur 100 000 → transaction correction de −10 000", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
   const target = await seedUser({ profile: "eleve", balance: 100_000 });
 
-  const r = await correctAccount(admin1, { userUid: target.uid, amount: -10_000, reason: "Erreur de saisie" });
+  const r = await correctAccount(admin1, { userUid: target.uid, newBalance: 90_000, reason: "Erreur de saisie" });
   assert.deepEqual(r, { balance: 90_000 });
 
   assert.equal((await getUser(target.uid)).balance, 90_000);
@@ -62,7 +63,7 @@ test("correction sans motif : invalid-argument", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
   const target = await seedUser({ profile: "eleve", balance: 100_000 });
   await assert.rejects(
-    correctAccount(admin1, { userUid: target.uid, amount: -10_000 }),
+    correctAccount(admin1, { userUid: target.uid, newBalance: 90_000 }),
     (e) => code(e) === "invalid-argument",
   );
 });
@@ -76,7 +77,7 @@ test("un lâché (ni instructeur ni admin) : permission-denied, pour créditer e
       (e as Error).message === "Réservé aux instructeurs et aux admins.",
   );
   await assert.rejects(
-    correctAccount(lache, { userUid: target.uid, amount: -10_000, reason: "Motif" }),
+    correctAccount(lache, { userUid: target.uid, newBalance: 90_000, reason: "Motif" }),
     (e) => code(e) === "permission-denied",
   );
   assert.equal((await getUser(target.uid)).balance, 100_000);
@@ -101,7 +102,7 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
 
   const results = await Promise.allSettled([
     creditAccount(instr, { userUid: pilot.uid, amount: 50_000, reason: "Versement" }),
-    closeFlight(pilot, { flightId, actualMinutes: 90 }),
+    closeFlight(pilot, { flightId, actualMinutes: 90, landings: 1 }),
   ]);
   assert.equal(results.filter((r) => r.status === "fulfilled").length, 2);
 
@@ -118,4 +119,18 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
   assert.equal(second.balanceAfter, expectedBalance);
   assert.equal(first.balanceAfter + (first.type === "credit" ? -50_000 : 15_000), 1_000_000);
   assert.equal(second.balanceAfter, first.balanceAfter + (second.type === "credit" ? 50_000 : -15_000));
+});
+
+test("correction : nouveau solde supérieur → écart positif ; égal au solde → refusé", async () => {
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  const target = await seedUser({ profile: "eleve", balance: 100_000 });
+  const r = await correctAccount(admin1, { userUid: target.uid, newBalance: 350_000, reason: "Reprise" });
+  assert.deepEqual(r, { balance: 350_000 });
+  const txs = await userTx(target.uid);
+  assert.equal(txs[0].amount, 250_000);
+  await assert.rejects(
+    correctAccount(admin1, { userUid: target.uid, newBalance: 350_000, reason: "Reprise" }),
+    (e) => code(e) === "failed-precondition" &&
+      (e as Error).message === `Le solde est déjà de ${formatFcfa(350_000)}.`,
+  );
 });

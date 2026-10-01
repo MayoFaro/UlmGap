@@ -6,7 +6,7 @@ import type { Profile } from "../admin/validation";
 import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
-  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, payerOf,
+  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, isPlanning, payerOf,
   resolvePricingMode,
 } from "../rules/flights";
 import {
@@ -42,6 +42,8 @@ export interface PlanArgs {
   skipActiveChecks?: boolean;
   /** Correction admin d'un vol clôturé : la régularisation remplace le contrôle du crédit. */
   skipCredit?: boolean;
+  /** Vol clôturé (correction admin) : conduite, aucun contrôle de conflit. */
+  closed?: boolean;
   /** Correction admin : mode imposé explicitement par l'admin (resolvePricingMode non appliqué). */
   forcedMode?: "standard" | "fuel_only";
 }
@@ -121,6 +123,7 @@ async function assertNoConflict(
     crew: (d.get("crew") as string[] | undefined) ?? [],
     status: d.get("status") as FlightStatus,
     deleted: d.get("deleted") === true,
+    closed: d.get("isClosed") === true,
   }));
   const c = findConflict(slot, others);
   if (!c) return;
@@ -222,9 +225,13 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   let locks: Ref[] = [];
   if (d.status === "valide") {
     locks = await readLocks(tx, db, aircraft.id, a.input.crew);
-    await assertNoConflict(tx, db, {
-      id: a.id, start: a.input.start, end: a.input.end, aircraftId: aircraft.id, crew: a.input.crew,
-    });
+    // Révision du 2026-10-01 : conflits contrôlés en planification seulement
+    // (vol à venir non clôturé), jamais en conduite.
+    if (isPlanning(a.input.start, Date.now(), a.closed === true)) {
+      await assertNoConflict(tx, db, {
+        id: a.id, start: a.input.start, end: a.input.end, aircraftId: aircraft.id, crew: a.input.crew,
+      });
+    }
   }
 
   // pricingSnapshot (décision, ctrl.) : figé au passage de demande/refuse à

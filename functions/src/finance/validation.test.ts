@@ -97,29 +97,20 @@ test("validateCredit : compte manquant ou invalide", () => {
   }
 });
 
-test("validateCorrection : cas nominal, positif et négatif", () => {
-  assert.deepEqual(
-    validateCorrection({ userUid: "u1", amount: -10_000, reason: "Erreur de saisie" }),
-    { userUid: "u1", amount: -10_000, reason: "Erreur de saisie" },
-  );
-  assert.deepEqual(
-    validateCorrection({ userUid: "u1", amount: 10_000, reason: "Ajustement" }),
-    { userUid: "u1", amount: 10_000, reason: "Ajustement" },
-  );
+test("validateCorrection : nouveau solde (positif, nul ou négatif) et motif", () => {
+  for (const newBalance of [350_000, 0, -10_000, 10_000_000]) {
+    assert.deepEqual(
+      validateCorrection({ userUid: "u1", newBalance, reason: "Erreur de saisie" }),
+      { userUid: "u1", newBalance, reason: "Erreur de saisie" },
+    );
+  }
 });
 
-test("validateCorrection : aucun plafond, 1 000 000 accepté", () => {
-  assert.deepEqual(
-    validateCorrection({ userUid: "u1", amount: 1_000_000, reason: "Correction" }),
-    { userUid: "u1", amount: 1_000_000, reason: "Correction" },
-  );
-});
-
-test("validateCorrection : montant invalide (zéro, décimal, manquant)", () => {
-  for (const bad of [0, 100.5, undefined, null, "100"]) {
+test("validateCorrection : nouveau solde invalide (décimal, manquant, texte)", () => {
+  for (const bad of [100.5, undefined, null, "100"]) {
     assert.throws(
-      () => validateCorrection({ userUid: "u1", amount: bad, reason: "Motif" }),
-      ValidationError,
+      () => validateCorrection({ userUid: "u1", newBalance: bad, reason: "Motif" }),
+      (e: unknown) => e instanceof ValidationError && e.message === "Nouveau solde invalide.",
       JSON.stringify(bad),
     );
   }
@@ -128,7 +119,7 @@ test("validateCorrection : montant invalide (zéro, décimal, manquant)", () => 
 test("validateCorrection : motif obligatoire (absent, vide)", () => {
   for (const bad of [undefined, null, "", "   "]) {
     assert.throws(
-      () => validateCorrection({ userUid: "u1", amount: 100, reason: bad }),
+      () => validateCorrection({ userUid: "u1", newBalance: 100, reason: bad }),
       (e: unknown) => e instanceof ValidationError && e.message === "Motif obligatoire pour une correction.",
       JSON.stringify(bad),
     );
@@ -137,8 +128,8 @@ test("validateCorrection : motif obligatoire (absent, vide)", () => {
 
 test("validateCorrection : motif de plus de 200 caractères → message distinct", () => {
   assert.throws(
-    () => validateCorrection({ userUid: "u1", amount: 100, reason: "x".repeat(201) }),
+    () => validateCorrection({ userUid: "u1", newBalance: 100, reason: "x".repeat(201) }),
     (e: unknown) => e instanceof ValidationError && e.message === "Motif trop long (200 caractères au maximum).",
   );
-  assert.equal(validateCorrection({ userUid: "u1", amount: 100, reason: "x".repeat(200) }).reason.length, 200);
+  assert.equal(validateCorrection({ userUid: "u1", newBalance: 100, reason: "x".repeat(200) }).reason.length, 200);
 });

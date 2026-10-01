@@ -328,9 +328,9 @@ class FakeFinanceApi implements FinanceApi {
   }
 
   @override
-  Future<int> correct(String uid, int amount, String reason) async {
+  Future<int> correct(String uid, int newBalance, String reason) async {
     _fail();
-    corrected.add({'uid': uid, 'amount': amount, 'reason': reason});
+    corrected.add({'uid': uid, 'newBalance': newBalance, 'reason': reason});
     return balance;
   }
 
@@ -340,11 +340,15 @@ class FakeFinanceApi implements FinanceApi {
     required int actualMinutes,
     int? shortFlightAmount,
     int? customAmount,
+    required int landings,
+    int waterLandings = 0,
   }) async {
     _fail();
     closed.add({
       'flightId': flightId,
       'actualMinutes': actualMinutes,
+      'landings': landings,
+      'waterLandings': waterLandings,
       'shortFlightAmount': shortFlightAmount,
       'customAmount': customAmount,
     });
@@ -370,5 +374,10 @@ class FakeFinanceApi implements FinanceApi {
   @override
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => Stream.value(
         flights.where((f) => f.payerUidField == payerUid && !f.isClosed).toList(),
+      );
+
+  @override
+  Stream<List<Flight>> watchValidUnclosedFlights() => Stream.value(
+        flights.where((f) => f.status == FlightStatus.valide && !f.isClosed).toList(),
       );
 }

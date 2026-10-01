@@ -52,9 +52,24 @@ void main() {
     expect(flightActions(started, testUser(uid: 'x'), now), isEmpty);
   });
 
-  test('vol validé, départ non passé : pas de clôture même pour l\'équipage', () {
-    final future = testFlight(start: DateTime(2026, 10, 13, 9), crew: ['u1'], createdBy: 'u1');
-    expect(flightActions(future, testUser(uid: 'u1'), now).contains(FlightAction.close), isFalse);
+  test('vol validé du jour, départ non passé : clôturer en plus de modifier et annuler', () {
+    final today = testFlight(start: DateTime(2026, 10, 12, 15), crew: ['u1'], createdBy: 'u1');
+    expect(flightActions(today, testUser(uid: 'u1'), now),
+        {FlightAction.edit, FlightAction.cancel, FlightAction.close});
+    expect(flightActions(today, testUser(uid: 'x'), now), isEmpty);
+  });
+
+  test('vol validé de demain : pas de clôture même pour l\'équipage', () {
+    final tomorrow = testFlight(start: DateTime(2026, 10, 13, 9), crew: ['u1'], createdBy: 'u1');
+    expect(flightActions(tomorrow, testUser(uid: 'u1'), now).contains(FlightAction.close), isFalse);
+  });
+
+  test('demande du jour pas encore partie : pas de clôture', () {
+    final req = testFlight(
+        start: DateTime(2026, 10, 12, 15), status: 'demande',
+        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
+    expect(flightActions(req, testUser(uid: 'ins', profile: 'instructeur'), now),
+        {FlightAction.validate, FlightAction.refuse, FlightAction.cancel});
   });
 
   test('demande dont le départ est passé (expirée) : pas de clôture', () {

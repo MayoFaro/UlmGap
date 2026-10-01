@@ -170,4 +170,20 @@ void main() {
     expect(rows.single[9], 'Hors app'); // imputation
     expect(rows.single[10], ''); // compte débité
   });
+
+  testWidgets('colonne « Temps de vol » : durée réelle de chaque vol', (tester) async {
+    _useTallView(tester);
+    final finance = FakeFinanceApi()
+      ..flights = [
+        testFlight(id: 'f1', start: DateTime(2026, 10, 5), isClosed: true,
+            actualFlightMinutes: 75, billedAmount: 12000, billedTo: 'account'),
+        testFlight(id: 'f2', start: DateTime(2026, 10, 6), isClosed: true,
+            billedAmount: 9000, billedTo: 'account'), // sans durée (données anciennes)
+      ];
+    await tester.pumpWidget(host(finance, FakeFlightApi()));
+    await tester.pump();
+    expect(find.text('Temps de vol'), findsOneWidget);
+    expect(find.text('1 h 15'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
+  });
 }

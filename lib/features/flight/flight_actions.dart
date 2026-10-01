@@ -1,5 +1,6 @@
 import '../../data/app_user.dart';
 import '../../data/flight.dart';
+import '../logbook/logbook.dart';
 
 enum FlightAction { validate, refuse, edit, cancel, close, adminEdit, adminDelete }
 
@@ -16,6 +17,9 @@ enum FlightAction { validate, refuse, edit, cancel, close, adminEdit, adminDelet
 /// serveur refuse de corriger un vol refusé). Ces deux actions s'ajoutent aux
 /// droits ci-dessus, y compris sur un vol clôturé (qui sinon n'offre plus
 /// aucune action).
+///
+/// Plan 4, décision 6 : la clôture est permise dès le jour du vol, même
+/// avant l'heure de départ, en plus des actions d'avant départ.
 Set<FlightAction> flightActions(Flight f, AppUser me, DateTime now) {
   if (f.deleted) return {};
   final admin = <FlightAction>{
@@ -23,13 +27,11 @@ Set<FlightAction> flightActions(Flight f, AppUser me, DateTime now) {
     if (me.isAdmin && f.status != FlightStatus.refuse) FlightAction.adminEdit,
   };
   if (f.isClosed) return admin;
-  if (!f.start.isAfter(now)) {
-    final member = f.crew.contains(me.uid) || me.isAdmin;
-    return {
-      if (f.status == FlightStatus.valide && member) FlightAction.close,
-      ...admin,
-    };
-  }
+  final member = f.crew.contains(me.uid) || me.isAdmin;
+  final close = <FlightAction>{
+    if (member && needsClosing(f, now)) FlightAction.close,
+  };
+  if (!f.start.isAfter(now)) return {...close, ...admin};
   final reviewer = me.isAdmin || f.instructorUid == me.uid;
   final creator = f.createdBy == me.uid;
   return {
@@ -39,6 +41,7 @@ Set<FlightAction> flightActions(Flight f, AppUser me, DateTime now) {
     },
     if (creator) FlightAction.edit,
     if (creator || reviewer) FlightAction.cancel,
+    ...close,
     ...admin,
   };
 }

@@ -9,10 +9,13 @@ import '../../core/csv.dart';
 import '../../core/download.dart';
 import '../../core/formats.dart';
 import '../../core/money.dart';
+import '../../core/period_bar.dart';
 import '../../data/crew_member.dart';
 import '../../data/flight.dart';
 import '../../data/services.dart';
 import '../flight/flight_texts.dart';
+import '../../data/app_user.dart';
+import '../home/app_nav.dart';
 
 /// En-têtes du CSV exporté : plus détaillées que le tableau affiché à
 /// l'écran. Fonction pure (avec [billingCsvRows]), testée indépendamment du
@@ -54,8 +57,11 @@ String _fileDatePart(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}';
 
 class BillingReportScreen extends StatefulWidget {
-  const BillingReportScreen({super.key, this.now = DateTime.now});
+  const BillingReportScreen({super.key, this.now = DateTime.now, this.me});
   final DateTime Function() now;
+
+  /// Compte connecté : icônes de navigation (absentes si null).
+  final AppUser? me;
 
   @override
   State<BillingReportScreen> createState() => _BillingReportScreenState();
@@ -76,26 +82,6 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
 
   DateTime get _lastIncludedDay => _to.subtract(const Duration(days: 1));
 
-  Future<void> _pickFrom() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _from,
-      firstDate: DateTime(2020),
-      lastDate: _lastIncludedDay,
-    );
-    if (d != null) setState(() => _from = DateTime(d.year, d.month, d.day));
-  }
-
-  Future<void> _pickTo() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _lastIncludedDay,
-      firstDate: _from,
-      lastDate: DateTime(2100),
-    );
-    if (d != null) setState(() => _to = DateTime(d.year, d.month, d.day + 1));
-  }
-
   void _export(List<Flight> flights, Map<String, CrewMember> dir) {
     final csv = buildCsv(billingCsvHeaders, billingCsvRows(flights, dir));
     final filename = 'releve_${_fileDatePart(_from)}_${_fileDatePart(_lastIncludedDay)}.csv';
@@ -107,26 +93,19 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
     final finance = AppServices.of(context).finance!;
     final flightsApi = AppServices.of(context).flights!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Relevé des vols facturés')),
+      appBar: AppBar(
+        title: const Text('Relevé des vols facturés'),
+        actions: widget.me == null ? null : appNavActions(context, widget.me!, current: AppDestination.billing),
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _pickFrom,
-                  child: Text('Du ${formatDay(_from)}'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _pickTo,
-                  child: Text('Au ${formatDay(_lastIncludedDay)}'),
-                ),
-              ),
-            ]),
+          PeriodBar(
+            from: _from,
+            to: _to,
+            onChanged: (f, t) => setState(() {
+              _from = f;
+              _to = t;
+            }),
           ),
           Expanded(
             child: StreamBuilder<List<CrewMember>>(
@@ -184,6 +163,7 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
                 DataColumn(label: Text('Date')),
                 DataColumn(label: Text('Appareil')),
                 DataColumn(label: Text('Équipage')),
+                DataColumn(label: Text('Temps de vol')),
                 DataColumn(label: Text('Mode')),
                 DataColumn(label: Text('Montant')),
                 DataColumn(label: Text('Imputation')),
@@ -194,6 +174,9 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
                     DataCell(Text(formatDay(f.start))),
                     DataCell(Text(f.aircraft)),
                     DataCell(Text(crewText(f.crew, f.passengers, dir))),
+                    DataCell(Text(f.actualFlightMinutes == null
+                        ? '—'
+                        : formatDurationHm(f.actualFlightMinutes!))),
                     DataCell(Text(pricingModeLabel(f.pricingMode))),
                     DataCell(Text(formatFcfa(f.billedAmount ?? 0))),
                     DataCell(Text(f.billedTo == 'off_app'

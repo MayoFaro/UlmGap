@@ -9,6 +9,8 @@ import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
 import { closingBill, Pricing, toCategory } from "../rules/pricing";
+import { isOnOrBeforeClubToday } from "../rules/club-day";
+import { closingEnd } from "../rules/closing";
 import { touchLocks } from "./core";
 import { validateClosing } from "./validation";
 
@@ -32,7 +34,8 @@ export interface CloseResult { billedAmount: number; billedTo: "account" | "off_
 export async function closeFlight(caller: Caller | undefined, data: unknown): Promise<CloseResult> {
   const db = admin.firestore();
   const me = await requireActiveUser(db, caller);
-  const { flightId, actualMinutes, shortFlightAmount, customAmount } = asInvalid(() => validateClosing(data));
+  const { flightId, actualMinutes, shortFlightAmount, customAmount, landings, waterLandings } =
+    asInvalid(() => validateClosing(data));
   const now = Date.now();
   const ref = db.collection("flights").doc(flightId);
 
@@ -42,8 +45,17 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     if (!me.isAdmin && !crew.includes(me.uid)) {
       throw new HttpsError("permission-denied", "Réservé à l'équipage ou à un admin.");
     }
-    if ((f.get("start") as FirebaseFirestore.Timestamp).toMillis() > now) {
+    const startMs = (f.get("start") as FirebaseFirestore.Timestamp).toMillis();
+    if (!isOnOrBeforeClubToday(startMs, now)) {
       throw new HttpsError("failed-precondition", "Le vol n'a pas encore eu lieu.");
+    }
+
+    // Plan 4b : amerrissages réservés à un appareil amphibie.
+    if (waterLandings > 0) {
+      const aircraft = await tx.get(db.collection("aircraft").doc(f.get("aircraftId") as string));
+      if (aircraft.get("amphibious") !== true) {
+        throw new HttpsError("failed-precondition", "Cet appareil n'est pas amphibie.");
+      }
     }
 
     // 1. Le vol (ci-dessus), le compte débité, son verrou, puis les tarifs.
@@ -92,6 +104,11 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     tx.update(ref, {
       isClosed: true,
       actualFlightMinutes: actualMinutes,
+      landings,
+      waterLandings,
+      // Plan 4b, décision 4 : fin allongée si le vol réel a duré plus que prévu.
+      end: admin.firestore.Timestamp.fromMillis(
+        closingEnd(startMs, (f.get("end") as FirebaseFirestore.Timestamp).toMillis(), actualMinutes)),
       closedBy: me.uid,
       closedAt: FieldValue.serverTimestamp(),
       billedAmount: bill.billedAmount,

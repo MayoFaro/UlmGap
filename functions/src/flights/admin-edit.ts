@@ -10,7 +10,8 @@ import { postMovement } from "../finance/ledger";
 import { designatedInstructor, PricingMode } from "../rules/flights";
 import { adjustments, closingBill, computedCost, Pricing, toCategory } from "../rules/pricing";
 import { planFlight, touchLocks } from "./core";
-import { checkHorizon, validateAdminUpdate, validateFlightId } from "./validation";
+import { checkHorizon, checkLandingsTotal, validateAdminUpdate, validateFlightId } from "./validation";
+import { closingEnd } from "../rules/closing";
 
 type Db = FirebaseFirestore.Firestore;
 type Tx = FirebaseFirestore.Transaction;
@@ -67,7 +68,8 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       throw new HttpsError("failed-precondition", "Un vol refusé ne peut pas être corrigé.");
     }
     if (!closed && (v.pricingMode === "custom" || v.actualMinutes !== undefined ||
-        v.shortFlightAmount != null || v.customAmount != null)) {
+        v.shortFlightAmount != null || v.customAmount != null ||
+        v.landings !== undefined || v.waterLandings !== undefined)) {
       throw new HttpsError("failed-precondition", "Réservé aux vols clôturés.");
     }
 
@@ -78,13 +80,35 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     const previousMode = f.get("pricingMode") as PricingMode;
     const mode: PricingMode | undefined = v.pricingMode ??
       (v.customAmount != null || previousMode === "custom" ? "custom" : undefined);
+    // Plan 4b : sur un vol clôturé, nombres fusionnés avec les valeurs
+    // stockées (1 atterrissage pour un vol clôturé avant le plan 4b),
+    // amerrissages réservés à un appareil amphibie, et fin allongée si la
+    // durée réelle dépasse fin − début (conflits vérifiés par planFlight).
+    const actualMinutes = v.actualMinutes ?? (f.get("actualFlightMinutes") as number);
+    let landings = 0;
+    let waterLandings = 0;
+    let input = v.input;
+    if (closed) {
+      landings = v.landings ?? (f.get("landings") as number | undefined) ?? 1;
+      waterLandings = v.waterLandings ?? (f.get("waterLandings") as number | undefined) ?? 0;
+      asInvalid(() => checkLandingsTotal(landings, waterLandings));
+      if (waterLandings > 0) {
+        const aircraft = await tx.get(db.collection("aircraft").doc(input.aircraftId));
+        if (aircraft.get("amphibious") !== true) {
+          throw new HttpsError("failed-precondition", "Cet appareil n'est pas amphibie.");
+        }
+      }
+      input = { ...input, end: closingEnd(input.start, input.end, actualMinutes) };
+    }
+
     const createdBy = (f.get("createdBy") as string | undefined) ?? "";
     const p = await planFlight(tx, db, {
-      id: ref.id, input: v.input, mayChoose: true,
+      id: ref.id, input, mayChoose: true,
       previousMode,
       forcedMode: mode === "custom" ? "standard" : mode,
       skipActiveChecks: true,
       skipCredit: closed,
+      closed,
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
       previousStatus: status,
       decide: (crew) => ({
@@ -106,7 +130,6 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     const oldPayer = payerUidOf(f);
     const newPayer = p.fields.payerUid as string;
     const accounts = await readAccounts(tx, db, oldPayer ? [oldPayer, newPayer] : [newPayer]);
-    const actualMinutes = v.actualMinutes ?? (f.get("actualFlightMinutes") as number);
     const customAmount = mode === "custom"
       ? (v.customAmount !== undefined ? v.customAmount : (f.get("customAmount") as number | null) ?? null)
       : null;
@@ -128,7 +151,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
         pricing,
         shortFlightAmount,
         customAmount,
-        hasPassenger: v.input.passengers.length > 0,
+        hasPassenger: input.passengers.length > 0,
       });
     } catch (e) {
       throw new HttpsError("invalid-argument", (e as Error).message);
@@ -154,6 +177,8 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     tx.update(ref, {
       ...p.fields,
       actualFlightMinutes: actualMinutes,
+      landings,
+      waterLandings,
       billedAmount: bill.billedAmount,
       billedTo: bill.billedTo,
       pricingMode: bill.pricingMode,

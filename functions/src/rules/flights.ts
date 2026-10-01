@@ -69,17 +69,33 @@ export function checkPayer(creator: Creator, crew: string[]): string | null {
 }
 
 export interface Slot { id?: string; start: number; end: number; aircraftId: string; crew: string[] }
-export interface ExistingFlight extends Slot { id: string; status: FlightStatus; deleted: boolean }
+export interface ExistingFlight extends Slot {
+  id: string; status: FlightStatus; deleted: boolean; closed?: boolean;
+}
 
-/** Spec §3.5 : vols valide non supprimés, bornes ouvertes, même appareil ou même personne. */
+/**
+ * Spec §3.5 : vols valide non supprimés, bornes ouvertes, même appareil ou
+ * même personne. Un vol clôturé n'est jamais en conflit : ses horaires sont
+ * ceux de la conduite, pas de la planification (révision du 2026-10-01).
+ */
 export function findConflict(candidate: Slot, others: ExistingFlight[]): ExistingFlight | null {
   return others.find((o) =>
     o.id !== candidate.id &&
     o.status === "valide" &&
     !o.deleted &&
+    o.closed !== true &&
     candidate.start < o.end && o.start < candidate.end &&
     (o.aircraftId === candidate.aircraftId || o.crew.some((u) => candidate.crew.includes(u))),
   ) ?? null;
+}
+
+/**
+ * Révision du 2026-10-01 : les conflits bloquent la planification, jamais la
+ * conduite. Ils ne se contrôlent que pour un vol non clôturé dont le départ
+ * est encore à venir.
+ */
+export function isPlanning(startMs: number, nowMs: number, closed: boolean): boolean {
+  return !closed && startMs > nowMs;
 }
 
 /** Cause d'un conflit : l'appareil d'abord, sinon les personnes communes. */

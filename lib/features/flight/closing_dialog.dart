@@ -9,10 +9,24 @@ import '../../core/profiles.dart';
 
 /// Saisie validée du dialogue de clôture, prête pour FinanceApi.closeFlight.
 class ClosingResult {
-  const ClosingResult(this.actualMinutes, this.shortFlightAmount, this.customAmount);
+  const ClosingResult(this.actualMinutes, this.shortFlightAmount, this.customAmount,
+      {this.landings = 1, this.waterLandings = 0});
   final int actualMinutes;
   final int? shortFlightAmount;
   final int? customAmount;
+  final int landings;
+  final int waterLandings;
+}
+
+/// Plan 4b, décision 3 : contrôle des nombres saisis à la clôture (et à la
+/// correction admin) ; null si valides. Même règle et mêmes messages que le
+/// serveur (validateClosing).
+String? landingsError(int? landings, int? waterLandings) {
+  bool ok(int? v) => v != null && v >= 0 && v <= 99;
+  if (!ok(landings)) return 'Nombre d\'atterrissages invalide (0 à 99).';
+  if (!ok(waterLandings)) return 'Nombre d\'amerrissages invalide (0 à 99).';
+  if (landings! + waterLandings! < 1) return 'Au moins un atterrissage ou amerrissage.';
+  return null;
 }
 
 /// Dialogue « Clôturer le vol » (Task 9, spec §4.3) : durée réelle
@@ -35,6 +49,7 @@ class ClosingDialog extends StatefulWidget {
     required this.category,
     required this.pricing,
     required this.hasPassenger,
+    this.amphibious = false,
   });
 
   final int plannedMinutes;
@@ -42,6 +57,9 @@ class ClosingDialog extends StatefulWidget {
   final UserCategory? category;
   final Pricing pricing;
   final bool hasPassenger;
+
+  /// Appareil amphibie : champ « Amerrissages » (plan 4b).
+  final bool amphibious;
 
   @override
   State<ClosingDialog> createState() => _ClosingDialogState();
@@ -51,6 +69,8 @@ class _ClosingDialogState extends State<ClosingDialog> {
   late final _minutes = TextEditingController(text: '${widget.plannedMinutes}');
   final _shortAmount = TextEditingController();
   final _customAmount = TextEditingController();
+  final _landings = TextEditingController(text: '1');
+  final _waterLandings = TextEditingController(text: '0');
   bool _customChecked = false;
   String? _error;
 
@@ -59,6 +79,8 @@ class _ClosingDialogState extends State<ClosingDialog> {
     _minutes.dispose();
     _shortAmount.dispose();
     _customAmount.dispose();
+    _landings.dispose();
+    _waterLandings.dispose();
     super.dispose();
   }
 
@@ -130,7 +152,15 @@ class _ClosingDialogState extends State<ClosingDialog> {
         return;
       }
     }
-    Navigator.pop(context, ClosingResult(m, shortAmount, customAmount));
+    final landings = int.tryParse(_landings.text.trim());
+    final waterLandings = widget.amphibious ? int.tryParse(_waterLandings.text.trim()) : 0;
+    final countError = landingsError(landings, waterLandings);
+    if (countError != null) {
+      setState(() => _error = countError);
+      return;
+    }
+    Navigator.pop(context, ClosingResult(m, shortAmount, customAmount,
+        landings: landings!, waterLandings: waterLandings!));
   }
 
   @override
@@ -150,12 +180,26 @@ class _ClosingDialogState extends State<ClosingDialog> {
               decoration: const InputDecoration(labelText: 'Durée réelle (minutes)'),
               onChanged: (_) => setState(() {}),
             ),
+            TextField(
+              key: const Key('closing-landings'),
+              controller: _landings,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Atterrissages'),
+            ),
+            if (widget.amphibious)
+              TextField(
+                key: const Key('closing-water-landings'),
+                controller: _waterLandings,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Amerrissages'),
+              ),
             if (_needsShortAmount) ...[
               const SizedBox(height: 8),
               TextField(
                 key: const Key('closing-short-amount'),
                 controller: _shortAmount,
                 keyboardType: TextInputType.number,
+                inputFormatters: const [AmountInputFormatter()],
                 decoration: const InputDecoration(labelText: 'Montant à facturer'),
                 onChanged: (_) => setState(() {}),
               ),
@@ -173,6 +217,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
                   key: const Key('closing-custom-amount'),
                   controller: _customAmount,
                   keyboardType: TextInputType.number,
+                inputFormatters: const [AmountInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Montant'),
                   onChanged: (_) => setState(() {}),
                 ),
