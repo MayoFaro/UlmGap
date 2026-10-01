@@ -860,7 +860,8 @@ void main() {
     expect(finance.adminUpdated['ac1']!['actualMinutes'], 120);
     // Vol clôturé avant le plan 4b (sans nombres) : pré-rempli à 1 et 0.
     expect(finance.adminUpdated['ac1']!['landings'], 1);
-    expect(finance.adminUpdated['ac1']!['waterLandings'], 0);
+    // Appareil non amphibie, vol sans amerrissages : champ non envoyé.
+    expect(finance.adminUpdated['ac1']!.containsKey('waterLandings'), isFalse);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
   });
@@ -1129,5 +1130,86 @@ void main() {
     await tester.pumpAndSettle();
     expect(finance.adminUpdated['ac9']!['landings'], 3);
     expect(finance.adminUpdated['ac9']!['waterLandings'], 4);
+  });
+
+  // --- plan 4b, revue finale : appareil amphibie inactif ---
+
+  Flight closedOn(String id, String aircraftId, {int landings = 0, int water = 2}) =>
+      Flight.fromMap(id, {
+        'start': DateTime(2026, 10, 12, 5), 'end': DateTime(2026, 10, 12, 6, 30),
+        'destination': 'Lomé', 'aircraftId': aircraftId, 'aircraft': 'F-JAMP', 'crew': ['u1'],
+        'passengers': <String>[], 'status': 'valide', 'createdBy': 'u1', 'pricingMode': 'standard',
+        'isClosed': true, 'deleted': false, 'actualFlightMinutes': 90, 'billedAmount': 15000,
+        'billedTo': 'account', 'landings': landings, 'waterLandings': water,
+      });
+
+  Future<FakeFinanceApi> correct(WidgetTester tester, FakeFlightApi a, Flight f) async {
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    return finance;
+  }
+
+  testWidgets('clôture sur un amphibie inactif : champ amerrissages présent', (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..aircraft = [
+        Aircraft.fromMap('amp',
+            {'registration': 'F-JAMP', 'label': 'ULM A', 'active': false, 'amphibious': true}),
+      ];
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'w2', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', aircraftId: 'amp', aircraft: 'F-JAMP');
+    await tester.pumpWidget(pushHost(a, testUser(uid: 'u1', category: 'GAP'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('closing-water-landings')), findsOneWidget);
+  });
+
+  testWidgets('correction d\'un vol sur un amphibie inactif : amerrissages conservés',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..categories = {'u1': UserCategory.gap}
+      ..aircraft = [
+        ...api().aircraft,
+        Aircraft.fromMap('amp',
+            {'registration': 'F-JAMP', 'label': 'ULM A', 'active': false, 'amphibious': true}),
+      ];
+    final finance = await correct(tester, a, closedOn('ci1', 'amp', landings: 1));
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ci1']!['waterLandings'], 2);
+  });
+
+  testWidgets('correction d\'un vol avec amerrissages sur un appareil non amphibie : champ '
+      'affiché, valeur envoyée (le serveur refuse)', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedOn('ci2', 'a1', landings: 1));
+    expect(find.byKey(const Key('correct-water-landings')), findsOneWidget);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ci2']!['waterLandings'], 2);
+  });
+
+  testWidgets('correction sur un appareil non amphibie sans amerrissages : champ absent, '
+      'non envoyé', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedOn('ci3', 'a1', landings: 1, water: 0));
+    expect(find.byKey(const Key('correct-water-landings')), findsNothing);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ci3']!.containsKey('waterLandings'), isFalse);
   });
 }

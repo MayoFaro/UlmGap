@@ -70,6 +70,10 @@ class _FlightScreenState extends State<FlightScreen> {
   Flight? _current;
   Map<String, CrewMember> _dir = {};
   List<Aircraft> _aircraft = [];
+
+  /// Tous les appareils, inactifs compris (plan 4b : un amphibie désactivé
+  /// garde ses amerrissages à la clôture et en correction).
+  List<Aircraft> _allAircraft = [];
   Map<String, UserCategory> _categories = {};
   List<Flight> _flights = [];
   List<String> _destinations = [];
@@ -156,6 +160,7 @@ class _FlightScreenState extends State<FlightScreen> {
         ));
     listen(api.watchDirectory(), (l) => _dir = {for (final m in l) m.uid: m});
     listen(api.watchAircraft(), (l) {
+      _allAircraft = l;
       _aircraft = l.where((a) => a.active).toList();
       // Spec §6 : en création, l'appareil par défaut est le premier de la
       // liste dès qu'elle arrive.
@@ -397,10 +402,10 @@ class _FlightScreenState extends State<FlightScreen> {
   int? get _correctActualMinutes => int.tryParse(_correctMinutes.text.trim());
   int? get _correctLandingsValue => int.tryParse(_correctLandings.text.trim());
 
-  /// 0 sur un appareil non amphibie : efface d'éventuels amerrissages quand
-  /// l'admin passe le vol sur un autre appareil.
-  int? get _correctWaterLandingsValue =>
-      _isAmphibious(_aircraftId) ? int.tryParse(_correctWaterLandings.text.trim()) : 0;
+  /// Champ masqué : le vol n'a pas d'amerrissages (0).
+  int? get _correctWaterLandingsValue => _showCorrectWaterLandings
+      ? int.tryParse(_correctWaterLandings.text.trim())
+      : 0;
 
   /// Miroir de ClosingDialog._needsShortAmount, avec le mode de tarification
   /// et les tarifs du brouillon en cours de correction.
@@ -698,10 +703,17 @@ class _FlightScreenState extends State<FlightScreen> {
   /// un admin clôture, même sans connaître l'appartenance d'un compte débité
   /// qui n'est pas le sien) : le dialogue s'ouvre quand même, seul son
   /// aperçu local du montant est alors indisponible.
-  /// Plan 4b : appareil amphibie (amerrissages saisis), d'après la liste des
-  /// appareils ; faux tant qu'elle n'est pas chargée.
+  /// Plan 4b : appareil amphibie (amerrissages saisis), d'après la liste de
+  /// tous les appareils, inactifs compris ; faux tant qu'elle n'est pas
+  /// chargée.
   bool _isAmphibious(String? aircraftId) =>
-      _aircraft.any((a) => a.id == aircraftId && a.amphibious);
+      _allAircraft.any((a) => a.id == aircraftId && a.amphibious);
+
+  /// Champ « Amerrissages » de la correction : appareil choisi amphibie, ou
+  /// vol qui en a déjà (l'admin peut alors les ramener à 0 ; sinon le
+  /// serveur refuse « Cet appareil n'est pas amphibie. »).
+  bool get _showCorrectWaterLandings =>
+      _isAmphibious(_aircraftId) || (_current?.waterLandings ?? 0) > 0;
 
   Future<void> _openClosing() async {
     final f = _current!;
@@ -780,7 +792,7 @@ class _FlightScreenState extends State<FlightScreen> {
     if (!f.isClosed) return payload;
     payload['actualMinutes'] = _correctActualMinutes;
     payload['landings'] = _correctLandingsValue;
-    payload['waterLandings'] = _correctWaterLandingsValue;
+    if (_showCorrectWaterLandings) payload['waterLandings'] = _correctWaterLandingsValue;
     if (_correctNeedsShortAmount) {
       payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
     }
@@ -1077,7 +1089,7 @@ class _FlightScreenState extends State<FlightScreen> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Atterrissages'),
             ),
-            if (_isAmphibious(_aircraftId))
+            if (_showCorrectWaterLandings)
               TextField(
                 key: const Key('correct-water-landings'),
                 controller: _correctWaterLandings,
