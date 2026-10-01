@@ -68,10 +68,13 @@ d'où le JDK d'Android Studio.
   Plan 4b : `closeFlight`, `adminUpdateFlight` et `adminUpsertAircraft`
   redéployées (atterrissages, amerrissages, appareil amphibie, fin allongée).
   Pour tester les amerrissages, cocher « Amphibie » sur un appareil.
+  Toutes les Functions redéployées ensuite (conflits contrôlés en
+  planification seulement, spec §3.5).
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
-  25/10/2026**, date d'expiration des règles du mode test (Functions dans
-  leur version du plan 4b : `closeFlight`, `adminUpdateFlight` et
-  `adminUpsertAircraft` ont changé ; ni règle ni index nouveau aux plans 4
+  25/10/2026**, date d'expiration des règles du mode test (toutes les
+  Functions dans leur version du plan 4b : `closeFlight`,
+  `adminUpdateFlight`, `adminUpsertAircraft` et la règle des conflits de
+  `createFlight`/`updateFlight`/`validateFlight` ont changé ; ni règle ni index nouveau aux plans 4
   et 4b). Marquer ensuite l'ULM amphibie dans Administration → Appareils. Premier admin à
   créer ensuite (`cd functions && npm run build && node
   scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
