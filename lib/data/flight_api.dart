@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../core/profiles.dart';
 import 'aircraft.dart';
 import 'crew_member.dart';
+import 'finance_api.dart' show financeFailureFrom;
 import 'flight.dart';
 
 /// Refus d'une action de vol par le serveur (message prêt à afficher).
@@ -56,6 +57,9 @@ FlightFailure flightFailureFrom(String message, Object? details) {
   );
 }
 
+FlightStatus _statusOf(Object? v) =>
+    FlightStatus.values.firstWhere((s) => s.name == v, orElse: () => FlightStatus.valide);
+
 abstract class FlightApi {
   /// Vols dont le départ est à partir de [from], triés par départ.
   Stream<List<Flight>> watchFrom(DateTime from);
@@ -68,8 +72,9 @@ abstract class FlightApi {
   Future<List<String>> recentDestinations();
 
   // Actions : lèvent FlightFailure (ou FlightConflict).
-  Future<String> create(FlightDraft draft);
-  Future<void> update(String id, FlightDraft draft);
+  /// Rendent le statut décidé par le serveur (vol enregistré ou demande).
+  Future<({String id, FlightStatus status})> create(FlightDraft draft);
+  Future<FlightStatus> update(String id, FlightDraft draft);
   Future<void> validate(String id, {Map<String, dynamic> changes = const {}});
   Future<void> refuse(String id, String? reason);
   Future<void> cancel(String id);
@@ -134,17 +139,24 @@ class FirebaseFlightApi implements FlightApi {
     try {
       return (await _fn.httpsCallable(name).call(payload)).data;
     } on FirebaseFunctionsException catch (e) {
-      throw flightFailureFrom(e.message ?? e.code, e.details);
+      // Refus certain du serveur : son message. Sinon (réseau, délai,
+      // erreur interne) l'issue est incertaine : erreur d'origine, que
+      // l'écran traduit en « vérifiez le planning » (pas de doublon).
+      throw financeFailureFrom(e.code, e.message ?? e.code, e.details) ?? e;
     }
   }
 
   @override
-  Future<String> create(FlightDraft draft) async =>
-      ((await _call('createFlight', draft.toPayload())) as Map)['id'] as String;
+  Future<({String id, FlightStatus status})> create(FlightDraft draft) async {
+    final r = (await _call('createFlight', draft.toPayload())) as Map;
+    return (id: r['id'] as String, status: _statusOf(r['status']));
+  }
 
   @override
-  Future<void> update(String id, FlightDraft draft) =>
-      _call('updateFlight', {'flightId': id, ...draft.toPayload()});
+  Future<FlightStatus> update(String id, FlightDraft draft) async {
+    final r = (await _call('updateFlight', {'flightId': id, ...draft.toPayload()})) as Map;
+    return _statusOf(r['status']);
+  }
 
   @override
   Future<void> validate(String id, {Map<String, dynamic> changes = const {}}) =>

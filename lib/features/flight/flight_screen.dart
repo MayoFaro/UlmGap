@@ -639,17 +639,22 @@ class _FlightScreenState extends State<FlightScreen> {
 
   /// Exécute une action serveur, gère erreurs et succès communs (spec §11-12) :
   /// après tout succès, on referme l'écran (retour au planning).
-  Future<void> _run(Future<void> Function() action) async {
+  /// Lance [action] (qui rend la confirmation à afficher), revient au
+  /// planning et y affiche la confirmation : le serveur a répondu, l'écriture
+  /// est donc faite dans Firestore.
+  Future<void> _run(Future<String> Function() action) async {
     setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await action();
+      final done = await action();
       if (mounted) Navigator.of(context).maybePop(true);
+      if (done.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(done)));
     } on FlightConflict catch (e) {
       if (mounted) _snack(describeConflict(e.conflict, _dir));
     } on FlightFailure catch (e) {
       if (mounted) _snack(e.message);
     } catch (_) {
-      if (mounted) _snack('Enregistrement impossible. Réessayez.');
+      if (mounted) _snack(uncertainMessage);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -665,9 +670,11 @@ class _FlightScreenState extends State<FlightScreen> {
     await _run(() async {
       switch (_mode) {
         case _Mode.create:
-          await api.create(_draft());
+          final r = await api.create(_draft());
+          return savedMessage(r.status, _instructorShortName, created: true);
         case _Mode.edit:
-          await api.update(widget.flight!.id, _draft());
+          final status = await api.update(widget.flight!.id, _draft());
+          return savedMessage(status, _instructorShortName, created: false);
         case _Mode.validate:
           final d = _draft();
           await api.validate(widget.flight!.id, changes: {
@@ -677,10 +684,21 @@ class _FlightScreenState extends State<FlightScreen> {
             'aircraftId': d.aircraftId,
             if (d.pricingMode != null) 'pricingMode': d.pricingMode,
           });
+          return 'Vol validé.';
         case _Mode.view:
-          break; // bouton absent dans ce mode
+          return ''; // bouton absent dans ce mode
       }
     });
+  }
+
+  /// Trigramme de l'instructeur désigné d'après l'équipage saisi (même règle
+  /// que le serveur : premier instructeur autre que le créateur).
+  String? get _instructorShortName {
+    final creator = widget.flight?.createdBy ?? _me.uid;
+    for (final u in _crew) {
+      if (u != creator && _profile(u) == PilotProfile.instructeur) return _short(u);
+    }
+    return null;
   }
 
   Future<void> _refuse() async {
@@ -690,7 +708,10 @@ class _FlightScreenState extends State<FlightScreen> {
     );
     if (reason == null || !mounted) return;
     final api = AppServices.of(context).flights!;
-    await _run(() => api.refuse(widget.flight!.id, reason));
+    await _run(() async {
+      await api.refuse(widget.flight!.id, reason);
+      return 'Demande refusée.';
+    });
   }
 
   Future<void> _cancel() async {
@@ -706,7 +727,10 @@ class _FlightScreenState extends State<FlightScreen> {
     );
     if (ok != true || !mounted) return;
     final api = AppServices.of(context).flights!;
-    await _run(() => api.cancel(widget.flight!.id));
+    await _run(() async {
+      await api.cancel(widget.flight!.id);
+      return 'Vol annulé.';
+    });
   }
 
   /// Clôture (Task 9, spec §4.3) : durée réelle, montant si nécessaire, puis
@@ -743,14 +767,17 @@ class _FlightScreenState extends State<FlightScreen> {
     );
     if (result == null || !mounted) return;
     final finance = AppServices.of(context).finance!;
-    await _run(() => finance.closeFlight(
+    await _run(() async {
+      await finance.closeFlight(
           f.id,
           actualMinutes: result.actualMinutes,
           shortFlightAmount: result.shortFlightAmount,
           customAmount: result.customAmount,
           landings: result.landings,
           waterLandings: result.waterLandings,
-        ));
+        );
+      return 'Vol clôturé.';
+    });
   }
 
   /// Task 10 (spec §4.5) : correction admin, à tout moment, champs de clôture
@@ -823,7 +850,10 @@ class _FlightScreenState extends State<FlightScreen> {
       return;
     }
     final finance = AppServices.of(context).finance!;
-    await _run(() => finance.adminUpdateFlight(_current!.id, _correctionPayload()));
+    await _run(() async {
+      await finance.adminUpdateFlight(_current!.id, _correctionPayload());
+      return 'Correction enregistrée.';
+    });
   }
 
   /// Task 10 : suppression admin, à tout moment ; la confirmation mentionne
@@ -845,7 +875,10 @@ class _FlightScreenState extends State<FlightScreen> {
     );
     if (ok != true || !mounted) return;
     final finance = AppServices.of(context).finance!;
-    await _run(() => finance.adminDeleteFlight(f.id));
+    await _run(() async {
+      await finance.adminDeleteFlight(f.id);
+      return 'Vol supprimé.';
+    });
   }
 
   // --- affichage ---

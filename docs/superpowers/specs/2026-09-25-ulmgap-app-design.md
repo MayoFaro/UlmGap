@@ -361,6 +361,19 @@ l'écran affiché est grisée.
   DPS »), **payeur**, coût estimé, crédit disponible du payeur, conflits éventuels. Cet
   aperçu est **indicatif** : la décision finale revient à la Function.
 
+**Confirmation des actions** (révision du 2026-10-01)
+- Toute écriture passe par une Function : sans réseau, rien n'est enregistré
+  (pas de file d'attente locale ; la lecture fonctionne hors ligne grâce au
+  cache Firestore).
+- Après une action réussie, l'app revient à l'écran précédent et affiche une
+  confirmation : « Vol enregistré. », « Demande envoyée à DPS. »,
+  « Modifications enregistrées. », « Vol validé. », « Vol clôturé. »… Le
+  serveur ne répond qu'après l'écriture dans Firestore : la confirmation
+  vaut enregistrement.
+- Sans réponse du serveur (hors ligne, coupure, délai) : « Pas de réponse du
+  serveur. Vérifiez votre connexion, puis le planning avant de recommencer :
+  l'opération a pu aboutir. » Un refus du serveur affiche son propre message.
+
 **Détail d'un vol**
 - Toutes les informations, et les actions permises selon le rôle : valider,
   refuser, modifier, annuler, clôturer (durée réelle), corriger (admin).

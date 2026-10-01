@@ -280,17 +280,22 @@ class FakeFlightApi implements FlightApi {
   @override
   Future<List<String>> recentDestinations() async => destinations;
 
+  /// Statut rendu par le serveur pour create / update (défaut : validé).
+  FlightStatus createStatus = FlightStatus.valide;
+  FlightStatus updateStatus = FlightStatus.valide;
+
   @override
-  Future<String> create(FlightDraft draft) async {
+  Future<({String id, FlightStatus status})> create(FlightDraft draft) async {
     _fail();
     created.add(draft.toPayload());
-    return 'f-new';
+    return (id: 'f-new', status: createStatus);
   }
 
   @override
-  Future<void> update(String id, FlightDraft draft) async {
+  Future<FlightStatus> update(String id, FlightDraft draft) async {
     _fail();
     updated[id] = draft.toPayload();
+    return updateStatus;
   }
 
   @override

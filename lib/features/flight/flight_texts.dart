@@ -29,6 +29,21 @@ String pricingModeLabel(String mode) => switch (mode) {
 String crewText(List<String> crew, List<String> passengers, Map<String, CrewMember> dir) =>
     [...crew.map((u) => dir[u]?.shortName ?? '?'), ...passengers].join('/');
 
+/// Confirmation d'un enregistrement de vol, d'après le statut rendu par le
+/// serveur (le vol est alors bien dans Firestore).
+String savedMessage(FlightStatus status, String? instructorShortName, {required bool created}) {
+  final to = instructorShortName == null ? 'à l\'instructeur' : 'à $instructorShortName';
+  if (status == FlightStatus.demande) {
+    return created ? 'Demande envoyée $to.' : 'Demande modifiée, envoyée $to.';
+  }
+  return created ? 'Vol enregistré.' : 'Modifications enregistrées.';
+}
+
+/// Pas de réponse du serveur (hors ligne, coupure, délai) : l'opération a pu
+/// aboutir ou non ; on ne peut pas le savoir côté app.
+const uncertainMessage = 'Pas de réponse du serveur. Vérifiez votre connexion, puis le '
+    'planning avant de recommencer : l\'opération a pu aboutir.';
+
 /// Libellé du compte débité (anciennement « Payeur »).
 const debitedLabel = 'Compte débité';
 
