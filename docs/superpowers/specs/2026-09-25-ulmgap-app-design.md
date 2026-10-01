@@ -100,7 +100,8 @@ exposer à tous les soldes, e-mails ou catégories.
 
 ### 2.3 `aircraft/{id}`, géré par un admin
 
-`registration` (immatriculation), `label` (« ULM 1 »…), `active`.
+`registration` (immatriculation), `label` (« ULM 1 »…), `active`, `amphibious`
+(révision du 2026-10-01 : amerrissages saisis à la clôture).
 
 ### 2.4 `settings/pricing`, modifiable par un admin
 
@@ -120,7 +121,7 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | Champ | Type | Contenu |
 |---|---|---|
 | `start` **(contrat)** | timestamp | Heure de départ prévue |
-| `end` **(contrat)** | timestamp | Heure de fin prévue, obligatoire, défaut `start` + 1 h, confirmée à la validation |
+| `end` **(contrat)** | timestamp | Heure de fin prévue, obligatoire, défaut `start` + 1 h, confirmée à la validation. À la clôture, allongée à `start` + `actualFlightMinutes` si elle est plus courte, jamais raccourcie (l'appareil a pu rester posé ailleurs) |
 | `destination` **(contrat)** | string | Obligatoire, texte libre |
 | `aircraftId` | string | Référence `aircraft` |
 | `aircraft` **(contrat)** | string | Immatriculation recopiée |
@@ -137,6 +138,8 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | `pricingSnapshot` | map | Tarifs figés au moment du passage en `valide` |
 | `isClosed` **(contrat)** | bool | |
 | `actualFlightMinutes` **(contrat)** | int? | Saisi à la clôture |
+| `landings` | int? | Nombre d'atterrissages, saisi à la clôture (révision du 2026-10-01) |
+| `waterLandings` | int? | Nombre d'amerrissages, saisi à la clôture d'un appareil `amphibious` ; 0 sinon |
 | `closedBy`, `closedAt` | uid, timestamp | |
 | `billedAmount` | int? | Montant final, fixé à la clôture |
 | `billedTo` | string? | `account` (débité sur un solde) / `off_app` (facturé hors app) |
@@ -199,7 +202,7 @@ En `demande`, `instructorUid` = l'instructeur de l'équipage.
 | `refuseFlight` (motif facultatif) | L'instructeur désigné, ou un admin | `demande` → `refuse` |
 | `updateFlight` | Le créateur, avant le départ | Mêmes règles qu'à la création. Si un non-instructeur modifie un vol avec instructeur, il redevient `demande`. Un vol `refuse` modifié repart en `demande` |
 | `cancelFlight` | Le créateur, l'instructeur désigné ou un admin, avant le départ | `deleted: true` |
-| `closeFlight` (minutes réelles) | Tout membre de `crew` ou un admin, dès le jour du vol (§3.1) | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
+| `closeFlight` (minutes réelles, atterrissages, amerrissages) | Tout membre de `crew` ou un admin, dès le jour du vol (§3.1) | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
 | `adminUpdateFlight` | Admin, à tout moment, vols clôturés compris | Modification libre, sans matrice mais avec conflits. Sur un vol clôturé, régularisation automatique (§4.5) |
 
 ### 3.4 Contrôles communs
@@ -345,7 +348,10 @@ Identiques sur mobile et sur web.
 **Détail d'un vol**
 - Toutes les informations, et les actions permises selon le rôle : valider,
   refuser, modifier, annuler, clôturer (durée réelle), corriger (admin).
-- **Clôture** : saisie de la durée réelle. Si elle est inférieure à 45 min,
+- **Clôture** : saisie de la durée réelle et du nombre d'atterrissages
+  (pré-rempli à 1), plus, sur un appareil amphibie, du nombre d'amerrissages
+  (pré-rempli à 0) ; entiers de 0 à 99, au moins 1 posé au total. Si la
+  durée réelle dépasse fin − début, l'heure de fin est allongée d'autant. Si elle est inférieure à 45 min,
   un champ obligatoire « Montant à facturer » apparaît. Pour tout vol avec un
   passager sans compte, une case « Montant différent (facturé hors app) »
   permet de saisir le montant : le vol passe alors en `custom` et aucun solde
@@ -357,6 +363,9 @@ effectués » et « Compteurs »)
   les vols **effectués** (date ≤ aujourd'hui, clôturés ou non), **tous
   appareils confondus**, du plus récent au plus ancien. Seuls les vols
   validés et non supprimés y figurent.
+- En haut, le nombre d'atterrissages de la période, et celui des
+  amerrissages s'il y en a ; chaque vol clôturé affiche les siens
+  (« Clôturé · 1 h 15 · 2 att. »).
 - En haut, le **temps de vol total** de la période choisie, calculé sur
   `actualFlightMinutes` des vols clôturés, non supprimés. Chaque vol compte
   une fois ; dans un vol à deux, chaque membre de `crew` le cumule sur son
