@@ -13,6 +13,7 @@ import { planFlight, touchLocks } from "./core";
 import { checkHorizon, checkLandingsTotal, validateAdminUpdate, validateFlightId } from "./validation";
 import { closingEnd } from "../rules/closing";
 import { notifyFlight } from "../notify/flight-info";
+import { notifyMovements, WrittenMovement } from "../notify/movements";
 import { cancelledPush } from "../rules/notifications";
 
 type Db = FirebaseFirestore.Firestore;
@@ -62,7 +63,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
   asInvalid(() => checkHorizon(v.input.start, Date.now()));
   const ref = db.collection("flights").doc(v.flightId);
 
-  await db.runTransaction(async (tx) => {
+  const written = await db.runTransaction(async (tx): Promise<WrittenMovement[]> => {
     const f = await loadAny(tx, ref);
     const closed = f.get("isClosed") === true;
     const status = f.get("status") as string;
@@ -123,7 +124,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     if (!closed) {
       touchLocks(tx, p.locks);
       tx.update(ref, p.fields);
-      return;
+      return [];
     }
 
     // Vol clôturé : nouvelle facture (tarifs figés du vol, sinon courants,
@@ -169,11 +170,13 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       },
       { billedTo: bill.billedTo, payerUid: newPayer, amount: bill.billedAmount },
     );
+    const posted: WrittenMovement[] = [];
     for (const m of moves) {
-      postMovement(tx, db, {
+      const balanceAfter = postMovement(tx, db, {
         uid: m.uid, amount: m.amount, type: "flight_adjustment", reason: "Régularisation",
         flightId: ref.id, by, currentBalance: balanceOf(accounts.users.get(m.uid)),
       });
+      posted.push({ uid: m.uid, amount: m.amount, balanceAfter, type: "flight_adjustment" });
     }
     touchLocks(tx, [...p.locks, ...accounts.locks.filter((l) => !p.locks.some((k) => k.path === l.path))]);
     tx.update(ref, {
@@ -190,7 +193,9 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       shortFlightAmount: bill.pricingMode !== "custom" &&
         computedCost(billMode, actualMinutes, category, pricing) === null ? shortFlightAmount : null,
     });
+    return posted;
   });
+  await notifyMovements(db, by, written);
 }
 
 export async function adminDeleteFlight(caller: Caller | undefined, data: unknown): Promise<void> {
@@ -200,25 +205,29 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
   const flightId = asInvalid(() => validateFlightId(data));
   const ref = db.collection("flights").doc(flightId);
 
-  const cancelled = await db.runTransaction(async (tx) => {
+  const { cancelled, refund } = await db.runTransaction(async (tx) => {
     const f = await loadAny(tx, ref);
+    let refund: WrittenMovement | null = null;
     // Remboursement d'un vol clôturé débité sur un compte.
     const payer = payerUidOf(f);
     if (f.get("isClosed") === true && f.get("billedTo") === "account" && payer) {
       const accounts = await readAccounts(tx, db, [payer]);
-      postMovement(tx, db, {
-        uid: payer, amount: f.get("billedAmount") as number, type: "flight_adjustment",
+      const amount = f.get("billedAmount") as number;
+      const balanceAfter = postMovement(tx, db, {
+        uid: payer, amount, type: "flight_adjustment",
         reason: "Annulation du vol", flightId: ref.id, by,
         currentBalance: balanceOf(accounts.users.get(payer)),
       });
+      refund = { uid: payer, amount, balanceAfter, type: "flight_adjustment" };
       touchLocks(tx, accounts.locks);
     }
     // Suppression logique uniquement (contrat AppGAP).
     tx.update(ref, { deleted: true, updatedAt: FieldValue.serverTimestamp() });
     // Spec §6.1 : un vol validé non clôturé supprimé = vol annulé.
-    return f.get("status") === "valide" && f.get("isClosed") !== true;
+    return { cancelled: f.get("status") === "valide" && f.get("isClosed") !== true, refund };
   });
   if (cancelled) await notifyFlight(db, flightId, (f, names) => cancelledPush(f, names, by));
+  if (refund) await notifyMovements(db, by, [refund]);
 }
 
 export const adminUpdateFlightFn = onCall((req) =>
