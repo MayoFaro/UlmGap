@@ -27,7 +27,7 @@ export async function upsertAircraft(caller: Caller | undefined, data: unknown):
     if (previous && previous !== a.registration) tx.delete(regs.doc(previous));
     tx.set(regs.doc(a.registration), { aircraftId: ref.id });
     tx.set(ref, {
-      registration: a.registration, label: a.label, active: a.active,
+      registration: a.registration, label: a.label, active: a.active, amphibious: a.amphibious,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
   });

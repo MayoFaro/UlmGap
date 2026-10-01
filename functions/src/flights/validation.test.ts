@@ -110,11 +110,11 @@ test("validateRefusal : motif facultatif, vide → null", () => {
 });
 
 test("validateClosing : durée réelle, 1 à 720 min, entier", () => {
-  assert.equal(validateClosing({ flightId: "f1", actualMinutes: 1 }).actualMinutes, 1);
-  assert.equal(validateClosing({ flightId: "f1", actualMinutes: 720 }).actualMinutes, 720);
+  assert.equal(validateClosing({ flightId: "f1", landings: 1, actualMinutes: 1 }).actualMinutes, 1);
+  assert.equal(validateClosing({ flightId: "f1", landings: 1, actualMinutes: 720 }).actualMinutes, 720);
   for (const bad of [0, 721, 1.5, "90"]) {
     assert.throws(
-      () => validateClosing({ flightId: "f1", actualMinutes: bad }),
+      () => validateClosing({ flightId: "f1", landings: 1, actualMinutes: bad }),
       (e: unknown) => e instanceof ValidationError && e.message === "Durée réelle invalide (1 à 720 min).",
       JSON.stringify(bad),
     );
@@ -126,11 +126,10 @@ test("validateClosing : flightId manquant → ValidationError", () => {
 });
 
 test("validateClosing : montants absents ou null → null", () => {
-  const r1 = validateClosing({ flightId: "f1", actualMinutes: 90 });
+  const r1 = validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90 });
   assert.equal(r1.shortFlightAmount, null);
   assert.equal(r1.customAmount, null);
-  const r2 = validateClosing({
-    flightId: "f1", actualMinutes: 90, shortFlightAmount: null, customAmount: null,
+  const r2 = validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, shortFlightAmount: null, customAmount: null,
   });
   assert.equal(r2.shortFlightAmount, null);
   assert.equal(r2.customAmount, null);
@@ -138,24 +137,24 @@ test("validateClosing : montants absents ou null → null", () => {
 
 test("validateClosing : montants entiers de 0 à 200 000 acceptés", () => {
   assert.equal(
-    validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: 0 }).shortFlightAmount, 0);
+    validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, shortFlightAmount: 0 }).shortFlightAmount, 0);
   assert.equal(
-    validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: MAX_MANUAL_AMOUNT })
+    validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, shortFlightAmount: MAX_MANUAL_AMOUNT })
       .shortFlightAmount, MAX_MANUAL_AMOUNT);
   assert.equal(
-    validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT }).customAmount,
+    validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT }).customAmount,
     MAX_MANUAL_AMOUNT);
 });
 
 test("validateClosing : montant négatif ou non entier → invalide (message générique)", () => {
   for (const bad of [-1, 1.5]) {
     assert.throws(
-      () => validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: bad }),
+      () => validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, shortFlightAmount: bad }),
       (e: unknown) => e instanceof ValidationError && e.message === "Montant à facturer invalide.",
       JSON.stringify(bad),
     );
     assert.throws(
-      () => validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: bad }),
+      () => validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, customAmount: bad }),
       (e: unknown) => e instanceof ValidationError && e.message === "Montant différent invalide.",
       JSON.stringify(bad),
     );
@@ -166,11 +165,11 @@ test("validateClosing : montant au-delà de 200 000 → message exact avec espac
   const expected = `Montant trop élevé (${formatFcfa(MAX_MANUAL_AMOUNT)} au maximum).`;
   assert.equal(expected, "Montant trop élevé (200 000 FCFA au maximum).");
   assert.throws(
-    () => validateClosing({ flightId: "f1", actualMinutes: 90, shortFlightAmount: MAX_MANUAL_AMOUNT + 1 }),
+    () => validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, shortFlightAmount: MAX_MANUAL_AMOUNT + 1 }),
     (e: unknown) => e instanceof ValidationError && e.message === expected,
   );
   assert.throws(
-    () => validateClosing({ flightId: "f1", actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT + 1 }),
+    () => validateClosing({ flightId: "f1", landings: 1, actualMinutes: 90, customAmount: MAX_MANUAL_AMOUNT + 1 }),
     (e: unknown) => e instanceof ValidationError && e.message === expected,
   );
 });
@@ -226,4 +225,41 @@ test("validateAdminUpdate : mêmes rejets que la saisie et la clôture", () => {
     ValidationError,
   );
   assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", customAmount: -1 }), ValidationError);
+});
+
+const C = { flightId: "f1", actualMinutes: 60 };
+const isErr = (msg: string) => (e: unknown) => e instanceof ValidationError && e.message === msg;
+
+test("validateClosing : atterrissages obligatoires, amerrissages 0 par défaut", () => {
+  const r = validateClosing({ ...C, landings: 2 });
+  assert.equal(r.landings, 2);
+  assert.equal(r.waterLandings, 0);
+  assert.throws(() => validateClosing(C), isErr("Nombre d'atterrissages invalide (0 à 99)."));
+});
+
+test("validateClosing : nombres entiers de 0 à 99", () => {
+  for (const bad of [100, -1, 1.5, "2"]) {
+    assert.throws(() => validateClosing({ ...C, landings: bad }),
+      isErr("Nombre d'atterrissages invalide (0 à 99)."), JSON.stringify(bad));
+  }
+  assert.throws(() => validateClosing({ ...C, landings: 1, waterLandings: 100 }),
+    isErr("Nombre d'amerrissages invalide (0 à 99)."));
+});
+
+test("validateClosing : au moins un posé au total", () => {
+  assert.throws(() => validateClosing({ ...C, landings: 0, waterLandings: 0 }),
+    isErr("Au moins un atterrissage ou amerrissage."));
+  const r = validateClosing({ ...C, landings: 0, waterLandings: 1 });
+  assert.equal(r.waterLandings, 1);
+});
+
+test("validateAdminUpdate : nombres absents inchangés, hors plage refusés", () => {
+  const r = validateAdminUpdate({ ...ok, flightId: "f1" });
+  assert.equal(r.landings, undefined);
+  assert.equal(r.waterLandings, undefined);
+  const r2 = validateAdminUpdate({ ...ok, flightId: "f1", landings: 3, waterLandings: 0 });
+  assert.equal(r2.landings, 3);
+  assert.equal(r2.waterLandings, 0);
+  assert.throws(() => validateAdminUpdate({ ...ok, flightId: "f1", landings: 100 }),
+    isErr("Nombre d'atterrissages invalide (0 à 99)."));
 });
