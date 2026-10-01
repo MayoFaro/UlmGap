@@ -21,3 +21,4 @@ export {
   adminUpdateFlightFn as adminUpdateFlight,
   adminDeleteFlightFn as adminDeleteFlight,
 } from "./flights/admin-edit";
+export { closingReminders } from "./notify/reminders";
