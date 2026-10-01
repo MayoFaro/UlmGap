@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { at, code, db, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, details, H, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { closeFlight } from "./close";
 
@@ -318,4 +318,75 @@ test("vol refusé : correction admin refusée", async () => {
     (e) => code(e) === "failed-precondition" &&
       (e as Error).message === "Un vol refusé ne peut pas être corrigé.",
   );
+});
+
+// --- Plan 4b : atterrissages, amerrissages, heure de fin ---
+
+test("correction d'un vol clôturé : atterrissages modifiés, amerrissages conservés", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft(true, true);
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a },
+    { actualMinutes: 90, landings: 1, waterLandings: 2 });
+  await adminUpdateFlight(boss, await correction(id, { landings: 3 }));
+  const f = await getFlight(id);
+  assert.equal(f.landings, 3);
+  assert.equal(f.waterLandings, 2);
+});
+
+test("nombres envoyés sur un vol non clôturé : refusé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: boss.uid,
+  });
+  await assert.rejects(adminUpdateFlight(boss, await correction(id, { landings: 2 })),
+    (e) => code(e) === "failed-precondition" && (e as Error).message === "Réservé aux vols clôturés.");
+});
+
+test("durée réelle corrigée au-delà de fin − début : fin allongée", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id, start } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 }));
+  assert.equal((await getFlight(id)).end.toMillis(), start + 120 * 60_000);
+});
+
+test("amerrissages sur un appareil non amphibie : refusé, y compris après changement d'appareil",
+  async () => {
+    const boss = await seedUser({ profile: null, isAdmin: true });
+    const pilot = await seedUser({ profile: "lache_toute_mission" });
+    const amphib = await seedAircraft(true, true);
+    const plain = await seedAircraft();
+    const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: amphib },
+      { actualMinutes: 90, landings: 1, waterLandings: 1 });
+    await assert.rejects(adminUpdateFlight(boss, await correction(id, { aircraftId: plain })),
+      (e) => code(e) === "failed-precondition" && (e as Error).message === "Cet appareil n'est pas amphibie.");
+    await assert.rejects(adminUpdateFlight(boss, await correction(id, { aircraftId: plain, waterLandings: 2 })),
+      (e) => code(e) === "failed-precondition" && (e as Error).message === "Cet appareil n'est pas amphibie.");
+    // Retirer les amerrissages en changeant d'appareil : accepté.
+    await adminUpdateFlight(boss, await correction(id, { aircraftId: plain, waterLandings: 0 }));
+    assert.equal((await getFlight(id)).aircraftId, plain);
+  });
+
+test("total nul après correction : refusé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await assert.rejects(adminUpdateFlight(boss, await correction(id, { landings: 0 })),
+    (e) => code(e) === "invalid-argument" && (e as Error).message === "Au moins un atterrissage ou amerrissage.");
+});
+
+test("fin allongée qui chevauche un autre vol validé du même appareil : conflit", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const other = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id, end } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await seedFlight({ start: end + 10 * 60_000, end: end + 70 * 60_000, crew: [other.uid], aircraftId: a });
+  await assert.rejects(adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 })),
+    (e) => code(e) === "failed-precondition" && details(e)?.conflict !== undefined);
 });
