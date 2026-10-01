@@ -71,9 +71,14 @@ class FakeUserRepository implements UserRepository {
   /// Plan 5 : jetons enregistrés, dans l'ordre ({uid, token}).
   final savedTokens = <({String uid, String? token})>[];
 
+  /// Si vrai, saveFcmToken ne se termine jamais (Firestore hors ligne).
+  bool saveHangs = false;
+
   @override
-  Future<void> saveFcmToken(String uid, String? token) async =>
-      savedTokens.add((uid: uid, token: token));
+  Future<void> saveFcmToken(String uid, String? token) {
+    savedTokens.add((uid: uid, token: token));
+    return saveHangs ? Completer<void>().future : Future.value();
+  }
 }
 
 // --- ajouts plan 5 (notifications) ---

@@ -74,3 +74,15 @@ test("échec d'envoi : la tâche continue et note quand même le rappel", async 
   await sendClosingReminders(db, now);
   assert.equal((await db.collection("flights").doc(id).get()).get("lastReminderAt").toMillis(), now);
 });
+
+test("un vol mal formé n'empêche pas les rappels des autres vols", async () => {
+  const now = Date.now();
+  const p = await pilot();
+  // Vol corrompu (fin illisible), lu avant ou après le bon vol selon l'ordre de la requête.
+  await db.collection("flights").doc().set({
+    status: "valide", isClosed: false, deleted: false, crew: [p.uid], end: "illisible",
+  });
+  await flight(p.uid, 25, now);
+  await sendClosingReminders(db, now);
+  assert.equal(remindersTo(p.uid), 1);
+});

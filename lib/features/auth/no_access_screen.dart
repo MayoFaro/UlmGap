@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/services.dart';
+import 'sign_out.dart';
 
 class NoAccessScreen extends StatelessWidget {
   const NoAccessScreen({super.key});
@@ -19,7 +20,7 @@ class NoAccessScreen extends StatelessWidget {
               const Text('Ce compte n\'a pas accès à UlmGap. Contactez un administrateur.',
                   textAlign: TextAlign.center),
               TextButton(
-                onPressed: AppServices.of(context).auth.signOut,
+                onPressed: () => signOutCleanly(AppServices.of(context)),
                 child: const Text('Se déconnecter'),
               ),
             ],

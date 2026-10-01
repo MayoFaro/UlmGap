@@ -73,15 +73,19 @@ d'où le JDK d'Android Studio.
   Toutes les Functions redéployées ensuite (conflits contrôlés en
   planification seulement, spec §3.5).
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
-  25/10/2026**, date d'expiration des règles du mode test (toutes les
-  Functions dans leur version du plan 4b : `closeFlight`,
-  `adminUpdateFlight`, `adminUpsertAircraft` et la règle des conflits de
-  `createFlight`/`updateFlight`/`validateFlight` ont changé ; ni règle ni index nouveau aux plans 4
-  et 4b). Marquer ensuite l'ULM amphibie dans Administration → Appareils. Premier admin à
-  créer ensuite (`cd functions && npm run build && node
-  scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
-  activer (e-mail et mot de passe, création de compte par l'utilisateur
-  désactivée).
+  25/10/2026**, date d'expiration des règles du mode test. Déployer
+  **toutes les Functions dans leur version du plan 5** (Node 22, dont la
+  tâche planifiée `closingReminders` : le déploiement active Cloud
+  Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
+  d'atterrissages, `correctAccount` le nouveau solde). Ni règle ni index
+  nouveau depuis le plan 3. Ensuite :
+  - premier admin (`cd functions && npm run build && node
+    scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
+    (e-mail et mot de passe, création de compte par l'utilisateur
+    désactivée) ;
+  - marquer l'ULM amphibie dans Administration → Appareils ;
+  - clé VAPID web du projet prod (voir plus bas), à reporter dans
+    `lib/core/env.dart` avant le build web de prod.
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :
   la 14 supprime l'API `admin.firestore()` utilisée partout). Le Node local
   reste en 20 : accepté par les tests et l'émulateur.

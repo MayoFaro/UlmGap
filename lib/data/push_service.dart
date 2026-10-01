@@ -3,6 +3,11 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+/// Jeton demandé seulement si l'utilisateur a accepté : une fenêtre fermée
+/// sans choix (« default » sur le web) ne relance pas de demande.
+bool pushAllowed(AuthorizationStatus s) =>
+    s == AuthorizationStatus.authorized || s == AuthorizationStatus.provisional;
+
 abstract class PushService {
   /// Demande la permission puis rend le jeton ; null si refusée ou si le web
   /// n'a pas de clé VAPID.
@@ -23,7 +28,7 @@ class FirebasePushService implements PushService {
   Future<String?> token() async {
     if (kIsWeb && webVapidKey.isEmpty) return null;
     final settings = await _m.requestPermission();
-    if (settings.authorizationStatus == AuthorizationStatus.denied) return null;
+    if (!pushAllowed(settings.authorizationStatus)) return null;
     return _m.getToken(vapidKey: kIsWeb ? webVapidKey : null);
   }
 

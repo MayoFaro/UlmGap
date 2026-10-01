@@ -19,8 +19,10 @@ const INVALID = new Set([
 const fcmSender: Sender = async (tokens, m) => {
   const r = await admin.messaging().sendEachForMulticast({
     tokens,
+    // Pas de webpush.fcmOptions.link : FCM exige une URL absolue en https et
+    // refuserait tout l'envoi (Android compris). Le clic est géré par
+    // web/firebase-messaging-sw.js.
     notification: { title: m.title, body: m.body },
-    webpush: { fcmOptions: { link: "/" } },
   });
   const failedTokens: string[] = [];
   const invalidTokens: string[] = [];

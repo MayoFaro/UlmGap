@@ -20,20 +20,23 @@ export async function sendClosingReminders(db: Db, now: number): Promise<number>
     .get();
   let count = 0;
   for (const d of snap.docs) {
-    if (d.get("deleted") === true) continue;
-    if (!reminderDue(ms(d.get("end"))!, ms(d.get("lastReminderAt")), now)) continue;
-    const info = flightInfoOf(d);
+    // Chaque vol à part : un vol mal formé ou une écriture en échec ne
+    // privent pas les autres de leur rappel.
     try {
+      if (d.get("deleted") === true) continue;
+      if (!reminderDue(ms(d.get("end"))!, ms(d.get("lastReminderAt")), now)) continue;
+      const info = flightInfoOf(d);
       await sendPush(db, reminderPush(info, await shortNames(db, info.crew)));
+      // Noté même si l'envoi échoue (sendPush ne lève pas) : pas de relance
+      // en boucle toutes les heures.
+      await d.ref.update({
+        lastReminderAt: admin.firestore.Timestamp.fromMillis(now),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      count++;
     } catch (e) {
-      logger.error("Rappel de clôture non envoyé", { flightId: d.id, error: String(e) });
+      logger.error("Rappel de clôture non traité", { flightId: d.id, error: String(e) });
     }
-    // Noté même si l'envoi échoue : pas de relance en boucle toutes les heures.
-    await d.ref.update({
-      lastReminderAt: admin.firestore.Timestamp.fromMillis(now),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    count++;
   }
   return count;
 }

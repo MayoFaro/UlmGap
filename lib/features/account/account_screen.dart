@@ -6,6 +6,7 @@ import '../../core/money.dart';
 import '../../core/profile_badge.dart';
 import '../../data/app_user.dart';
 import '../../data/services.dart';
+import '../auth/sign_out.dart';
 import 'movements_list.dart';
 import '../home/app_nav.dart';
 
@@ -31,14 +32,7 @@ class AccountScreen extends StatelessWidget {
               final services = AppServices.of(context);
               Navigator.of(context).popUntil((r) => r.isFirst);
               // Plan 5 : plus de notifications de ce compte sur l'appareil.
-              // Jeton effacé avant signOut (l'écriture exige d'être connecté).
-              try {
-                await services.users.saveFcmToken(me.uid, null);
-                await services.push?.deleteToken();
-              } catch (_) {
-                // Hors ligne : la déconnexion passe quand même.
-              }
-              await services.auth.signOut();
+              await signOutCleanly(services, uid: me.uid);
             },
           ),
         ],

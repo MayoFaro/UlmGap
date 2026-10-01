@@ -1,6 +1,21 @@
 // Notifications push web reçues quand l'onglet est fermé ou en arrière-plan
 // (plan 5). La configuration (publique) est choisie selon le nom d'hôte :
 // « ulmgap-prod » dans l'URL → prod, sinon dev (localhost compris).
+// Clic sur une notification : ramène l'onglet de l'app au premier plan, ou
+// l'ouvre (URL relative au service worker, valable sur tout domaine). Écouteur
+// enregistré avant le SDK, qui sinon ne fait rien sans fcmOptions.link.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ('focus' in c) return c.focus();
+      }
+      return clients.openWindow('./');
+    }),
+  );
+});
+
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
