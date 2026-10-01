@@ -6,6 +6,8 @@ import { PricingMode, checkPayer, decideStatus } from "../rules/flights";
 import type { Pricing } from "../rules/pricing";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import { checkHorizon, validateFlightId, validateFlightInput } from "./validation";
+import { notifyFlight } from "../notify/flight-info";
+import { requestPush } from "../rules/notifications";
 
 /** Spec §4.1 : un instructeur ou un admin choisit « carburant seulement ». */
 const mayChoose = (me: CallerProfile) => me.isAdmin || me.profile === "instructeur";
@@ -52,6 +54,9 @@ export async function createFlight(
     });
     return p.status;
   });
+  if (status === "demande") {
+    await notifyFlight(db, ref.id, (f, names) => requestPush(f, names, me.uid, false));
+  }
   return { id: ref.id, status };
 }
 
@@ -87,6 +92,9 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
     tx.update(ref, { ...p.fields, refusalReason: null });
     return p.status;
   });
+  if (status === "demande") {
+    await notifyFlight(db, ref.id, (f, names) => requestPush(f, names, me.uid, true));
+  }
   return { status };
 }
 

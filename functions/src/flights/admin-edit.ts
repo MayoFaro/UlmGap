@@ -12,6 +12,8 @@ import { adjustments, closingBill, computedCost, Pricing, toCategory } from "../
 import { planFlight, touchLocks } from "./core";
 import { checkHorizon, checkLandingsTotal, validateAdminUpdate, validateFlightId } from "./validation";
 import { closingEnd } from "../rules/closing";
+import { notifyFlight } from "../notify/flight-info";
+import { cancelledPush } from "../rules/notifications";
 
 type Db = FirebaseFirestore.Firestore;
 type Tx = FirebaseFirestore.Transaction;
@@ -198,7 +200,7 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
   const flightId = asInvalid(() => validateFlightId(data));
   const ref = db.collection("flights").doc(flightId);
 
-  await db.runTransaction(async (tx) => {
+  const cancelled = await db.runTransaction(async (tx) => {
     const f = await loadAny(tx, ref);
     // Remboursement d'un vol clôturé débité sur un compte.
     const payer = payerUidOf(f);
@@ -213,7 +215,10 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
     }
     // Suppression logique uniquement (contrat AppGAP).
     tx.update(ref, { deleted: true, updatedAt: FieldValue.serverTimestamp() });
+    // Spec §6.1 : un vol validé non clôturé supprimé = vol annulé.
+    return f.get("status") === "valide" && f.get("isClosed") !== true;
   });
+  if (cancelled) await notifyFlight(db, flightId, (f, names) => cancelledPush(f, names, by));
 }
 
 export const adminUpdateFlightFn = onCall((req) =>
