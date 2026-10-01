@@ -15,6 +15,7 @@ import '../flight/flight_screen.dart';
 import '../flight/flight_texts.dart';
 import 'logbook.dart';
 import 'logbook_flight_tile.dart';
+import '../home/app_nav.dart';
 
 /// Choix d'une période précise : début et fin, bornes incluses.
 typedef RangePicker = Future<DateTimeRange?> Function(
@@ -130,7 +131,10 @@ class _LogbookScreenState extends State<LogbookScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Carnet de vol')),
+        appBar: AppBar(
+          title: const Text('Carnet de vol'),
+          actions: appNavActions(context, widget.me, current: AppDestination.logbook),
+        ),
         body: StreamBuilder<List<CrewMember>>(
           stream: _dir,
           builder: (context, dirSnap) {

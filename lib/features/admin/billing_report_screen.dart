@@ -14,6 +14,8 @@ import '../../data/crew_member.dart';
 import '../../data/flight.dart';
 import '../../data/services.dart';
 import '../flight/flight_texts.dart';
+import '../../data/app_user.dart';
+import '../home/app_nav.dart';
 
 /// En-têtes du CSV exporté : plus détaillées que le tableau affiché à
 /// l'écran. Fonction pure (avec [billingCsvRows]), testée indépendamment du
@@ -55,8 +57,11 @@ String _fileDatePart(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}';
 
 class BillingReportScreen extends StatefulWidget {
-  const BillingReportScreen({super.key, this.now = DateTime.now});
+  const BillingReportScreen({super.key, this.now = DateTime.now, this.me});
   final DateTime Function() now;
+
+  /// Compte connecté : icônes de navigation (absentes si null).
+  final AppUser? me;
 
   @override
   State<BillingReportScreen> createState() => _BillingReportScreenState();
@@ -88,7 +93,10 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
     final finance = AppServices.of(context).finance!;
     final flightsApi = AppServices.of(context).flights!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Relevé des vols facturés')),
+      appBar: AppBar(
+        title: const Text('Relevé des vols facturés'),
+        actions: widget.me == null ? null : appNavActions(context, widget.me!, current: AppDestination.billing),
+      ),
       body: Column(
         children: [
           PeriodBar(

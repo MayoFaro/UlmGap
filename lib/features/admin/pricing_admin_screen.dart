@@ -6,9 +6,14 @@ import '../../core/money.dart';
 import '../../core/pricing.dart';
 import '../../core/profiles.dart';
 import '../../data/services.dart';
+import '../../data/app_user.dart';
+import '../home/app_nav.dart';
 
 class PricingAdminScreen extends StatefulWidget {
-  const PricingAdminScreen({super.key});
+  const PricingAdminScreen({super.key, this.me});
+
+  /// Compte connecté : icônes de navigation (absentes si null).
+  final AppUser? me;
 
   @override
   State<PricingAdminScreen> createState() => _PricingAdminScreenState();
@@ -93,7 +98,10 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   Widget build(BuildContext context) {
     final finance = AppServices.of(context).finance!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Tarifs')),
+      appBar: AppBar(
+        title: const Text('Tarifs'),
+        actions: widget.me == null ? null : appNavActions(context, widget.me!, current: AppDestination.pricing),
+      ),
       body: StreamBuilder<Pricing>(
         stream: finance.watchPricing(),
         builder: (context, snap) {

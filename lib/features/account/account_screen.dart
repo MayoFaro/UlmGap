@@ -7,6 +7,7 @@ import '../../core/profile_badge.dart';
 import '../../data/app_user.dart';
 import '../../data/services.dart';
 import 'movements_list.dart';
+import '../home/app_nav.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key, required this.me});
@@ -19,6 +20,7 @@ class AccountScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Mon compte'),
         actions: [
+          ...appNavActions(context, me, current: AppDestination.account),
           IconButton(
             tooltip: 'Se déconnecter',
             icon: const Icon(Icons.logout),

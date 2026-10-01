@@ -328,6 +328,12 @@ Exemples (`standard`) :
 
 Identiques sur mobile et sur web.
 
+**Navigation** (révision du 2026-10-01) : les icônes de la barre du haut de
+l'accueil (Carnet de vol, Mon compte, Instructeurs, Administration) figurent
+sur tous les écrans. Un appui ouvre directement l'écran voulu, juste
+au-dessus de l'accueil : « retour » ramène toujours à l'accueil. L'icône de
+l'écran affiché est grisée.
+
 **Accès**
 - **Connexion** : e-mail et mot de passe, « mot de passe oublié ».
 - **Première connexion** : lien de définition du mot de passe, puis

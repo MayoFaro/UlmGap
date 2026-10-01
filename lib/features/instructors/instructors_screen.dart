@@ -9,15 +9,22 @@ import '../../data/app_user.dart';
 import '../../data/services.dart';
 import '../account/movements_list.dart';
 import 'credit_dialog.dart';
+import '../home/app_nav.dart';
 
 class InstructorsScreen extends StatelessWidget {
-  const InstructorsScreen({super.key});
+  const InstructorsScreen({super.key, this.me});
+
+  /// Compte connecté : icônes de navigation (absentes si null).
+  final AppUser? me;
 
   @override
   Widget build(BuildContext context) {
     final finance = AppServices.of(context).finance!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Instructeurs')),
+      appBar: AppBar(
+        title: const Text('Instructeurs'),
+        actions: me == null ? null : appNavActions(context, me!, current: AppDestination.instructors),
+      ),
       body: StreamBuilder<List<AppUser>>(
         stream: finance.watchAccounts(),
         builder: (context, snap) {
@@ -39,7 +46,7 @@ class InstructorsScreen extends StatelessWidget {
                     ),
                   ),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => _AccountDetailScreen(account: a),
+                    builder: (_) => _AccountDetailScreen(account: a, me: me),
                   )),
                 ),
             ],
@@ -53,8 +60,9 @@ class InstructorsScreen extends StatelessWidget {
 /// Historique d'un compte et bouton « Créditer / corriger », ouverts depuis
 /// la liste ci-dessus.
 class _AccountDetailScreen extends StatelessWidget {
-  const _AccountDetailScreen({required this.account});
+  const _AccountDetailScreen({required this.account, this.me});
   final AppUser account; // valeur initiale, tant que le flux n'a pas émis.
+  final AppUser? me;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +84,10 @@ class _AccountDetailScreen extends StatelessWidget {
         }
         final current = found ?? account;
         return Scaffold(
-          appBar: AppBar(title: Text(current.displayName)),
+          appBar: AppBar(
+            title: Text(current.displayName),
+            actions: me == null ? null : appNavActions(context, me!),
+          ),
           body: Column(
             children: [
               Padding(

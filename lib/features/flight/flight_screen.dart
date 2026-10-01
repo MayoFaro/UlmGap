@@ -18,6 +18,7 @@ import '../../data/services.dart';
 import 'closing_dialog.dart';
 import 'flight_actions.dart';
 import 'flight_texts.dart';
+import '../home/app_nav.dart';
 
 /// Fenêtre unique d'un vol : consultation, création, édition, validation,
 /// refus et annulation (spec plan 2b, Task 3). Les droits sont calculés par
@@ -906,7 +907,7 @@ class _FlightScreenState extends State<FlightScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(title: Text(title), actions: appNavActions(context, widget.me)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
