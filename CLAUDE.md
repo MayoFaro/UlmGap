@@ -56,9 +56,8 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-10-01
 
-- Plans 1 à 4b terminés. `main` contient les plans 1, 2 et 2b ; le plan 3 est
-  sur `feature/finances`, les plans 4 et 4b sur `feature/compteurs` (créée depuis
-  `feature/finances`) ; aucune des deux n'est fusionnée.
+- Plans 1 à 4b terminés. `main` contient les plans 1, 2 et 2b ; les plans 3,
+  4 et 4b sont sur `feature/finances` (poussée, non fusionnée dans `main`).
 - En dev : Authentication activé, premier admin (DPS), règles et Functions du
   plan 3 déployées (vols, finances : `closeFlight`, `creditAccount`,
   `correctAccount`, `adminUpdateFlight`, `adminDeleteFlight`,
