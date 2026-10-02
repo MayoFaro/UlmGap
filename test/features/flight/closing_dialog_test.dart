@@ -109,10 +109,11 @@ void main() {
     await tester.tap(find.byKey(const Key('closing-fuel-gap')));
     await tester.pumpAndSettle();
     await fillFuel(tester);
-    // après fillFuel, qui met 40 dans le départ affiché
-    await tester.enterText(find.byKey(const Key('closing-fuel-start')), '25');
+    // après fillFuel, qui met 40 dans le départ affiché ; 45 − 30 = 15 L/h,
+    // consommation habituelle (pas d'alerte)
+    await tester.enterText(find.byKey(const Key('closing-fuel-start')), '45');
     await submit(tester);
-    expect(out.single!.fuelStart, 25);
+    expect(out.single!.fuelStart, 45);
     expect(out.single!.fuelStartExpected, 40);
   });
 
@@ -139,10 +140,10 @@ void main() {
     await submit(tester);
     expect(find.text('Carburant au départ invalide (0 à 100 L).'), findsOneWidget);
     expect(out, isEmpty);
-    await tester.enterText(find.byKey(const Key('closing-fuel-start')), '12');
+    await tester.enterText(find.byKey(const Key('closing-fuel-start')), '42');
     await submit(tester);
     expect(out.single!.fuelStartExpected, isNull);
-    expect(out.single!.fuelStart, 12);
+    expect(out.single!.fuelStart, 42);
   });
 
   testWidgets('ajouté et rangé vides : refusés ; plus de 100 L : refusé', (tester) async {
@@ -154,5 +155,48 @@ void main() {
     await submit(tester);
     expect(find.text('Carburant rangé invalide (0 à 100 L).'), findsOneWidget);
     expect(out, isEmpty);
+  });
+
+  // 60 min prévues (durée réelle pré-remplie), 40 L prévus au départ.
+  testWidgets('consommation habituelle (10 L/h) : pas d\'alerte, clôture directe', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await fillFuel(tester, added: '0', end: '30');
+    await submit(tester);
+    expect(find.text('Consommation inhabituelle'), findsNothing);
+    expect(out.single!.fuelEnd, 30);
+  });
+
+  testWidgets('consommation inhabituelle (40 L/h) : alerte, « Corriger » garde le dialogue',
+      (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await fillFuel(tester, added: '0', end: '0');
+    await submit(tester);
+    expect(find.text('Consommation inhabituelle'), findsOneWidget);
+    expect(find.text('Consommation calculée : 40,0 L/h. Vérifiez les valeurs saisies.'),
+        findsOneWidget);
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(find.text('Consommation inhabituelle'), findsNothing);
+    expect(find.text('Clôturer le vol'), findsOneWidget);
+    expect(out, isEmpty);
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '28');
+    await submit(tester);
+    expect(out.single!.fuelEnd, 28);
+  });
+
+  testWidgets('consommation inhabituelle (négative) : « Confirmer » clôture quand même',
+      (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await fillFuel(tester, added: '0', end: '50');
+    await submit(tester);
+    expect(find.text('Consommation calculée : -10,0 L/h. Vérifiez les valeurs saisies.'),
+        findsOneWidget);
+    await tester.tap(find.text('Confirmer'));
+    await tester.pumpAndSettle();
+    expect(out.single!.fuelEnd, 50);
+    expect(find.text('Clôturer le vol'), findsNothing);
   });
 }

@@ -16,19 +16,21 @@ import '../../support/fakes.dart';
 
 final now = DateTime(2026, 10, 12, 8, 20);
 
-/// Un vol existant passé à l'écran doit aussi être « connu » du serveur
-/// simulé (watchFlight le sert depuis `api.flights`, Task 3 retours de
-/// recette) : sinon la première émission du flux (introuvable) écraserait
-/// aussitôt l'état initial et l'écran afficherait « Vol introuvable. ».
 /// Remplit les champs carburant obligatoires du dialogue de clôture (et le
 /// départ s'il est affiché).
-Future<void> fillFuel(WidgetTester tester, {String added = '0', String end = '30'}) async {
+/// Rangé par défaut à 25 L : 15 L consommés, soit 10 à 15 L/h pour les vols
+/// de 60 à 90 min des tests (pas d'alerte de consommation).
+Future<void> fillFuel(WidgetTester tester, {String added = '0', String end = '25'}) async {
   final start = find.byKey(const Key('closing-fuel-start'));
   if (start.evaluate().isNotEmpty) await tester.enterText(start, '40');
   await tester.enterText(find.byKey(const Key('closing-fuel-added')), added);
   await tester.enterText(find.byKey(const Key('closing-fuel-end')), end);
 }
 
+/// Un vol existant passé à l'écran doit aussi être « connu » du serveur
+/// simulé (watchFlight le sert depuis `api.flights`, Task 3 retours de
+/// recette) : sinon la première émission du flux (introuvable) écraserait
+/// aussitôt l'état initial et l'écran afficherait « Vol introuvable. ».
 void _seedFlight(FakeFlightApi api, Flight? flight) {
   if (flight != null && !api.flights.any((f) => f.id == flight.id)) {
     api.flights = [...api.flights, flight];

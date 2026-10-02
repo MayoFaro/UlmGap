@@ -147,7 +147,25 @@ class _ClosingDialogState extends State<ClosingDialog> {
     }
   }
 
-  void _submit() {
+  /// Consommation du vol hors des bornes habituelles : demande de vérifier
+  /// les valeurs (non bloquant). Vrai si l'équipage confirme.
+  Future<bool> _confirmConsumption(double litersPerHour) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Consommation inhabituelle'),
+        content: Text('Consommation calculée : ${formatLitersPerHour(litersPerHour)}. '
+            'Vérifiez les valeurs saisies.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Corriger')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirmer')),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _submit() async {
     final m = _actualMinutes;
     if (m == null || m < 1 || m > 720) {
       setState(() => _error = 'Durée réelle invalide (1 à 720 min).');
@@ -194,15 +212,20 @@ class _ClosingDialogState extends State<ClosingDialog> {
       setState(() => _error = fuelErr);
       return;
     }
+    // Alerte de consommation (non bloquante) : l'équipage corrige ou confirme.
+    final rate = flightLitersPerHour(
+        start: fuelStart!, added: fuelAdded!, end: fuelEnd!, minutes: m);
+    if (isUnusualConsumption(rate) && !await _confirmConsumption(rate)) return;
+    if (!mounted) return;
     Navigator.pop(
         context,
         ClosingResult(m, shortAmount, customAmount,
             landings: landings!,
             waterLandings: waterLandings!,
             fuelStartExpected: widget.fuelExpected,
-            fuelStart: fuelStart!,
-            fuelAdded: fuelAdded!,
-            fuelEnd: fuelEnd!));
+            fuelStart: fuelStart,
+            fuelAdded: fuelAdded,
+            fuelEnd: fuelEnd));
   }
 
   @override

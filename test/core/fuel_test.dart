@@ -54,4 +54,19 @@ void main() {
     expect(s.flights, 1);
     expect(s.litersPerHour, 12);
   });
+
+  test('flightLitersPerHour : (départ + ajouté − rangé) / durée réelle', () {
+    expect(flightLitersPerHour(start: 40, added: 20, end: 45, minutes: 60), 15);
+    expect(flightLitersPerHour(start: 30, added: 0, end: 20, minutes: 30), 20);
+    expect(flightLitersPerHour(start: 10, added: 0, end: 20, minutes: 60), -10);
+  });
+
+  test('isUnusualConsumption : alerte sous 8 L/h et au-dessus de 30 L/h, bornes acceptées', () {
+    expect(isUnusualConsumption(8), isFalse);
+    expect(isUnusualConsumption(30), isFalse);
+    expect(isUnusualConsumption(15), isFalse);
+    expect(isUnusualConsumption(7.9), isTrue);
+    expect(isUnusualConsumption(30.1), isTrue);
+    expect(isUnusualConsumption(-10), isTrue);
+  });
 }

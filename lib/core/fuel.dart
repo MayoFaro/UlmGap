@@ -46,3 +46,17 @@ FuelStats? fuelStats(Iterable<Flight> flights) {
 }
 
 String formatLitersPerHour(double v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} L/h';
+
+/// Consommation d'un seul vol, en L/h : (départ + ajouté − rangé) / durée
+/// réelle. Indicative : sert seulement à l'alerte de la clôture.
+double flightLitersPerHour(
+        {required int start, required int added, required int end, required int minutes}) =>
+    (start + added - end) * 60 / minutes;
+
+/// Bornes de consommation plausibles d'un ULM ; en dehors, la clôture
+/// demande de vérifier les valeurs (alerte non bloquante).
+const minUsualLitersPerHour = 8.0;
+const maxUsualLitersPerHour = 30.0;
+
+bool isUnusualConsumption(double litersPerHour) =>
+    litersPerHour < minUsualLitersPerHour || litersPerHour > maxUsualLitersPerHour;
