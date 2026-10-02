@@ -857,6 +857,38 @@ void main() {
     expect(finance.closed, isEmpty);
   });
 
+  testWidgets('vol non clôturé : carburant actuel affiché, appui → Suivi carburant',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..aircraft = [
+        Aircraft.fromMap('a1',
+            {'registration': 'F-JABC', 'label': 'ULM 1', 'active': true, 'fuelLiters': 40}),
+      ];
+    final f = testFlight(
+        id: 'f1', start: DateTime(2026, 10, 13, 9), end: DateTime(2026, 10, 13, 10),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    await tester.pumpWidget(host(a, testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant : 40 L'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('current-fuel')));
+    await tester.pumpAndSettle();
+    expect(find.text('Suivi carburant · F-JABC'), findsOneWidget);
+  });
+
+  testWidgets('vol clôturé : résumé carburant', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        fuelStartExpected: 30, fuelStart: 40, fuelAdded: 20, fuelEnd: 35);
+    await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu 30 L)'),
+        findsOneWidget);
+  });
+
   testWidgets('vol clôturé : ligne « Clôturé », aucun bouton pour un non-admin', (tester) async {
     _useTallView(tester);
     final f = testFlight(

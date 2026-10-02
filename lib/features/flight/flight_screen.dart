@@ -18,6 +18,7 @@ import '../../data/services.dart';
 import 'closing_dialog.dart';
 import 'flight_actions.dart';
 import 'flight_texts.dart';
+import '../fuel/fuel_log_screen.dart';
 import '../home/app_nav.dart';
 
 /// Fenêtre unique d'un vol : consultation, création, édition, validation,
@@ -975,6 +976,8 @@ class _FlightScreenState extends State<FlightScreen> {
                   waterLandings: f.waterLandings,
                 )),
               ),
+            if (f.isClosed && f.hasFuel)
+              ListTile(key: const Key('closed-fuel'), title: Text(fuelSummary(f))),
             ListTile(
               title: const Text('Statut'),
               subtitle: Text(
@@ -1032,6 +1035,8 @@ class _FlightScreenState extends State<FlightScreen> {
             ],
             onChanged: _fieldsEditable ? (v) => setState(() => _aircraftId = v) : null,
           ),
+          if ((f == null || !f.isClosed) && _aircraftOf(_aircraftId) != null)
+            CurrentFuelTile(me: _me, aircraft: _aircraftOf(_aircraftId)!),
           const SizedBox(height: 16),
           Text('Équipage', style: Theme.of(context).textTheme.titleMedium),
           for (var i = 0; i < _crew.length; i++)
