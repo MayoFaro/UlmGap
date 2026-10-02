@@ -9,7 +9,8 @@ plugins {
 android {
     namespace = "com.ulmgap.app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // NDK le plus récent exigé par les plugins Firebase (rétrocompatible).
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -22,7 +23,8 @@ android {
 
     defaultConfig {
         applicationId = "com.ulmgap.app"
-        minSdk = flutter.minSdkVersion
+        // cloud_functions (et les autres plugins Firebase récents) exigent l'API 23.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
