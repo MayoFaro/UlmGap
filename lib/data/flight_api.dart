@@ -69,6 +69,9 @@ abstract class FlightApi {
   /// Appartenances de tous les comptes : réservé aux instructeurs et admins (règles).
   Stream<Map<String, UserCategory>> watchCategories();
   Stream<List<Aircraft>> watchAircraft();
+
+  /// Vols d'un appareil (écran Suivi carburant) ; égalité seule, tri dans l'app.
+  Stream<List<Flight>> watchAircraftFlights(String aircraftId);
   Future<List<String>> recentDestinations();
 
   // Actions : lèvent FlightFailure (ou FlightConflict).
@@ -123,6 +126,12 @@ class FirebaseFlightApi implements FlightApi {
       .orderBy('label')
       .snapshots()
       .map((q) => q.docs.map((d) => Aircraft.fromMap(d.id, d.data())).toList());
+
+  @override
+  Stream<List<Flight>> watchAircraftFlights(String aircraftId) => _flights
+      .where('aircraftId', isEqualTo: aircraftId)
+      .snapshots()
+      .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
 
   @override
   Future<List<String>> recentDestinations() async {

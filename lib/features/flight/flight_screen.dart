@@ -775,6 +775,10 @@ class _FlightScreenState extends State<FlightScreen> {
           customAmount: result.customAmount,
           landings: result.landings,
           waterLandings: result.waterLandings,
+          fuelStartExpected: null,
+          fuelStart: 0,
+          fuelAdded: 0,
+          fuelEnd: 0,
         );
       return 'Vol clôturé.';
     });
