@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/features/flight/flight_texts.dart';
 
@@ -40,5 +41,15 @@ void main() {
         closedSummary(actualMinutes: 75, billedAmount: 15000, billedTo: 'account',
             debitedShortName: 'DPS'),
         endsWith('le compte de DPS'));
+  });
+
+  test('savedMessage : confirmation selon le résultat du serveur', () {
+    expect(savedMessage(FlightStatus.valide, 'INS', created: true), 'Vol enregistré.');
+    expect(savedMessage(FlightStatus.demande, 'INS', created: true), 'Demande envoyée à INS.');
+    expect(savedMessage(FlightStatus.demande, null, created: true),
+        'Demande envoyée à l\'instructeur.');
+    expect(savedMessage(FlightStatus.valide, null, created: false), 'Modifications enregistrées.');
+    expect(savedMessage(FlightStatus.demande, 'INS', created: false),
+        'Demande modifiée, envoyée à INS.');
   });
 }

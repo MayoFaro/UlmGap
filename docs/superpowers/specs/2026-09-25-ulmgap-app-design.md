@@ -143,7 +143,8 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | `closedBy`, `closedAt` | uid, timestamp | |
 | `billedAmount` | int? | Montant final, fixé à la clôture |
 | `billedTo` | string? | `account` (débité sur un solde) / `off_app` (facturé hors app) |
-| `reminderGen` | int | Génération du rappel de clôture (§6) |
+| `reminderGen` | int | Inutilisé depuis le plan 5 (toujours 0) |
+| `lastReminderAt` | timestamp? | Dernier rappel de clôture envoyé (§6.2) |
 | `deleted` **(contrat)** | bool | **Suppression logique uniquement**, jamais de suppression physique |
 | `updatedAt` **(contrat)** | timestamp serveur | Mis à jour à **chaque** écriture |
 
@@ -360,6 +361,19 @@ l'écran affiché est grisée.
   DPS »), **payeur**, coût estimé, crédit disponible du payeur, conflits éventuels. Cet
   aperçu est **indicatif** : la décision finale revient à la Function.
 
+**Confirmation des actions** (révision du 2026-10-01)
+- Toute écriture passe par une Function : sans réseau, rien n'est enregistré
+  (pas de file d'attente locale ; la lecture fonctionne hors ligne grâce au
+  cache Firestore).
+- Après une action réussie, l'app revient à l'écran précédent et affiche une
+  confirmation : « Vol enregistré. », « Demande envoyée à DPS. »,
+  « Modifications enregistrées. », « Vol validé. », « Vol clôturé. »… Le
+  serveur ne répond qu'après l'écriture dans Firestore : la confirmation
+  vaut enregistrement.
+- Sans réponse du serveur (hors ligne, coupure, délai) : « Pas de réponse du
+  serveur. Vérifiez votre connexion, puis le planning avant de recommencer :
+  l'opération a pu aboutir. » Un refus du serveur affiche son propre message.
+
 **Détail d'un vol**
 - Toutes les informations, et les actions permises selon le rôle : valider,
   refuser, modifier, annuler, clôturer (durée réelle), corriger (admin).
@@ -432,28 +446,41 @@ Via FCM, avec le jeton dans `users.fcmToken`. Elles sont envoyées par les
 Functions **après** l'écriture réussie ; un échec d'envoi est journalisé et
 n'annule jamais l'action.
 
+Plan 5 (2026-10-01) :
+- plateformes : **Android et web** ; iOS plus tard, par un développeur
+  dédié (clés APNs) ;
+- l'auteur d'une action n'est jamais notifié ; les comptes inactifs ou sans
+  jeton sont ignorés ; un jeton déclaré invalide par FCM est effacé ;
+- un jeton par compte, celui du dernier appareil connecté ; effacé à la
+  déconnexion ;
+- un appui sur une notification ouvre l'app ; app ouverte, la notification
+  s'affiche en bas de l'écran ;
+- web : clé VAPID par projet (console Firebase → Cloud Messaging →
+  Certificats Web Push), dans `lib/core/env.dart`.
+
 | Événement | Destinataires |
 |---|---|
 | Nouvelle demande, ou demande modifiée | L'instructeur désigné |
 | Demande validée (éventuellement modifiée) | Le créateur et l'équipage |
 | Demande refusée (avec motif) | Le créateur |
 | Vol validé annulé | L'équipage et l'instructeur désigné |
-| Vol non clôturé 24 h après sa fin, puis toutes les 24 h | Les membres de `crew` |
+| Vol non clôturé 24 h après sa fin, puis toutes les **48 h** | Les membres de `crew` |
 | Mouvement de crédit (crédit, correction, régularisation) | L'intéressé et **tous les autres instructeurs** |
 
-### 6.2 Rappel de clôture par tâche programmée
+### 6.2 Rappel de clôture par tâche planifiée (révision du 2026-10-01)
 
-- Quand un vol **devient `valide`**, ou quand l'heure de fin d'un vol `valide`
-  change, la Function incrémente `reminderGen` et programme, dans une file de
-  tâches Firebase (`onTaskDispatched`), la tâche
-  `checkFlightClosure(flightId, gen)` à `end` + 24 h.
-- À l'exécution, la tâche **relit le vol** :
-  - supprimé, clôturé ou non `valide` → fin ;
-  - `gen` ≠ `reminderGen` (tâche caduque) → fin ;
-  - sinon → notification aux membres de `crew`, puis nouvelle tâche à
-    maintenant + 24 h, avec le même `gen`.
-- Aucune annulation de tâche n'est nécessaire : les anciennes s'éteignent
-  d'elles-mêmes.
+- Une tâche planifiée (`closingReminders`, toutes les heures, heure de
+  Libreville) lit les vols `valide` non clôturés (deux égalités, sans index
+  composite) et, pour chaque vol non supprimé :
+  - fin + 24 h pas encore atteinte → rien ;
+  - `lastReminderAt` vide, ou plus vieux que 48 h → notification aux membres
+    de `crew`, puis `lastReminderAt` = maintenant (écrit même si l'envoi
+    échoue, pour ne pas relancer toutes les heures).
+- La tâche relit toujours l'horaire courant du vol : rien à reprogrammer
+  quand l'heure de fin change. Un rappel part au plus une heure après son
+  échéance.
+- Remplace la file de tâches (`onTaskDispatched`, `reminderGen`) prévue à
+  l'origine.
 
 ## 7. Architecture technique
 

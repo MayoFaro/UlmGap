@@ -13,6 +13,8 @@ doivent jamais accéder à AppGAP.
 - Plan 3, finances (terminé) : `docs/superpowers/plans/2026-09-29-ulmgap-03-finances.md`
 - Plan 4b, atterrissages, amerrissages, heure de fin à la clôture (terminé) :
   `docs/superpowers/plans/2026-10-01-ulmgap-04b-atterrissages.md`
+- Plan 5, Node 22, notifications push et rappels de clôture (terminé) :
+  `docs/superpowers/plans/2026-10-01-ulmgap-05-notifications.md`
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -56,8 +58,9 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-10-01
 
-- Plans 1 à 4b terminés. `main` contient les plans 1, 2 et 2b ; les plans 3,
-  4 et 4b sont sur `feature/finances` (poussée, non fusionnée dans `main`).
+- Plans 1 à 5 terminés. `main` contient les plans 1, 2 et 2b ; les plans 3,
+  4 et 4b sont sur `feature/finances` (poussée, non fusionnée dans `main`) ;
+  le plan 5 sur `feature/notifications` (créée depuis `feature/finances`).
 - En dev : Authentication activé, premier admin (DPS), règles et Functions du
   plan 3 déployées (vols, finances : `closeFlight`, `creditAccount`,
   `correctAccount`, `adminUpdateFlight`, `adminDeleteFlight`,
@@ -70,19 +73,28 @@ d'où le JDK d'Android Studio.
   Toutes les Functions redéployées ensuite (conflits contrôlés en
   planification seulement, spec §3.5).
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
-  25/10/2026**, date d'expiration des règles du mode test (toutes les
-  Functions dans leur version du plan 4b : `closeFlight`,
-  `adminUpdateFlight`, `adminUpsertAircraft` et la règle des conflits de
-  `createFlight`/`updateFlight`/`validateFlight` ont changé ; ni règle ni index nouveau aux plans 4
-  et 4b). Marquer ensuite l'ULM amphibie dans Administration → Appareils. Premier admin à
-  créer ensuite (`cd functions && npm run build && node
-  scripts/bootstrap-admin.js --project ulmgap-prod …`), et Authentication à
-  activer (e-mail et mot de passe, création de compte par l'utilisateur
-  désactivée).
-- **Node.js 20 retiré par Google Cloud le 30/10/2026** : après cette date,
-  plus aucun déploiement de Functions possible sans passer à Node 22
-  (`functions/package.json` → `engines.node`) et sans mettre à jour
-  `firebase-functions`. À faire avant.
+  25/10/2026**, date d'expiration des règles du mode test. Déployer
+  **toutes les Functions dans leur version du plan 5** (Node 22, dont la
+  tâche planifiée `closingReminders` : le déploiement active Cloud
+  Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
+  d'atterrissages, `correctAccount` le nouveau solde). Ni règle ni index
+  nouveau depuis le plan 3. Ensuite :
+  - premier admin (`cd functions && npm run build && node
+    scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
+    (e-mail et mot de passe, création de compte par l'utilisateur
+    désactivée) ;
+  - marquer l'ULM amphibie dans Administration → Appareils ;
+  - clé VAPID web du projet prod (voir plus bas), à reporter dans
+    `lib/core/env.dart` avant le build web de prod.
+- Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :
+  la 14 supprime l'API `admin.firestore()` utilisée partout). Le Node local
+  reste en 20 : accepté par les tests et l'émulateur.
+- Plan 5 en dev : toutes les Functions redéployées, dont `closingReminders`
+  (tâche planifiée horaire). **Notifications web : clé VAPID à créer** dans
+  la console (Paramètres du projet → Cloud Messaging → Certificats Web Push →
+  Générer), en dev puis en prod, à reporter dans `lib/core/env.dart`
+  (`_webVapidKeyDev` / `_webVapidKeyProd`). Sans clé : pas de notifications
+  web, sans erreur. Android n'en a pas besoin. iOS : plus tard (clés APNs).
 - Comptes de test en dev (e-mails `test-…@ulmgap.invalid`, déjà vérifiés) :
   `cd functions && npm run build && node scripts/seed-test-users.js --project ulmgap-dev --password <8 car. min.>`.
   Crédit initial (une fois par compte) :
@@ -95,9 +107,6 @@ d'où le JDK d'Android Studio.
 
 ### À reprendre aux plans suivants
 
-- Plan 5 (notifications) : rappels de clôture ; tant qu'ils n'existent pas,
-  des vols validés passés restent non clôturés et pèsent sur le crédit
-  disponible.
 - La durée prévue maximale (12 h) et l'horizon de réservation (366 jours)
   restent codés en dur ; `minPlannedMinutes` est dans `settings/pricing`.
 - Une demande expirée reste `demande` en base (statut calculé côté app).

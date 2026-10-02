@@ -10,6 +10,7 @@ import { Caller, requireStaff } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { formatFcfa } from "../rules/pricing";
 import { postMovement } from "./ledger";
+import { notifyMovements } from "../notify/movements";
 import { validateCorrection, validateCredit } from "./validation";
 
 export interface AccountResult { balance: number }
@@ -28,14 +29,15 @@ async function applyMovement(
   const ref = db.collection("users").doc(userUid);
   const lockRef = db.collection("flightLocks").doc(`user_${userUid}`);
 
-  return db.runTransaction(async (tx) => {
+  const written = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "Compte introuvable.");
     await tx.get(lockRef);
     const currentBalance = (snap.get("balance") as number | undefined) ?? 0;
+    const amount = amountFor(currentBalance);
     const balance = postMovement(tx, db, {
       uid: userUid,
-      amount: amountFor(currentBalance),
+      amount,
       type,
       reason,
       flightId: null,
@@ -43,8 +45,10 @@ async function applyMovement(
       currentBalance,
     });
     tx.set(lockRef, { at: admin.firestore.FieldValue.serverTimestamp() });
-    return { balance };
+    return { uid: userUid, amount, balanceAfter: balance, type };
   });
+  await notifyMovements(db, me.uid, [written]);
+  return { balance: written.balanceAfter };
 }
 
 export async function creditAccount(caller: Caller | undefined, data: unknown): Promise<AccountResult> {

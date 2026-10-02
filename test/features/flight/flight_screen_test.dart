@@ -10,6 +10,7 @@ import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/flight/flight_screen.dart';
+import 'package:ulmgap/features/flight/flight_texts.dart' show uncertainMessage;
 
 import '../../support/fakes.dart';
 
@@ -351,7 +352,7 @@ void main() {
     await pickAircraft(tester);
     await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
     await save(tester);
-    expect(find.text('Enregistrement impossible. Réessayez.'), findsOneWidget);
+    expect(find.text(uncertainMessage), findsOneWidget);
     final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Enregistrer'));
     expect(button.onPressed, isNotNull);
   });
@@ -585,6 +586,8 @@ void main() {
     expect(a.created.single['destination'], 'Lomé');
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
+    // Confirmation affichée sur le planning : le serveur a enregistré le vol.
+    expect(find.text('Vol enregistré.'), findsOneWidget);
   });
 
   // --- Task 9 (finances) : coût estimé, crédit disponible, clôture ---
@@ -1253,5 +1256,55 @@ void main() {
     await tester.tap(find.text('Enregistrer la correction'));
     await tester.pumpAndSettle();
     expect(finance.adminUpdated.containsKey('cc1'), isTrue);
+  });
+
+  // --- confirmations et réponse perdue ---
+
+  testWidgets('modification d\'une demande : « Demande modifiée, envoyée à INS. »', (tester) async {
+    _useTallView(tester);
+    final a = api()..updateStatus = FlightStatus.demande;
+    final f = testFlight(
+        id: 'rq', start: DateTime(2026, 10, 13, 9), status: 'demande',
+        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
+    await tester.pumpWidget(pushHost(a, testUser(uid: 'u1', profile: 'eleve'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await save(tester);
+    expect(find.text('planning'), findsOneWidget);
+    expect(find.text('Demande modifiée, envoyée à INS.'), findsOneWidget);
+  });
+
+  testWidgets('validation : « Vol validé. »', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'rq2', start: DateTime(2026, 10, 13, 9), status: 'demande',
+        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
+    await tester.pumpWidget(
+        pushHost(api(), testUser(uid: 'ins', profile: 'instructeur'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vol validé.'), findsOneWidget);
+  });
+
+  testWidgets('clôture : « Vol clôturé. »', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'cl', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    await tester.pumpWidget(pushHost(api(), testUser(uid: 'u1', category: 'GAP'), flight: f,
+        finance: FakeFinanceApi()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Vol clôturé.'), findsOneWidget);
   });
 }

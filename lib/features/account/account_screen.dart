@@ -6,6 +6,7 @@ import '../../core/money.dart';
 import '../../core/profile_badge.dart';
 import '../../data/app_user.dart';
 import '../../data/services.dart';
+import '../auth/sign_out.dart';
 import 'movements_list.dart';
 import '../home/app_nav.dart';
 
@@ -24,13 +25,14 @@ class AccountScreen extends StatelessWidget {
           IconButton(
             tooltip: 'Se déconnecter',
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              // Service lu avant de démonter l'écran ; retour à la racine
+            onPressed: () async {
+              // Services lus avant de démonter l'écran ; retour à la racine
               // d'abord, sinon cet écran resterait empilé au-dessus de
               // l'écran de connexion.
-              final auth = AppServices.of(context).auth;
+              final services = AppServices.of(context);
               Navigator.of(context).popUntil((r) => r.isFirst);
-              auth.signOut();
+              // Plan 5 : plus de notifications de ce compte sur l'appareil.
+              await signOutCleanly(services, uid: me.uid);
             },
           ),
         ],

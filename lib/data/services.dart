@@ -4,6 +4,7 @@ import 'admin_api.dart';
 import 'auth_service.dart';
 import 'finance_api.dart';
 import 'flight_api.dart';
+import 'push_service.dart';
 import 'user_repository.dart';
 
 /// Services de l'app, injectés à la racine (doublures en test).
@@ -15,6 +16,7 @@ class AppServices extends InheritedWidget {
     this.admin,
     this.flights,
     this.finance,
+    this.push,
     required super.child,
   });
 
@@ -23,6 +25,9 @@ class AppServices extends InheritedWidget {
   final AdminApi? admin;
   final FlightApi? flights;
   final FinanceApi? finance;
+
+  /// Plan 5 : notifications push ; null en test (aucune inscription).
+  final PushService? push;
 
   static AppServices of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppServices>()!;
@@ -33,5 +38,6 @@ class AppServices extends InheritedWidget {
       users != old.users ||
       admin != old.admin ||
       flights != old.flights ||
-      finance != old.finance;
+      finance != old.finance ||
+      push != old.push;
 }

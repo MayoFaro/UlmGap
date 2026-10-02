@@ -11,6 +11,7 @@ import 'package:ulmgap/data/crew_member.dart';
 import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
+import 'package:ulmgap/data/push_service.dart';
 import 'package:ulmgap/data/user_repository.dart';
 
 /// Émet [initial] puis relaie [rest] (même schéma que FakeAuthService.changes :
@@ -66,6 +67,42 @@ class FakeUserRepository implements UserRepository {
     watchCalls++;
     return live?.stream ?? Stream.value(users[uid]);
   }
+
+  /// Plan 5 : jetons enregistrés, dans l'ordre ({uid, token}).
+  final savedTokens = <({String uid, String? token})>[];
+
+  /// Si vrai, saveFcmToken ne se termine jamais (Firestore hors ligne).
+  bool saveHangs = false;
+
+  @override
+  Future<void> saveFcmToken(String uid, String? token) {
+    savedTokens.add((uid: uid, token: token));
+    return saveHangs ? Completer<void>().future : Future.value();
+  }
+}
+
+// --- ajouts plan 5 (notifications) ---
+class FakePushService implements PushService {
+  String? nextToken = 'tok-1';
+  Object? tokenError; // si défini, token() échoue
+  int tokenCalls = 0;
+  int deleteCalls = 0;
+  final refreshCtrl = StreamController<String>.broadcast();
+  final messagesCtrl = StreamController<({String title, String body})>.broadcast();
+
+  @override
+  Future<String?> token() async {
+    tokenCalls++;
+    if (tokenError != null) throw tokenError!;
+    return nextToken;
+  }
+
+  @override
+  Stream<String> get onTokenRefresh => refreshCtrl.stream;
+  @override
+  Stream<({String title, String body})> get onForegroundMessage => messagesCtrl.stream;
+  @override
+  Future<void> deleteToken() async => deleteCalls++;
 }
 
 AppUser testUser({
@@ -243,17 +280,22 @@ class FakeFlightApi implements FlightApi {
   @override
   Future<List<String>> recentDestinations() async => destinations;
 
+  /// Statut rendu par le serveur pour create / update (défaut : validé).
+  FlightStatus createStatus = FlightStatus.valide;
+  FlightStatus updateStatus = FlightStatus.valide;
+
   @override
-  Future<String> create(FlightDraft draft) async {
+  Future<({String id, FlightStatus status})> create(FlightDraft draft) async {
     _fail();
     created.add(draft.toPayload());
-    return 'f-new';
+    return (id: 'f-new', status: createStatus);
   }
 
   @override
-  Future<void> update(String id, FlightDraft draft) async {
+  Future<FlightStatus> update(String id, FlightDraft draft) async {
     _fail();
     updated[id] = draft.toPayload();
+    return updateStatus;
   }
 
   @override

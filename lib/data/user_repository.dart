@@ -6,6 +6,10 @@ import 'app_user.dart';
 
 abstract class UserRepository {
   Stream<AppUser?> watchUser(String uid);
+
+  /// Plan 5 : jeton FCM de l'appareil (null à la déconnexion). Seule écriture
+  /// client permise par les règles (users/{uid}.fcmToken).
+  Future<void> saveFcmToken(String uid, String? token);
 }
 
 /// Toute erreur (lecture refusée : compte désactivé, e-mail non vérifié…)
@@ -27,4 +31,8 @@ class FirestoreUserRepository implements UserRepository {
       .doc(uid)
       .snapshots()
       .map((s) => s.exists ? AppUser.fromMap(s.id, s.data()!) : null));
+
+  @override
+  Future<void> saveFcmToken(String uid, String? token) =>
+      _db.collection('users').doc(uid).update({'fcmToken': token});
 }

@@ -17,6 +17,14 @@ FirebaseOptions firebaseOptionsFor(AppEnv env) => env == AppEnv.prod
     ? prod.DefaultFirebaseOptions.currentPlatform
     : dev.DefaultFirebaseOptions.currentPlatform;
 
+/// Clé VAPID des notifications web (console Firebase → Paramètres du projet
+/// → Cloud Messaging → Certificats Web Push). Vide : pas de notifications sur
+/// le web, sans erreur (plan 5).
+const _webVapidKeyDev = '';
+const _webVapidKeyProd = '';
+
+String webVapidKeyFor(AppEnv env) => env == AppEnv.prod ? _webVapidKeyProd : _webVapidKeyDev;
+
 /// Message d'erreur si le flavor de compilation (Android/iOS) ne correspond pas
 /// à ENV ; null si tout concorde ou sans flavor (web).
 String? flavorMismatch(AppEnv env, String? flavor) {

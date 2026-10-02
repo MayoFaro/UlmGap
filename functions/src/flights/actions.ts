@@ -8,6 +8,8 @@ import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import {
   FlightInput, checkDuration, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
 } from "./validation";
+import { notifyFlight } from "../notify/flight-info";
+import { cancelledPush, refusedPush, validatedPush } from "../rules/notifications";
 
 type Tx = FirebaseFirestore.Transaction;
 type Ref = FirebaseFirestore.DocumentReference;
@@ -35,7 +37,7 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
   const now = Date.now();
   const ref = db.collection("flights").doc(flightId);
 
-  await db.runTransaction(async (tx) => {
+  const modified = await db.runTransaction(async (tx) => {
     const f = await loadRequest(tx, ref, me, now);
     const input: FlightInput = {
       start: changes.start ?? ms(f.get("start")),
@@ -59,7 +61,11 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
     });
     touchLocks(tx, p.locks);
     tx.update(ref, p.fields);
+    // « Avec modifications » : horaire, destination ou appareil changés.
+    return input.start !== ms(f.get("start")) || input.end !== ms(f.get("end")) ||
+      input.destination !== f.get("destination") || input.aircraftId !== f.get("aircraftId");
   });
+  await notifyFlight(db, flightId, (f, names) => validatedPush(f, names, me.uid, modified));
 }
 
 export async function refuseFlight(caller: Caller | undefined, data: unknown): Promise<void> {
@@ -74,6 +80,7 @@ export async function refuseFlight(caller: Caller | undefined, data: unknown): P
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
+  await notifyFlight(db, flightId, (f, names) => refusedPush(f, names, me.uid, reason));
 }
 
 export async function cancelFlight(caller: Caller | undefined, data: unknown): Promise<void> {
@@ -81,7 +88,7 @@ export async function cancelFlight(caller: Caller | undefined, data: unknown): P
   const me = await requireActiveUser(db, caller);
   const flightId = asInvalid(() => validateFlightId(data));
   const ref = db.collection("flights").doc(flightId);
-  await db.runTransaction(async (tx) => {
+  const status = await db.runTransaction(async (tx) => {
     const f = await loadFlight(tx, ref);
     if (!me.isAdmin && f.get("createdBy") !== me.uid && f.get("instructorUid") !== me.uid) {
       throw new HttpsError("permission-denied",
@@ -90,7 +97,12 @@ export async function cancelFlight(caller: Caller | undefined, data: unknown): P
     assertNotStarted(f, Date.now());
     // Suppression logique uniquement (contrat AppGAP).
     tx.update(ref, { deleted: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return f.get("status") as string;
   });
+  // Spec §6.1 : seule l'annulation d'un vol validé est notifiée.
+  if (status === "valide") {
+    await notifyFlight(db, flightId, (f, names) => cancelledPush(f, names, me.uid));
+  }
 }
 
 export const validateFlightFn = onCall((req) => validateFlight(req.auth as Caller | undefined, req.data));

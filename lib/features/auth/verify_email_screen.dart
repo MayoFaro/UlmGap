@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/services.dart';
+import 'sign_out.dart';
 
 class VerifyEmailScreen extends StatelessWidget {
   const VerifyEmailScreen({super.key, required this.email});
@@ -35,7 +36,10 @@ class VerifyEmailScreen extends StatelessWidget {
                 },
                 child: const Text('Renvoyer le lien'),
               ),
-              TextButton(onPressed: auth.signOut, child: const Text('Se déconnecter')),
+              TextButton(
+                onPressed: () => signOutCleanly(AppServices.of(context)),
+                child: const Text('Se déconnecter'),
+              ),
             ],
           ),
         ),

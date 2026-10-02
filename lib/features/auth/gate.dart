@@ -4,6 +4,7 @@ import '../../data/app_user.dart';
 import '../../data/auth_service.dart';
 import '../../data/services.dart';
 import '../home/home_shell.dart';
+import '../home/push_registration.dart';
 import 'login_screen.dart';
 import 'no_access_screen.dart';
 import 'verify_email_screen.dart';
@@ -65,7 +66,7 @@ class _AppGateState extends State<AppGate> {
             }
             final user = userSnap.hasError ? null : userSnap.data;
             return gateFor(auth, user) == GateState.ready
-                ? HomeShell(user: user!)
+                ? PushRegistration(uid: user!.uid, child: HomeShell(user: user))
                 : const NoAccessScreen();
           },
         );
