@@ -20,6 +20,15 @@ final now = DateTime(2026, 10, 12, 8, 20);
 /// simulé (watchFlight le sert depuis `api.flights`, Task 3 retours de
 /// recette) : sinon la première émission du flux (introuvable) écraserait
 /// aussitôt l'état initial et l'écran afficherait « Vol introuvable. ».
+/// Remplit les champs carburant obligatoires du dialogue de clôture (et le
+/// départ s'il est affiché).
+Future<void> fillFuel(WidgetTester tester, {String added = '0', String end = '30'}) async {
+  final start = find.byKey(const Key('closing-fuel-start'));
+  if (start.evaluate().isNotEmpty) await tester.enterText(start, '40');
+  await tester.enterText(find.byKey(const Key('closing-fuel-added')), added);
+  await tester.enterText(find.byKey(const Key('closing-fuel-end')), end);
+}
+
 void _seedFlight(FakeFlightApi api, Flight? flight) {
   if (flight != null && !api.flights.any((f) => f.id == flight.id)) {
     api.flights = [...api.flights, flight];
@@ -653,6 +662,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('closing-minutes')), findsOneWidget);
     expect(find.text('Montant : ${formatFcfa(15000)}'), findsOneWidget);
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['flightId'], 'c1');
@@ -663,6 +673,38 @@ void main() {
     expect(finance.closed.single['waterLandings'], 0);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets('clôture : carburant prévu = carburant actuel de l\'appareil, valeurs envoyées',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..aircraft = [
+        Aircraft.fromMap('a1', {
+          'registration': 'F-JABC',
+          'label': 'ULM 1',
+          'active': true,
+          'fuelLiters': 40,
+        }),
+      ];
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(
+        pushHost(a, testUser(uid: 'u1', category: 'GAP'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant prévu au départ : 40 L'), findsOneWidget);
+    await fillFuel(tester, added: '10', end: '35');
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    final c = finance.closed.single;
+    expect([c['fuelStartExpected'], c['fuelStart'], c['fuelAdded'], c['fuelEnd']], [40, 40, 10, 35]);
   });
 
   testWidgets(
@@ -691,6 +733,7 @@ void main() {
     // reste utilisable.
     expect(find.text('Montant calculé par le serveur à la clôture.'), findsOneWidget);
     expect(find.textContaining('Montant :'), findsNothing);
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['flightId'], 'c5');
@@ -784,6 +827,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('closing-custom-amount')), '5000');
     await tester.pumpAndSettle();
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['customAmount'], 5000);
@@ -1095,6 +1139,7 @@ void main() {
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('closing-water-landings')), '2');
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['landings'], 1);
@@ -1303,6 +1348,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(find.text('Vol clôturé.'), findsOneWidget);

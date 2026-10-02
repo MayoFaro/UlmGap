@@ -751,6 +751,13 @@ class _FlightScreenState extends State<FlightScreen> {
   bool get _showCorrectWaterLandings =>
       _isAmphibious(_aircraftId) || (_current?.waterLandings ?? 0) > 0;
 
+  Aircraft? _aircraftOf(String? id) {
+    for (final a in _allAircraft) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
   Future<void> _openClosing() async {
     final f = _current!;
     final category = _category(_debitedUid);
@@ -763,6 +770,7 @@ class _FlightScreenState extends State<FlightScreen> {
         pricing: _pricingForCost,
         hasPassenger: f.passengers.isNotEmpty,
         amphibious: _isAmphibious(f.aircraftId),
+        fuelExpected: _aircraftOf(f.aircraftId)?.fuelLiters,
       ),
     );
     if (result == null || !mounted) return;
@@ -775,10 +783,10 @@ class _FlightScreenState extends State<FlightScreen> {
           customAmount: result.customAmount,
           landings: result.landings,
           waterLandings: result.waterLandings,
-          fuelStartExpected: null,
-          fuelStart: 0,
-          fuelAdded: 0,
-          fuelEnd: 0,
+          fuelStartExpected: result.fuelStartExpected,
+          fuelStart: result.fuelStart,
+          fuelAdded: result.fuelAdded,
+          fuelEnd: result.fuelEnd,
         );
       return 'Vol clôturé.';
     });
