@@ -426,6 +426,11 @@ effectués » et « Compteurs »)
   d'heure) sont surlignés en orange. Un compteur « N vols à clôturer » les
   compte sur toutes les périodes ; un appui dessus les affiche.
 - Le planning (accueil) reste limité aux vols à venir.
+- **Rappel au lancement** (révision du 2026-10-02) : au démarrage de l'app,
+  si un vol validé, non clôturé, dont l'utilisateur est membre de `crew` a
+  son heure de fin passée, la fiche du plus ancien s'ouvre au-dessus de
+  l'accueil (bouton « Clôturer »). « Retour » ramène à l'accueil ; pas de
+  nouveau rappel avant le prochain lancement, ni au retour d'arrière-plan.
 
 **Mon compte**
 - Solde, historique, profil (badge), appartenance.
@@ -591,6 +596,12 @@ atterrissages :
 `fuelStart`, `fuelAdded`, `fuelEnd` ; `fuelStartExpected` à `null` ou entier,
 les trois autres obligatoires ; entiers de 0 à 100, mêmes messages côté app et
 côté serveur. Le vol enregistre les quatre valeurs (§2.5).
+
+**Alerte de consommation** (non bloquante) : au clic sur « Clôturer », l'app
+calcule (départ + ajouté − rangé) / durée réelle. Hors de 8 à 30 L/h (bornes
+acceptées), une fenêtre « Consommation inhabituelle » affiche « Consommation
+calculée : 42,0 L/h. Vérifiez les valeurs saisies. » avec « Corriger »
+(retour au dialogue) et « Confirmer » (clôture). Rien côté serveur.
 
 ### 9.2 Carburant actuel de l'appareil
 

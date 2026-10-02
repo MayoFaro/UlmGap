@@ -1,5 +1,6 @@
 // Clôture d'un vol (spec §4.3) : bilan facturé sur tarifs figés, débit du
-// compte débité et historique dans la même transaction (règle absolue).
+// compte débité et historique dans la même transaction (règle absolue),
+// et carburant (spec §9).
 // N'utilise pas `loadFlight` (core.ts) : celui-ci refuse un vol déjà clôturé
 // avec un autre message, et ne vérifie pas le statut `valide`.
 import * as admin from "firebase-admin";
@@ -11,6 +12,7 @@ import { readPricing } from "../finance/pricing-store";
 import { closingBill, Pricing, toCategory } from "../rules/pricing";
 import { isOnOrBeforeClubToday } from "../rules/club-day";
 import { closingEnd } from "../rules/closing";
+import { becomesFuelSource } from "../rules/fuel";
 import { touchLocks } from "./core";
 import { validateClosing } from "./validation";
 
@@ -34,7 +36,8 @@ export interface CloseResult { billedAmount: number; billedTo: "account" | "off_
 export async function closeFlight(caller: Caller | undefined, data: unknown): Promise<CloseResult> {
   const db = admin.firestore();
   const me = await requireActiveUser(db, caller);
-  const { flightId, actualMinutes, shortFlightAmount, customAmount, landings, waterLandings } =
+  const { flightId, actualMinutes, shortFlightAmount, customAmount, landings, waterLandings,
+    fuelStartExpected, fuelStart, fuelAdded, fuelEnd } =
     asInvalid(() => validateClosing(data));
   const now = Date.now();
   const ref = db.collection("flights").doc(flightId);
@@ -50,12 +53,12 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
       throw new HttpsError("failed-precondition", "Le vol n'a pas encore eu lieu.");
     }
 
-    // Plan 4b : amerrissages réservés à un appareil amphibie.
-    if (waterLandings > 0) {
-      const aircraft = await tx.get(db.collection("aircraft").doc(f.get("aircraftId") as string));
-      if (aircraft.get("amphibious") !== true) {
-        throw new HttpsError("failed-precondition", "Cet appareil n'est pas amphibie.");
-      }
+    // Plan 4b : amerrissages réservés à un appareil amphibie. Plan 7 :
+    // l'appareil est lu dans tous les cas (carburant actuel, spec §9.2).
+    const aircraftRef = db.collection("aircraft").doc(f.get("aircraftId") as string);
+    const aircraft = await tx.get(aircraftRef);
+    if (waterLandings > 0 && aircraft.get("amphibious") !== true) {
+      throw new HttpsError("failed-precondition", "Cet appareil n'est pas amphibie.");
     }
 
     // 1. Le vol (ci-dessus), le compte débité, son verrou, puis les tarifs.
@@ -116,8 +119,24 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
       customAmount,
       shortFlightAmount,
       pricingMode: bill.pricingMode,
+      fuelStartExpectedLiters: fuelStartExpected,
+      fuelStartLiters: fuelStart,
+      fuelAddedLiters: fuelAdded,
+      fuelEndLiters: fuelEnd,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // 5. Carburant actuel de l'appareil (spec §9.2) : seulement si ce vol
+    // est le plus récent à avoir déclaré son carburant.
+    const sourceStart = aircraft.get("fuelFlightStart") as FirebaseFirestore.Timestamp | undefined;
+    if (aircraft.exists && becomesFuelSource(startMs, sourceStart?.toMillis() ?? null)) {
+      tx.update(aircraftRef, {
+        fuelLiters: fuelEnd,
+        fuelFlightId: ref.id,
+        fuelFlightStart: f.get("start"),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     return { billedAmount: bill.billedAmount, billedTo: bill.billedTo };
   });

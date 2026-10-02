@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
-  code, db, seedAircraft, seedFlight, seedUser, H,
+  code, db, FUEL, seedAircraft, seedFlight, seedUser, H,
 } from "../flights/testkit";
 import { creditAccount, correctAccount } from "./accounts";
 import { closeFlight } from "../flights/close";
@@ -102,7 +102,7 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
 
   const results = await Promise.allSettled([
     creditAccount(instr, { userUid: pilot.uid, amount: 50_000, reason: "Versement" }),
-    closeFlight(pilot, { flightId, actualMinutes: 90, landings: 1 }),
+    closeFlight(pilot, { ...FUEL, flightId, actualMinutes: 90, landings: 1 }),
   ]);
   assert.equal(results.filter((r) => r.status === "fulfilled").length, 2);
 
@@ -110,12 +110,17 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
   const expectedBalance = 1_000_000 + 50_000 - 15_000;
   assert.equal((await getUser(pilot.uid)).balance, expectedBalance);
 
-  const txs = (await userTx(pilot.uid)).sort((a, b) => (a.balanceAfter as number) - (b.balanceAfter as number));
+  const txs = await userTx(pilot.uid);
   assert.equal(txs.length, 2);
   // Les deux mouvements se sérialisent (verrou flightLocks/user_<pilot>) : le
   // second balanceAfter part du solde réellement laissé par le premier, pas
   // d'un solde lu avant l'autre transaction.
-  const [first, second] = txs;
+  // Ordre causal (pas par balanceAfter) : le premier part de 1 000 000.
+  const startsAtInitial = (t: Record<string, unknown>) =>
+    (t.balanceAfter as number) - (t.amount as number) === 1_000_000;
+  const first = txs.find(startsAtInitial)!;
+  const second = txs.find((t) => t !== first)!;
+  assert.ok(first && second);
   assert.equal(second.balanceAfter, expectedBalance);
   assert.equal(first.balanceAfter + (first.type === "credit" ? -50_000 : 15_000), 1_000_000);
   assert.equal(second.balanceAfter, first.balanceAfter + (second.type === "credit" ? 50_000 : -15_000));

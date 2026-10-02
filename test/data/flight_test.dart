@@ -60,4 +60,20 @@ void main() {
         isFalse);
     expect(Aircraft.fromMap('a', {'amphibious': true}).amphibious, isTrue);
   });
+
+  test('carburant lu depuis Firestore ; hasFuel', () {
+    final f = testFlight(fuelStartExpected: null, fuelStart: 35, fuelAdded: 20, fuelEnd: 41);
+    expect(f.fuelStartExpectedLiters, isNull);
+    expect([f.fuelStartLiters, f.fuelAddedLiters, f.fuelEndLiters], [35, 20, 41]);
+    expect(f.hasFuel, isTrue);
+    expect(testFlight().hasFuel, isFalse);
+  });
+
+  test('appareil : carburant actuel', () {
+    final a = Aircraft.fromMap('a1', {'registration': 'F-X', 'label': 'ULM', 'active': true,
+        'fuelLiters': 41, 'fuelFlightId': 'f1'});
+    expect(a.fuelLiters, 41);
+    expect(a.fuelFlightId, 'f1');
+    expect(Aircraft.fromMap('a2', {}).fuelLiters, isNull);
+  });
 }

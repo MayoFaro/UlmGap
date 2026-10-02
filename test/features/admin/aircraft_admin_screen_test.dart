@@ -22,7 +22,7 @@ void main() {
     await tester.pumpWidget(host(api));
     await tester.pump();
     expect(find.text('ULM 1'), findsOneWidget);
-    expect(find.text('F-JABC'), findsOneWidget);
+    expect(find.text('F-JABC · carburant inconnu'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Nouvel appareil'));
     await tester.pumpAndSettle();
@@ -67,7 +67,7 @@ void main() {
       ];
     await tester.pumpWidget(host(api));
     await tester.pump();
-    expect(find.text('F-JABC · amphibie'), findsOneWidget);
+    expect(find.text('F-JABC · amphibie · carburant inconnu'), findsOneWidget);
     await tester.tap(find.byTooltip('Nouvel appareil'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('a-reg')), 'F-JAMP');
@@ -76,5 +76,25 @@ void main() {
     await tester.tap(find.text('Enregistrer'));
     await tester.pumpAndSettle();
     expect(api.upserted.single['amphibious'], isTrue);
+  });
+
+  testWidgets('carburant affiché ; bouton Suivi carburant', (tester) async {
+    final aircraft = [
+      Aircraft.fromMap('a1',
+          {'registration': 'F-JABC', 'label': 'ULM 1', 'active': true, 'fuelLiters': 40}),
+    ];
+    final admin = FakeAdminApi()..aircraft = aircraft;
+    await tester.pumpWidget(AppServices(
+      auth: FakeAuthService(),
+      users: FakeUserRepository(),
+      admin: admin,
+      flights: FakeFlightApi()..aircraft = aircraft,
+      child: MaterialApp(home: AircraftAdminScreen(me: testUser(isAdmin: true))),
+    ));
+    await tester.pump();
+    expect(find.text('F-JABC · carburant 40 L'), findsOneWidget);
+    await tester.tap(find.byTooltip('Suivi carburant'));
+    await tester.pumpAndSettle();
+    expect(find.text('Suivi carburant · F-JABC'), findsOneWidget);
   });
 }

@@ -72,7 +72,8 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     }
     if (!closed && (v.pricingMode === "custom" || v.actualMinutes !== undefined ||
         v.shortFlightAmount != null || v.customAmount != null ||
-        v.landings !== undefined || v.waterLandings !== undefined)) {
+        v.landings !== undefined || v.waterLandings !== undefined ||
+        v.fuelStart !== undefined || v.fuelAdded !== undefined || v.fuelEnd !== undefined)) {
       throw new HttpsError("failed-precondition", "Réservé aux vols clôturés.");
     }
 
@@ -90,6 +91,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     const actualMinutes = v.actualMinutes ?? (f.get("actualFlightMinutes") as number);
     let landings = 0;
     let waterLandings = 0;
+    let fuelAircraftRef: Ref | null = null;
     let input = v.input;
     if (closed) {
       landings = v.landings ?? (f.get("landings") as number | undefined) ?? 1;
@@ -100,6 +102,13 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
         if (aircraft.get("amphibious") !== true) {
           throw new HttpsError("failed-precondition", "Cet appareil n'est pas amphibie.");
         }
+      }
+      // Plan 7 (spec §9.3) : le carburant actuel suit la correction si ce
+      // vol en est la source et que son appareil ne change pas.
+      if (v.fuelEnd !== undefined && input.aircraftId === f.get("aircraftId")) {
+        const ref2 = db.collection("aircraft").doc(input.aircraftId);
+        const ac = await tx.get(ref2);
+        if (ac.exists && ac.get("fuelFlightId") === ref.id) fuelAircraftRef = ref2;
       }
       input = { ...input, end: closingEnd(input.start, input.end, actualMinutes) };
     }
@@ -192,7 +201,13 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       // durée minimale), jamais périmé.
       shortFlightAmount: bill.pricingMode !== "custom" &&
         computedCost(billMode, actualMinutes, category, pricing) === null ? shortFlightAmount : null,
+      ...(v.fuelStart !== undefined ? { fuelStartLiters: v.fuelStart } : {}),
+      ...(v.fuelAdded !== undefined ? { fuelAddedLiters: v.fuelAdded } : {}),
+      ...(v.fuelEnd !== undefined ? { fuelEndLiters: v.fuelEnd } : {}),
     });
+    if (fuelAircraftRef) {
+      tx.update(fuelAircraftRef, { fuelLiters: v.fuelEnd, updatedAt: FieldValue.serverTimestamp() });
+    }
     return posted;
   });
   await notifyMovements(db, by, written);

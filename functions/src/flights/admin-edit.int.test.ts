@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { at, code, db, details, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, details, FUEL, H, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { closeFlight } from "./close";
 
@@ -40,7 +40,7 @@ async function closedFlight(
   const id = await seedFlight({
     start, end, status: "valide", pricingMode: "standard", createdBy: adminCaller.uid, ...fields,
   });
-  await closeFlight(adminCaller, { landings: 1, flightId: id, ...closing });
+  await closeFlight(adminCaller, { ...FUEL, landings: 1, flightId: id, ...closing });
   return { id, start, end };
 }
 
@@ -406,3 +406,49 @@ test("conduite : correction d'un vol passé non clôturé qui chevauche un autre
     await adminUpdateFlight(boss, await correction(id, { end: start + 150 * 60_000 }));
     assert.equal((await getFlight(id)).end.toMillis(), start + 150 * 60_000);
   });
+
+const fuelOf = async (aircraftId: string) =>
+  (await db.collection("aircraft").doc(aircraftId).get()).get("fuelLiters") as number | undefined;
+
+test("carburant corrigé sur le vol source : le vol et l'appareil suivent", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  assert.equal(await fuelOf(a), 30);
+  await adminUpdateFlight(boss, await correction(id, { fuelStart: 12, fuelAdded: 30, fuelEnd: 22 }));
+  const f = await getFlight(id);
+  assert.deepEqual([f.fuelStartLiters, f.fuelAddedLiters, f.fuelEndLiters], [12, 30, 22]);
+  assert.equal(await fuelOf(a), 22);
+});
+
+test("carburant corrigé sur un vol qui n'est pas la source : appareil inchangé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await db.collection("aircraft").doc(a).update({ fuelFlightId: "autre-vol", fuelLiters: 55 });
+  await adminUpdateFlight(boss, await correction(id, { fuelEnd: 10 }));
+  assert.equal((await getFlight(id)).fuelEndLiters, 10);
+  assert.equal(await fuelOf(a), 55);
+});
+
+test("correction sans carburant : valeurs carburant du vol inchangées", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { destination: "Kara" }));
+  const f = await getFlight(id);
+  assert.deepEqual([f.fuelStartLiters, f.fuelAddedLiters, f.fuelEndLiters], [40, 0, 30]);
+  assert.equal(await fuelOf(a), 30);
+});
+
+test("carburant sur un vol non clôturé : refusé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const id = await seedFlight({ start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: pilot.uid });
+  await assert.rejects(adminUpdateFlight(boss, await correction(id, { fuelEnd: 10 })),
+    (e) => code(e) === "failed-precondition" && (e as Error).message === "Réservé aux vols clôturés.");
+});

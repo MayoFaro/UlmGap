@@ -5,7 +5,7 @@
 // run-tests.js).
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { at, code, db, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, FUEL, H, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { closeFlight } from "./close";
 import { createFlight } from "./edit";
 import { DEFAULT_PRICING } from "../rules/pricing";
@@ -34,7 +34,7 @@ test("clôture 90 min GAP par un membre de l'équipage : solde −15 000, transa
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid, mate.uid], payerUid: pilot.uid, aircraftId: a });
 
-  const r = await closeFlight(mate, { landings: 1, flightId: id, actualMinutes: 90 });
+  const r = await closeFlight(mate, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90 });
   assert.deepEqual(r, { billedAmount: 15_000, billedTo: "account" });
 
   assert.equal((await getUser(pilot.uid)).balance, 1_000_000 - 15_000);
@@ -64,12 +64,12 @@ test("non-membre non admin : permission-denied ; admin hors équipage : accepté
   const a = await seedAircraft();
   const id1 = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
   await assert.rejects(
-    closeFlight(outsider, { landings: 1, flightId: id1, actualMinutes: 90 }),
+    closeFlight(outsider, { ...FUEL, landings: 1, flightId: id1, actualMinutes: 90 }),
     (e) => code(e) === "permission-denied",
   );
 
   const id2 = await seedPastFlight({ crew: [pilot.uid], aircraftId: await seedAircraft() });
-  const r = await closeFlight(admin1, { landings: 1, flightId: id2, actualMinutes: 90 });
+  const r = await closeFlight(admin1, { ...FUEL, landings: 1, flightId: id2, actualMinutes: 90 });
   assert.equal(r.billedTo, "account");
 });
 
@@ -81,7 +81,7 @@ test("avant le départ : failed-precondition", async () => {
     status: "valide", pricingMode: "standard",
   });
   await assert.rejects(
-    closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 90 }),
+    closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90 }),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "Le vol n'a pas encore eu lieu.",
   );
 });
@@ -96,7 +96,7 @@ test("vol du jour pas encore parti : clôture acceptée (décision 6)", async ()
     start: endOfClubDay - 60 * 60_000, end: endOfClubDay, crew: [pilot.uid], aircraftId: a,
     status: "valide", pricingMode: "standard",
   });
-  const r = await closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 60 });
+  const r = await closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 60 });
   assert.equal(r.billedTo, "account");
 });
 
@@ -106,8 +106,8 @@ test("deux clôtures simultanées : une seule réussit, un seul débit", async (
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
 
   const r = await Promise.allSettled([
-    closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 90 }),
-    closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 90 }),
+    closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90 }),
+    closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90 }),
   ]);
   assert.equal(r.filter((x) => x.status === "fulfilled").length, 1);
   const rejected = r.find((x) => x.status === "rejected") as PromiseRejectedResult;
@@ -123,11 +123,11 @@ test("moins de 45 min standard sans montant : invalid-argument ; avec 8 000 : d�
   const a = await seedAircraft();
   const id1 = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
   await assert.rejects(
-    closeFlight(pilot, { landings: 1, flightId: id1, actualMinutes: 30 }),
+    closeFlight(pilot, { ...FUEL, landings: 1, flightId: id1, actualMinutes: 30 }),
     (e) => code(e) === "invalid-argument",
   );
   // Le vol n'a pas été clôturé par l'essai précédent : on peut réessayer.
-  const r = await closeFlight(pilot, { landings: 1, flightId: id1, actualMinutes: 30, shortFlightAmount: 8_000 });
+  const r = await closeFlight(pilot, { ...FUEL, landings: 1, flightId: id1, actualMinutes: 30, shortFlightAmount: 8_000 });
   assert.deepEqual(r, { billedAmount: 8_000, billedTo: "account" });
 });
 
@@ -135,7 +135,7 @@ test("montant différent avec passager : off_app, aucun mouvement de solde ; san
   const pilot = await seedUser({ profile: "lache_toute_mission" });
   const a = await seedAircraft();
   const idWithPax = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, passengers: ["Paul"] });
-  const r = await closeFlight(pilot, { landings: 1, flightId: idWithPax, actualMinutes: 90, customAmount: 5_000 });
+  const r = await closeFlight(pilot, { ...FUEL, landings: 1, flightId: idWithPax, actualMinutes: 90, customAmount: 5_000 });
   assert.deepEqual(r, { billedAmount: 5_000, billedTo: "off_app" });
   assert.equal((await getUser(pilot.uid)).balance, 1_000_000);
   assert.equal((await flightTx(idWithPax)).length, 0);
@@ -146,7 +146,7 @@ test("montant différent avec passager : off_app, aucun mouvement de solde ; san
 
   const idNoPax = await seedPastFlight({ crew: [pilot.uid], aircraftId: await seedAircraft() });
   await assert.rejects(
-    closeFlight(pilot, { landings: 1, flightId: idNoPax, actualMinutes: 90, customAmount: 5_000 }),
+    closeFlight(pilot, { ...FUEL, landings: 1, flightId: idNoPax, actualMinutes: 90, customAmount: 5_000 }),
     (e) => code(e) === "invalid-argument",
   );
 });
@@ -156,7 +156,7 @@ test("montant de 250 000 : invalid-argument", async () => {
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, passengers: ["Paul"] });
   await assert.rejects(
-    closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 90, customAmount: 250_000 }),
+    closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90, customAmount: 250_000 }),
     (e) => code(e) === "invalid-argument",
   );
 });
@@ -178,7 +178,7 @@ test("tarifs figés : le pricingSnapshot (EXT 70 000) facture, pas le tarif cour
     await updatePricing(admin1, {
       ...DEFAULT_PRICING, flatFee: { ...DEFAULT_PRICING.flatFee, EXT: 80_000 },
     });
-    const r = await closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 60 });
+    const r = await closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 60 });
     assert.equal(r.billedAmount, 70_000);
   } finally {
     await updatePricing(admin1, DEFAULT_PRICING);
@@ -190,7 +190,7 @@ test("vol validé sans pricingSnapshot (ancien vol) : tarifs courants", async ()
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, pricingSnapshot: null });
   assert.equal((await getFlight(id)).pricingSnapshot, null);
-  const r = await closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 60 });
+  const r = await closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 60 });
   assert.equal(r.billedAmount, DEFAULT_PRICING.flatFee.EXT);
 });
 
@@ -198,7 +198,7 @@ test("le solde peut devenir négatif", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission", balance: 1_000 });
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
-  const r = await closeFlight(pilot, { landings: 1, flightId: id, actualMinutes: 60 });
+  const r = await closeFlight(pilot, { ...FUEL, landings: 1, flightId: id, actualMinutes: 60 });
   assert.equal(r.billedAmount, DEFAULT_PRICING.flatFee.EXT); // EXT par défaut, 60 min < 75 incluses
   assert.equal((await getUser(pilot.uid)).balance, 1_000 - DEFAULT_PRICING.flatFee.EXT);
 });
@@ -208,7 +208,7 @@ test("temps de vol plus long que prévu : fin allongée, nombres enregistrés", 
   const a = await seedAircraft();
   const start = Date.now() - 5 * H;
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, start, end: start + H });
-  await closeFlight(pilot, { flightId: id, actualMinutes: 90, landings: 2 });
+  await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 90, landings: 2 });
   const f = await getFlight(id);
   assert.equal(f.end.toMillis(), start + 90 * 60_000);
   assert.equal(f.landings, 2);
@@ -220,7 +220,7 @@ test("temps de vol plus court que fin − début : fin inchangée", async () => 
   const a = await seedAircraft();
   const start = Date.now() - 5 * H;
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, start, end: start + 3 * H });
-  await closeFlight(pilot, { flightId: id, actualMinutes: 90, landings: 1 });
+  await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 90, landings: 1 });
   assert.equal((await getFlight(id)).end.toMillis(), start + 3 * H);
 });
 
@@ -228,7 +228,7 @@ test("appareil amphibie : amerrissages enregistrés", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission" });
   const a = await seedAircraft(true, true);
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
-  await closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1, waterLandings: 3 });
+  await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 60, landings: 1, waterLandings: 3 });
   const f = await getFlight(id);
   assert.equal(f.landings, 1);
   assert.equal(f.waterLandings, 3);
@@ -239,8 +239,54 @@ test("amerrissages sur un appareil non amphibie : refusé, vol non clôturé", a
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
   await assert.rejects(
-    closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1, waterLandings: 1 }),
+    closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 60, landings: 1, waterLandings: 1 }),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "Cet appareil n'est pas amphibie.",
+  );
+  assert.equal((await getFlight(id)).isClosed, false);
+});
+
+const getAircraft = async (id: string) => (await db.collection("aircraft").doc(id).get()).data()!;
+
+test("carburant : valeurs enregistrées sur le vol, recopiées sur l'appareil", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const start = Date.now() - 3 * H;
+  const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, start, end: start + H });
+  await closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1,
+    fuelStartExpected: null, fuelStart: 35, fuelAdded: 20, fuelEnd: 41 });
+  const f = await getFlight(id);
+  assert.equal(f.fuelStartExpectedLiters, null);
+  assert.equal(f.fuelStartLiters, 35);
+  assert.equal(f.fuelAddedLiters, 20);
+  assert.equal(f.fuelEndLiters, 41);
+  const ac = await getAircraft(a);
+  assert.equal(ac.fuelLiters, 41);
+  assert.equal(ac.fuelFlightId, id);
+  assert.equal(ac.fuelFlightStart.toMillis(), start);
+});
+
+test("carburant : clôture tardive d'un vol plus ancien, appareil inchangé", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const older = Date.now() - 30 * H;
+  const newer = Date.now() - 5 * H;
+  const idNew = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, start: newer, end: newer + H });
+  const idOld = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, start: older, end: older + H });
+  await closeFlight(pilot, { ...FUEL, flightId: idNew, actualMinutes: 60, landings: 1, fuelEnd: 25 });
+  await closeFlight(pilot, { ...FUEL, flightId: idOld, actualMinutes: 60, landings: 1, fuelEnd: 70 });
+  assert.equal((await getFlight(idOld)).fuelEndLiters, 70);
+  const ac = await getAircraft(a);
+  assert.equal(ac.fuelLiters, 25);
+  assert.equal(ac.fuelFlightId, idNew);
+});
+
+test("carburant manquant : invalid-argument, vol non clôturé", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
+  await assert.rejects(
+    closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1, fuelStart: 40, fuelAdded: 0 }),
+    (e) => code(e) === "invalid-argument" && (e as Error).message === "Carburant rangé invalide (0 à 100 L).",
   );
   assert.equal((await getFlight(id)).isClosed, false);
 });

@@ -3,6 +3,7 @@
 // écran davantage (Task 10 y ajoute encore des actions admin).
 import 'package:flutter/material.dart';
 
+import '../../core/fuel.dart';
 import '../../core/money.dart';
 import '../../core/pricing.dart';
 import '../../core/profiles.dart';
@@ -10,12 +11,24 @@ import '../../core/profiles.dart';
 /// Saisie validée du dialogue de clôture, prête pour FinanceApi.closeFlight.
 class ClosingResult {
   const ClosingResult(this.actualMinutes, this.shortFlightAmount, this.customAmount,
-      {this.landings = 1, this.waterLandings = 0});
+      {this.landings = 1,
+      this.waterLandings = 0,
+      this.fuelStartExpected,
+      this.fuelStart = 0,
+      this.fuelAdded = 0,
+      this.fuelEnd = 0});
   final int actualMinutes;
   final int? shortFlightAmount;
   final int? customAmount;
   final int landings;
   final int waterLandings;
+
+  /// Plan 7 : carburant prévu au départ (null si inconnu), réel au départ,
+  /// ajouté et à bord appareil rangé, en litres.
+  final int? fuelStartExpected;
+  final int fuelStart;
+  final int fuelAdded;
+  final int fuelEnd;
 }
 
 /// Plan 4b, décision 3 : contrôle des nombres saisis à la clôture (et à la
@@ -33,7 +46,9 @@ String? landingsError(int? landings, int? waterLandings) {
 /// (préremplie avec la durée prévue), montant à facturer si le vol est plus
 /// court que le minimum tarifaire, montant différent si un passager sans
 /// compte est à bord, aperçu du montant calculé par [closingBill] et plafond
-/// local de 200 000 FCFA sur les montants saisis (décision 5).
+/// local de 200 000 FCFA sur les montants saisis (décision 5). Plan 7 : bloc
+/// carburant (spec §9.1) : prévu au départ = carburant actuel de l'appareil,
+/// case « non conforme » pour corriger le départ, ajouté et rangé obligatoires.
 ///
 /// [category] peut être `null` (fix round 1, décision utilisateur 2) : un
 /// membre d'équipage non-staff qui n'est pas le compte débité ne connaît pas
@@ -50,6 +65,7 @@ class ClosingDialog extends StatefulWidget {
     required this.pricing,
     required this.hasPassenger,
     this.amphibious = false,
+    this.fuelExpected,
   });
 
   final int plannedMinutes;
@@ -61,6 +77,9 @@ class ClosingDialog extends StatefulWidget {
   /// Appareil amphibie : champ « Amerrissages » (plan 4b).
   final bool amphibious;
 
+  /// Plan 7 : carburant actuel de l'appareil, null si inconnu.
+  final int? fuelExpected;
+
   @override
   State<ClosingDialog> createState() => _ClosingDialogState();
 }
@@ -71,7 +90,11 @@ class _ClosingDialogState extends State<ClosingDialog> {
   final _customAmount = TextEditingController();
   final _landings = TextEditingController(text: '1');
   final _waterLandings = TextEditingController(text: '0');
+  final _fuelStart = TextEditingController();
+  final _fuelAdded = TextEditingController();
+  final _fuelEnd = TextEditingController();
   bool _customChecked = false;
+  bool _fuelGap = false;
   String? _error;
 
   @override
@@ -81,6 +104,9 @@ class _ClosingDialogState extends State<ClosingDialog> {
     _customAmount.dispose();
     _landings.dispose();
     _waterLandings.dispose();
+    _fuelStart.dispose();
+    _fuelAdded.dispose();
+    _fuelEnd.dispose();
     super.dispose();
   }
 
@@ -121,7 +147,25 @@ class _ClosingDialogState extends State<ClosingDialog> {
     }
   }
 
-  void _submit() {
+  /// Consommation du vol hors des bornes habituelles : demande de vérifier
+  /// les valeurs (non bloquant). Vrai si l'équipage confirme.
+  Future<bool> _confirmConsumption(double litersPerHour) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Consommation inhabituelle'),
+        content: Text('Consommation calculée : ${formatLitersPerHour(litersPerHour)}. '
+            'Vérifiez les valeurs saisies.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Corriger')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirmer')),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _submit() async {
     final m = _actualMinutes;
     if (m == null || m < 1 || m > 720) {
       setState(() => _error = 'Durée réelle invalide (1 à 720 min).');
@@ -159,8 +203,29 @@ class _ClosingDialogState extends State<ClosingDialog> {
       setState(() => _error = countError);
       return;
     }
-    Navigator.pop(context, ClosingResult(m, shortAmount, customAmount,
-        landings: landings!, waterLandings: waterLandings!));
+    final unknown = widget.fuelExpected == null;
+    final fuelStart = unknown || _fuelGap ? int.tryParse(_fuelStart.text.trim()) : widget.fuelExpected;
+    final fuelAdded = int.tryParse(_fuelAdded.text.trim());
+    final fuelEnd = int.tryParse(_fuelEnd.text.trim());
+    final fuelErr = fuelError(start: fuelStart, added: fuelAdded, end: fuelEnd);
+    if (fuelErr != null) {
+      setState(() => _error = fuelErr);
+      return;
+    }
+    // Alerte de consommation (non bloquante) : l'équipage corrige ou confirme.
+    final rate = flightLitersPerHour(
+        start: fuelStart!, added: fuelAdded!, end: fuelEnd!, minutes: m);
+    if (isUnusualConsumption(rate) && !await _confirmConsumption(rate)) return;
+    if (!mounted) return;
+    Navigator.pop(
+        context,
+        ClosingResult(m, shortAmount, customAmount,
+            landings: landings!,
+            waterLandings: waterLandings!,
+            fuelStartExpected: widget.fuelExpected,
+            fuelStart: fuelStart,
+            fuelAdded: fuelAdded,
+            fuelEnd: fuelEnd));
   }
 
   @override
@@ -193,6 +258,40 @@ class _ClosingDialogState extends State<ClosingDialog> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Amerrissages'),
               ),
+            const SizedBox(height: 12),
+            Text('Carburant', style: Theme.of(context).textTheme.titleSmall),
+            Text('Carburant prévu au départ : ${fuelText(widget.fuelExpected)}',
+                key: const Key('closing-fuel-expected')),
+            if (widget.fuelExpected != null)
+              CheckboxListTile(
+                key: const Key('closing-fuel-gap'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Carburant réel à bord non conforme'),
+                value: _fuelGap,
+                onChanged: (v) => setState(() => _fuelGap = v ?? false),
+              ),
+            if (widget.fuelExpected == null || _fuelGap)
+              TextField(
+                key: const Key('closing-fuel-start'),
+                controller: _fuelStart,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText: widget.fuelExpected == null
+                        ? 'Carburant au départ (L)'
+                        : 'Carburant réel au départ (L)'),
+              ),
+            TextField(
+              key: const Key('closing-fuel-added'),
+              controller: _fuelAdded,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Carburant ajouté (L)'),
+            ),
+            TextField(
+              key: const Key('closing-fuel-end'),
+              controller: _fuelEnd,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Carburant à bord, appareil rangé (L)'),
+            ),
             if (_needsShortAmount) ...[
               const SizedBox(height: 8),
               TextField(

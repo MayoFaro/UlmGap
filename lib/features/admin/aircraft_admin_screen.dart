@@ -2,10 +2,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/async_state.dart';
+import '../../core/fuel.dart';
 import '../../data/aircraft.dart';
 import '../../data/services.dart';
 import 'aircraft_form_dialog.dart';
 import '../../data/app_user.dart';
+import '../fuel/fuel_log_screen.dart';
 import '../home/app_nav.dart';
 
 class AircraftAdminScreen extends StatelessWidget {
@@ -56,8 +58,22 @@ class AircraftAdminScreen extends StatelessWidget {
                   textColor: a.active ? null : Theme.of(context).disabledColor,
                   leading: const Icon(Icons.airplanemode_active),
                   title: Text(a.label),
-                  subtitle: Text(a.amphibious ? '${a.registration} · amphibie' : a.registration),
-                  trailing: a.active ? null : const Chip(label: Text('Inactif')),
+                  subtitle: Text(
+                      '${a.amphibious ? '${a.registration} · amphibie' : a.registration}'
+                      ' · carburant ${fuelText(a.fuelLiters)}'),
+                  trailing: me == null
+                      ? (a.active ? null : const Chip(label: Text('Inactif')))
+                      : Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (!a.active) const Chip(label: Text('Inactif')),
+                          IconButton(
+                            tooltip: 'Suivi carburant',
+                            icon: const Icon(Icons.local_gas_station),
+                            onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => FuelLogScreen(me: me!, aircraftId: a.id))),
+                          ),
+                        ]),
                   onTap: () async {
                     final input = await showAircraftFormDialog(context, aircraft: a);
                     if (context.mounted) await _save(context, input);

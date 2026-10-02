@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/formats.dart';
+import '../../core/fuel.dart';
 import '../../core/money.dart';
 import '../../data/crew_member.dart';
 import '../../data/flight.dart';
@@ -98,4 +99,11 @@ String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {
     return 'Conflit : $members est déjà sur le vol du $when (${c.aircraft}, $crew).';
   }
   return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew).';
+}
+
+/// Plan 7 (spec §9.4) : carburant déclaré à la clôture.
+String fuelSummary(Flight f) {
+  final base = 'Carburant : départ ${fuelText(f.fuelStartLiters)} · '
+      'ajouté ${fuelText(f.fuelAddedLiters)} · rangé ${fuelText(f.fuelEndLiters)}';
+  return fuelGap(f) ? '$base (prévu ${fuelText(f.fuelStartExpectedLiters)})' : base;
 }

@@ -5,7 +5,7 @@
 import { test, beforeEach, afterEach } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { db, H, seedAircraft, seedFlight, seedUser } from "../flights/testkit";
+import { db, FUEL, H, seedAircraft, seedFlight, seedUser } from "../flights/testkit";
 import { correctAccount, creditAccount } from "../finance/accounts";
 import { closeFlight } from "../flights/close";
 import { adminUpdateFlight } from "../flights/admin-edit";
@@ -74,7 +74,7 @@ test("correction admin d'un vol clôturé : « Régularisation » ; clôture seu
   const id = await seedFlight({
     start, end: start + 90 * 60_000, crew: [pilot.uid], aircraftId: a, createdBy: boss.uid,
   });
-  await closeFlight(pilot, { flightId: id, actualMinutes: 90, landings: 1 });
+  await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 90, landings: 1 });
   assert.deepEqual(about("PIL"), []); // débit de clôture : pas un mouvement de crédit
 
   const f = (await db.collection("flights").doc(id).get()).data()!;

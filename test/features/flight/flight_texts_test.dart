@@ -52,4 +52,12 @@ void main() {
     expect(savedMessage(FlightStatus.demande, 'INS', created: false),
         'Demande modifiée, envoyée à INS.');
   });
+
+  test('fuelSummary : sans écart, avec écart, prévu inconnu', () {
+    Flight f(int? exp, int start) => testFlight(isClosed: true, actualFlightMinutes: 60,
+        fuelStartExpected: exp, fuelStart: start, fuelAdded: 20, fuelEnd: 35);
+    expect(fuelSummary(f(40, 40)), 'Carburant : départ 40 L · ajouté 20 L · rangé 35 L');
+    expect(fuelSummary(f(30, 40)), 'Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu 30 L)');
+    expect(fuelSummary(f(null, 40)), 'Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu inconnu)');
+  });
 }

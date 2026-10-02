@@ -46,6 +46,10 @@ class Flight {
     this.closedAt,
     this.landings,
     this.waterLandings,
+    this.fuelStartExpectedLiters,
+    this.fuelStartLiters,
+    this.fuelAddedLiters,
+    this.fuelEndLiters,
   });
 
   final String id;
@@ -83,6 +87,15 @@ class Flight {
   final int? landings;
   final int? waterLandings;
 
+  /// Plan 7 : carburant (spec §9), saisi à la clôture ; null avant.
+  final int? fuelStartExpectedLiters;
+  final int? fuelStartLiters;
+  final int? fuelAddedLiters;
+  final int? fuelEndLiters;
+
+  bool get hasFuel =>
+      fuelStartLiters != null && fuelAddedLiters != null && fuelEndLiters != null;
+
   String get payerUid => crew.first;
 
   factory Flight.fromMap(String id, Map<String, dynamic> m) => Flight(
@@ -114,6 +127,10 @@ class Flight {
         closedAt: _dateOrNull(m['closedAt']),
         landings: (m['landings'] as num?)?.toInt(),
         waterLandings: (m['waterLandings'] as num?)?.toInt(),
+        fuelStartExpectedLiters: (m['fuelStartExpectedLiters'] as num?)?.toInt(),
+        fuelStartLiters: (m['fuelStartLiters'] as num?)?.toInt(),
+        fuelAddedLiters: (m['fuelAddedLiters'] as num?)?.toInt(),
+        fuelEndLiters: (m['fuelEndLiters'] as num?)?.toInt(),
       );
 
   /// Demande non validée à l'heure du départ : considérée comme refusée.

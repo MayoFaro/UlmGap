@@ -196,6 +196,10 @@ Flight testFlight({
   String? billedTo,
   String? payerUidField,
   Map<String, dynamic>? pricingSnapshot,
+  int? fuelStartExpected,
+  int? fuelStart,
+  int? fuelAdded,
+  int? fuelEnd,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -218,6 +222,10 @@ Flight testFlight({
     'billedTo': billedTo,
     'payerUid': payerUidField,
     'pricingSnapshot': pricingSnapshot,
+    'fuelStartExpectedLiters': fuelStartExpected,
+    'fuelStartLiters': fuelStart,
+    'fuelAddedLiters': fuelAdded,
+    'fuelEndLiters': fuelEnd,
   });
 }
 
@@ -277,6 +285,12 @@ class FakeFlightApi implements FlightApi {
   Stream<Map<String, UserCategory>> watchCategories() => Stream.value(categories);
   @override
   Stream<List<Aircraft>> watchAircraft() => Stream.value(aircraft);
+  @override
+  Stream<List<Flight>> watchAircraftFlights(String aircraftId) async* {
+    yield flights.where((f) => f.aircraftId == aircraftId).toList();
+    yield* flightsCtrl.stream.map((l) => l.where((f) => f.aircraftId == aircraftId).toList());
+  }
+
   @override
   Future<List<String>> recentDestinations() async => destinations;
 
@@ -384,6 +398,10 @@ class FakeFinanceApi implements FinanceApi {
     int? customAmount,
     required int landings,
     int waterLandings = 0,
+    required int? fuelStartExpected,
+    required int fuelStart,
+    required int fuelAdded,
+    required int fuelEnd,
   }) async {
     _fail();
     closed.add({
@@ -391,6 +409,10 @@ class FakeFinanceApi implements FinanceApi {
       'actualMinutes': actualMinutes,
       'landings': landings,
       'waterLandings': waterLandings,
+      'fuelStartExpected': fuelStartExpected,
+      'fuelStart': fuelStart,
+      'fuelAdded': fuelAdded,
+      'fuelEnd': fuelEnd,
       'shortFlightAmount': shortFlightAmount,
       'customAmount': customAmount,
     });

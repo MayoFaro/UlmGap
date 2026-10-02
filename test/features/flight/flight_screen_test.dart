@@ -16,6 +16,17 @@ import '../../support/fakes.dart';
 
 final now = DateTime(2026, 10, 12, 8, 20);
 
+/// Remplit les champs carburant obligatoires du dialogue de clôture (et le
+/// départ s'il est affiché).
+/// Rangé par défaut à 25 L : 15 L consommés, soit 10 à 15 L/h pour les vols
+/// de 60 à 90 min des tests (pas d'alerte de consommation).
+Future<void> fillFuel(WidgetTester tester, {String added = '0', String end = '25'}) async {
+  final start = find.byKey(const Key('closing-fuel-start'));
+  if (start.evaluate().isNotEmpty) await tester.enterText(start, '40');
+  await tester.enterText(find.byKey(const Key('closing-fuel-added')), added);
+  await tester.enterText(find.byKey(const Key('closing-fuel-end')), end);
+}
+
 /// Un vol existant passé à l'écran doit aussi être « connu » du serveur
 /// simulé (watchFlight le sert depuis `api.flights`, Task 3 retours de
 /// recette) : sinon la première émission du flux (introuvable) écraserait
@@ -653,6 +664,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('closing-minutes')), findsOneWidget);
     expect(find.text('Montant : ${formatFcfa(15000)}'), findsOneWidget);
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['flightId'], 'c1');
@@ -663,6 +675,38 @@ void main() {
     expect(finance.closed.single['waterLandings'], 0);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
+  });
+
+  testWidgets('clôture : carburant prévu = carburant actuel de l\'appareil, valeurs envoyées',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..aircraft = [
+        Aircraft.fromMap('a1', {
+          'registration': 'F-JABC',
+          'label': 'ULM 1',
+          'active': true,
+          'fuelLiters': 40,
+        }),
+      ];
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'c1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    final finance = FakeFinanceApi();
+    await tester.pumpWidget(
+        pushHost(a, testUser(uid: 'u1', category: 'GAP'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant prévu au départ : 40 L'), findsOneWidget);
+    await fillFuel(tester, added: '10', end: '35');
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    final c = finance.closed.single;
+    expect([c['fuelStartExpected'], c['fuelStart'], c['fuelAdded'], c['fuelEnd']], [40, 40, 10, 35]);
   });
 
   testWidgets(
@@ -691,6 +735,7 @@ void main() {
     // reste utilisable.
     expect(find.text('Montant calculé par le serveur à la clôture.'), findsOneWidget);
     expect(find.textContaining('Montant :'), findsNothing);
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['flightId'], 'c5');
@@ -784,6 +829,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('closing-custom-amount')), '5000');
     await tester.pumpAndSettle();
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['customAmount'], 5000);
@@ -811,6 +857,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Montant trop élevé (200 000 FCFA au maximum).'), findsOneWidget);
     expect(finance.closed, isEmpty);
+  });
+
+  testWidgets('vol non clôturé : carburant actuel affiché, appui → Suivi carburant',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..aircraft = [
+        Aircraft.fromMap('a1',
+            {'registration': 'F-JABC', 'label': 'ULM 1', 'active': true, 'fuelLiters': 40}),
+      ];
+    final f = testFlight(
+        id: 'f1', start: DateTime(2026, 10, 13, 9), end: DateTime(2026, 10, 13, 10),
+        crew: ['u1'], createdBy: 'u1', status: 'valide');
+    await tester.pumpWidget(host(a, testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant : 40 L'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('current-fuel')));
+    await tester.pumpAndSettle();
+    expect(find.text('Suivi carburant · F-JABC'), findsOneWidget);
+  });
+
+  testWidgets('vol clôturé : résumé carburant', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        fuelStartExpected: 30, fuelStart: 40, fuelAdded: 20, fuelEnd: 35);
+    await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu 30 L)'),
+        findsOneWidget);
   });
 
   testWidgets('vol clôturé : ligne « Clôturé », aucun bouton pour un non-admin', (tester) async {
@@ -1095,6 +1173,7 @@ void main() {
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('closing-water-landings')), '2');
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['landings'], 1);
@@ -1216,6 +1295,58 @@ void main() {
     expect(finance.adminUpdated['ci3']!.containsKey('waterLandings'), isFalse);
   });
 
+  // --- plan 7 : correction admin du carburant ---
+
+  Flight closedFuel({int? start, int? added, int? end}) {
+    final s = DateTime(2026, 10, 12, 5);
+    return testFlight(
+        id: 'fu1', start: s, end: s.add(const Duration(minutes: 90)), crew: ['u1'],
+        createdBy: 'u1', status: 'valide', isClosed: true, actualFlightMinutes: 90,
+        billedAmount: 15000, billedTo: 'account',
+        fuelStart: start, fuelAdded: added, fuelEnd: end);
+  }
+
+  Future<void> saveCorrection(WidgetTester tester) async {
+    final save = find.byKey(const Key('admin-save-correction'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('correction admin : carburant pré-rempli et envoyé', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel(start: 40, added: 20, end: 35));
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-fuel-end'))).controller!.text, '35');
+    await tester.enterText(find.byKey(const Key('correct-fuel-end')), '22');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect([p['fuelStart'], p['fuelAdded'], p['fuelEnd']], [40, 20, 22]);
+  });
+
+  testWidgets('correction admin d\'un vol sans carburant : champs vides, rien envoyé',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel());
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-fuel-end'))).controller!.text, '');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect(p.containsKey('fuelStart'), isFalse);
+    expect(p.containsKey('fuelAdded'), isFalse);
+    expect(p.containsKey('fuelEnd'), isFalse);
+  });
+
+  testWidgets('correction admin : carburant partiel ou hors bornes refusé', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel());
+    await tester.enterText(find.byKey(const Key('correct-fuel-end')), '150');
+    await saveCorrection(tester);
+    expect(find.text('Carburant au départ invalide (0 à 100 L).'), findsOneWidget);
+    expect(finance.adminUpdated, isEmpty);
+  });
+
   // --- révision du 2026-10-01 : conflits en planification seulement ---
 
   testWidgets('aperçu : un vol clôturé ne crée jamais de conflit', (tester) async {
@@ -1303,6 +1434,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
+    await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(find.text('Vol clôturé.'), findsOneWidget);

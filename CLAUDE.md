@@ -15,6 +15,8 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-01-ulmgap-04b-atterrissages.md`
 - Plan 5, Node 22, notifications push et rappels de clôture (terminé) :
   `docs/superpowers/plans/2026-10-01-ulmgap-05-notifications.md`
+- Plan 7, suivi carburant (terminé, branche `feature/carburant`, pas encore fusionné) :
+  `docs/superpowers/plans/2026-10-02-ulmgap-07-carburant.md` (spec §9)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -59,6 +61,8 @@ d'où le JDK d'Android Studio.
 ## État au 2026-10-02
 
 - Plans 1 à 5 terminés et **tous fusionnés dans `main`** (2026-10-02).
+  Plan 7 (suivi carburant) terminé sur la branche `feature/carburant`, pas
+  encore fusionné.
 - Plan 6 (pont AppGAP) fait dans le dépôt AppGAP : worktree
   `~/StudioProjects/app_gap-plan6`, branche `feature/ulm-bridge-plan6`
   (créée depuis le `main` local d'AppGAP, qui a 17 commits du pont non
@@ -76,13 +80,19 @@ d'où le JDK d'Android Studio.
   Pour tester les amerrissages, cocher « Amphibie » sur un appareil.
   Toutes les Functions redéployées ensuite (conflits contrôlés en
   planification seulement, spec §3.5).
+- Plan 7 en dev : `closeFlight` et `adminUpdateFlight` redéployées.
+  `closeFlight` exige désormais les champs carburant : **en dev, l'app
+  installée doit être reconstruite**, un ancien build ne peut plus clôturer
+  un vol.
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
-  **toutes les Functions dans leur version du plan 5** (Node 22, dont la
+  **toutes les Functions dans leur version du plan 7** (Node 22, dont la
   tâche planifiée `closingReminders` : le déploiement active Cloud
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
-  d'atterrissages, `correctAccount` le nouveau solde). Ni règle ni index
-  nouveau depuis le plan 3. Ensuite :
+  d'atterrissages et les champs carburant, `correctAccount` le nouveau
+  solde). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
+  iOS installé antérieur au plan 7 doit être mis à jour : il ne peut plus
+  clôturer un vol. Ensuite :
   - premier admin (`cd functions && npm run build && node
     scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
     (e-mail et mot de passe, création de compte par l'utilisateur
