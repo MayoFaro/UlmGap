@@ -299,3 +299,14 @@ test("seedTestUsers : une relance conserve un balance modifié entre-temps", asy
   assert.equal(rec.emailVerified, true);
   assert.equal(rec.disabled, false);
 });
+
+test("appareils : la modification de la fiche conserve le carburant", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const reg = `F-${uniq().toUpperCase().slice(0, 4)}`;
+  const { id } = await upsertAircraft(me, { registration: reg, label: "ULM 1" });
+  await db.collection("aircraft").doc(id).update({ fuelLiters: 33, fuelFlightId: "f-x" });
+  await upsertAircraft(me, { id, registration: reg, label: "ULM 1 bis" });
+  const a = (await db.collection("aircraft").doc(id).get()).data()!;
+  assert.equal(a.fuelLiters, 33);
+  assert.equal(a.fuelFlightId, "f-x");
+});

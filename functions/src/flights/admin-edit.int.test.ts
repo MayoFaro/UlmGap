@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { at, code, db, details, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, details, FUEL, H, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { closeFlight } from "./close";
 
@@ -40,7 +40,7 @@ async function closedFlight(
   const id = await seedFlight({
     start, end, status: "valide", pricingMode: "standard", createdBy: adminCaller.uid, ...fields,
   });
-  await closeFlight(adminCaller, { landings: 1, flightId: id, ...closing });
+  await closeFlight(adminCaller, { ...FUEL, landings: 1, flightId: id, ...closing });
   return { id, start, end };
 }
 

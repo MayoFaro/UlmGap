@@ -60,3 +60,6 @@ export async function seedFlight(fields: Record<string, unknown>): Promise<strin
 export const draft = (aircraftId: string, crew: string[], o: Record<string, unknown> = {}) => ({
   start: at(10), end: at(11), destination: "Lomé", aircraftId, crew, passengers: [], ...o,
 });
+
+/** Carburant valide pour les clôtures de test (plan 7, champs obligatoires). */
+export const FUEL = { fuelStartExpected: null, fuelStart: 40, fuelAdded: 0, fuelEnd: 30 };
