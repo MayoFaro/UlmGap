@@ -59,7 +59,12 @@ d'où le JDK d'Android Studio.
 ## État au 2026-10-02
 
 - Plans 1 à 5 terminés et **tous fusionnés dans `main`** (2026-10-02).
-  Reste le plan 6 (pont AppGAP, dans `~/StudioProjects/app_gap`).
+- Plan 6 (pont AppGAP) fait dans le dépôt AppGAP : worktree
+  `~/StudioProjects/app_gap-plan6`, branche `feature/ulm-bridge-plan6`
+  (créée depuis le `main` local d'AppGAP, qui a 17 commits du pont non
+  poussés). Plan : `docs/superpowers/plans/2026-10-02-ulm-bridge-plan6.md`
+  dans ce dépôt-là. Le pont ne copie que les vols `valide`, et
+  `externalCount` compte les passagers ; Functions AppGAP en Node 22.
 - En dev : Authentication activé, premier admin (DPS), règles et Functions du
   plan 3 déployées (vols, finances : `closeFlight`, `creditAccount`,
   `correctAccount`, `adminUpdateFlight`, `adminDeleteFlight`,
@@ -114,8 +119,14 @@ d'où le JDK d'Android Studio.
 - Export CSV du relevé : vérifié par tests unitaires ; le téléchargement dans
   le navigateur reste à contrôler en recette web.
 
-### Rappel côté AppGAP (plan 6)
+### Mise en service du pont (par l'utilisateur, après UlmGap en prod)
 
-Le pont `syncUlmFlights` d'AppGAP ne doit copier que les vols
-`status == 'valide'`, et `externalCount` doit inclure `passengers.length`.
-Spec §8.
+1. AppGAP : fusionner `feature/ulm-bridge-plan6`, puis déployer ses
+   Functions (Node 22, avant le 30/10/2026). AppGAP n'a qu'un projet,
+   `appgap-c64d0`, qui est la prod.
+2. Paramètre des Functions AppGAP : `ULM_PROJECT_ID=ulmgap-prod`.
+3. Sur `ulmgap-prod` **uniquement** : accorder au compte de service des
+   Functions AppGAP les rôles `roles/datastore.viewer` et
+   `roles/firebaseauth.viewer`. Le pont ne lit jamais `ulmgap-dev`.
+4. La synchronisation nocturne complète (`syncUlmFlightsNightly`, 03:00)
+   rattrape ensuite tous les vols ; `syncUlmFlights` suit toutes les 2 min.
