@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/flight_rules.dart';
+import '../../core/fuel.dart';
 import '../../core/formats.dart';
 import '../../core/money.dart';
 import '../../core/pricing.dart';
@@ -62,6 +63,10 @@ class _FlightScreenState extends State<FlightScreen> {
   // Plan 4b : nombres saisis à la clôture, corrigeables par un admin.
   final _correctLandings = TextEditingController();
   final _correctWaterLandings = TextEditingController();
+  // Plan 7 : carburant (départ, ajouté, rangé), corrigeable par un admin.
+  final _correctFuelStart = TextEditingController();
+  final _correctFuelAdded = TextEditingController();
+  final _correctFuelEnd = TextEditingController();
 
   final _subs = <StreamSubscription<Object?>>[];
   /// Version « live » d'un vol existant (Task 3, retours de recette) : mise à
@@ -142,6 +147,10 @@ class _FlightScreenState extends State<FlightScreen> {
       // Vol clôturé avant le plan 4b (sans nombres) : 1 et 0.
       _correctLandings.text = '${f.landings ?? 1}';
       _correctWaterLandings.text = '${f.waterLandings ?? 0}';
+      // Vol clôturé avant le plan 7 : champs vides, rien n'est envoyé.
+      _correctFuelStart.text = f.fuelStartLiters?.toString() ?? '';
+      _correctFuelAdded.text = f.fuelAddedLiters?.toString() ?? '';
+      _correctFuelEnd.text = f.fuelEndLiters?.toString() ?? '';
     } else {
       final n = widget.now();
       _start = DateTime(n.year, n.month, n.day, n.hour + 1);
@@ -204,6 +213,9 @@ class _FlightScreenState extends State<FlightScreen> {
     _correctMinutes.dispose();
     _correctLandings.dispose();
     _correctWaterLandings.dispose();
+    _correctFuelStart.dispose();
+    _correctFuelAdded.dispose();
+    _correctFuelEnd.dispose();
     _correctShortAmount.dispose();
     _correctCustomAmount.dispose();
     super.dispose();
@@ -413,6 +425,13 @@ class _FlightScreenState extends State<FlightScreen> {
   // --- Task 10 (finances) : correction admin, régularisation d'un vol clôturé ---
 
   int? get _correctActualMinutes => int.tryParse(_correctMinutes.text.trim());
+  /// Au moins un des trois champs carburant est rempli : alors les trois
+  /// sont exigés et envoyés.
+  bool get _correctFuelFilled =>
+      _correctFuelStart.text.trim().isNotEmpty ||
+      _correctFuelAdded.text.trim().isNotEmpty ||
+      _correctFuelEnd.text.trim().isNotEmpty;
+
   int? get _correctLandingsValue => int.tryParse(_correctLandings.text.trim());
 
   /// Champ masqué : le vol n'a pas d'amerrissages (0).
@@ -807,6 +826,14 @@ class _FlightScreenState extends State<FlightScreen> {
       if (m == null || m < 1 || m > 720) return 'Durée réelle invalide (1 à 720 min).';
       final countError = landingsError(_correctLandingsValue, _correctWaterLandingsValue);
       if (countError != null) return countError;
+      if (_correctFuelFilled) {
+        final err = fuelError(
+          start: int.tryParse(_correctFuelStart.text.trim()),
+          added: int.tryParse(_correctFuelAdded.text.trim()),
+          end: int.tryParse(_correctFuelEnd.text.trim()),
+        );
+        if (err != null) return err;
+      }
       if (_correctNeedsShortAmount) {
         final short = parseAmount(_correctShortAmount.text);
         if (short == null) {
@@ -845,6 +872,11 @@ class _FlightScreenState extends State<FlightScreen> {
     payload['actualMinutes'] = _correctActualMinutes;
     payload['landings'] = _correctLandingsValue;
     if (_showCorrectWaterLandings) payload['waterLandings'] = _correctWaterLandingsValue;
+    if (_correctFuelFilled) {
+      payload['fuelStart'] = int.parse(_correctFuelStart.text.trim());
+      payload['fuelAdded'] = int.parse(_correctFuelAdded.text.trim());
+      payload['fuelEnd'] = int.parse(_correctFuelEnd.text.trim());
+    }
     if (_correctNeedsShortAmount) {
       payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
     }
@@ -1158,6 +1190,25 @@ class _FlightScreenState extends State<FlightScreen> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Amerrissages'),
               ),
+            TextField(
+              key: const Key('correct-fuel-start'),
+              controller: _correctFuelStart,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Carburant au départ (L)'),
+            ),
+            TextField(
+              key: const Key('correct-fuel-added'),
+              controller: _correctFuelAdded,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Carburant ajouté (L)'),
+            ),
+            TextField(
+              key: const Key('correct-fuel-end'),
+              controller: _correctFuelEnd,
+              keyboardType: TextInputType.number,
+              decoration:
+                  const InputDecoration(labelText: 'Carburant à bord, appareil rangé (L)'),
+            ),
             if (_correctNeedsShortAmount)
               TextField(
                 key: const Key('correct-short-amount'),

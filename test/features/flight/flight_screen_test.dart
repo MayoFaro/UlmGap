@@ -1293,6 +1293,58 @@ void main() {
     expect(finance.adminUpdated['ci3']!.containsKey('waterLandings'), isFalse);
   });
 
+  // --- plan 7 : correction admin du carburant ---
+
+  Flight closedFuel({int? start, int? added, int? end}) {
+    final s = DateTime(2026, 10, 12, 5);
+    return testFlight(
+        id: 'fu1', start: s, end: s.add(const Duration(minutes: 90)), crew: ['u1'],
+        createdBy: 'u1', status: 'valide', isClosed: true, actualFlightMinutes: 90,
+        billedAmount: 15000, billedTo: 'account',
+        fuelStart: start, fuelAdded: added, fuelEnd: end);
+  }
+
+  Future<void> saveCorrection(WidgetTester tester) async {
+    final save = find.byKey(const Key('admin-save-correction'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('correction admin : carburant pré-rempli et envoyé', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel(start: 40, added: 20, end: 35));
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-fuel-end'))).controller!.text, '35');
+    await tester.enterText(find.byKey(const Key('correct-fuel-end')), '22');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect([p['fuelStart'], p['fuelAdded'], p['fuelEnd']], [40, 20, 22]);
+  });
+
+  testWidgets('correction admin d\'un vol sans carburant : champs vides, rien envoyé',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel());
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-fuel-end'))).controller!.text, '');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect(p.containsKey('fuelStart'), isFalse);
+    expect(p.containsKey('fuelAdded'), isFalse);
+    expect(p.containsKey('fuelEnd'), isFalse);
+  });
+
+  testWidgets('correction admin : carburant partiel ou hors bornes refusé', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel());
+    await tester.enterText(find.byKey(const Key('correct-fuel-end')), '150');
+    await saveCorrection(tester);
+    expect(find.text('Carburant au départ invalide (0 à 100 L).'), findsOneWidget);
+    expect(finance.adminUpdated, isEmpty);
+  });
+
   // --- révision du 2026-10-01 : conflits en planification seulement ---
 
   testWidgets('aperçu : un vol clôturé ne crée jamais de conflit', (tester) async {
