@@ -56,11 +56,10 @@ d'où le JDK d'Android Studio.
 **Disque presque plein** (environ 6 Go libres) : éviter les builds inutiles.
 `build/` peut être supprimé, il est régénérable.
 
-## État au 2026-10-01
+## État au 2026-10-02
 
-- Plans 1 à 5 terminés. `main` contient les plans 1, 2 et 2b ; les plans 3,
-  4 et 4b sont sur `feature/finances` (poussée, non fusionnée dans `main`) ;
-  le plan 5 sur `feature/notifications` (créée depuis `feature/finances`).
+- Plans 1 à 5 terminés et **tous fusionnés dans `main`** (2026-10-02).
+  Reste le plan 6 (pont AppGAP, dans `~/StudioProjects/app_gap`).
 - En dev : Authentication activé, premier admin (DPS), règles et Functions du
   plan 3 déployées (vols, finances : `closeFlight`, `creditAccount`,
   `correctAccount`, `adminUpdateFlight`, `adminDeleteFlight`,
