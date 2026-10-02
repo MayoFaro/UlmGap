@@ -160,6 +160,16 @@ export function checkLandingsTotal(landings: number, waterLandings: number): voi
   if (landings + waterLandings < 1) throw new ValidationError("Au moins un atterrissage ou amerrissage.");
 }
 
+/** Carburant (spec §9) : litres entiers de 0 à 100. */
+export const MAX_FUEL_LITERS = 100;
+
+function liters(v: unknown, label: string): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > MAX_FUEL_LITERS) {
+    throw new ValidationError(`${label} invalide (0 à ${MAX_FUEL_LITERS} L).`);
+  }
+  return v;
+}
+
 /** Plafond des montants saisis à la clôture (décision 5, spec §2.4). */
 function manualAmount(v: unknown, field: string): number | null {
   if (v === undefined || v === null) return null;
@@ -179,6 +189,10 @@ export function validateClosing(data: unknown): {
   customAmount: number | null;
   landings: number;
   waterLandings: number;
+  fuelStartExpected: number | null;
+  fuelStart: number;
+  fuelAdded: number;
+  fuelEnd: number;
 } {
   const d = obj(data);
   const flightId = validateFlightId(d);
@@ -192,6 +206,10 @@ export function validateClosing(data: unknown): {
     customAmount: manualAmount(d.customAmount, "Montant différent"),
     landings,
     waterLandings,
+    fuelStartExpected: d.fuelStartExpected == null ? null : liters(d.fuelStartExpected, "Carburant prévu"),
+    fuelStart: liters(d.fuelStart, "Carburant au départ"),
+    fuelAdded: liters(d.fuelAdded, "Carburant ajouté"),
+    fuelEnd: liters(d.fuelEnd, "Carburant rangé"),
   };
 }
 
@@ -204,6 +222,9 @@ export interface AdminUpdate {
   customAmount?: number | null;
   landings?: number;
   waterLandings?: number;
+  fuelStart?: number;
+  fuelAdded?: number;
+  fuelEnd?: number;
 }
 
 /**
@@ -223,6 +244,9 @@ export function validateAdminUpdate(data: unknown): AdminUpdate {
   if (d.actualMinutes !== undefined) out.actualMinutes = actualMinutes(d.actualMinutes);
   if (d.landings !== undefined) out.landings = count(d.landings, "d'atterrissages");
   if (d.waterLandings !== undefined) out.waterLandings = count(d.waterLandings, "d'amerrissages");
+  if (d.fuelStart !== undefined) out.fuelStart = liters(d.fuelStart, "Carburant au départ");
+  if (d.fuelAdded !== undefined) out.fuelAdded = liters(d.fuelAdded, "Carburant ajouté");
+  if (d.fuelEnd !== undefined) out.fuelEnd = liters(d.fuelEnd, "Carburant rangé");
   if (d.shortFlightAmount !== undefined) {
     out.shortFlightAmount = manualAmount(d.shortFlightAmount, "Montant à facturer");
   }
