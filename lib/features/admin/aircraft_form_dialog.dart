@@ -21,6 +21,7 @@ class _AircraftFormDialogState extends State<_AircraftFormDialog> {
   late final _reg = TextEditingController(text: widget.aircraft?.registration ?? '');
   late final _label = TextEditingController(text: widget.aircraft?.label ?? '');
   late bool _active = widget.aircraft?.active ?? true;
+  late bool _amphibious = widget.aircraft?.amphibious ?? false;
 
   @override
   void dispose() {
@@ -55,6 +56,12 @@ class _AircraftFormDialogState extends State<_AircraftFormDialog> {
               value: _active,
               onChanged: (v) => setState(() => _active = v),
             ),
+            SwitchListTile(
+              key: const Key('a-amphibious'),
+              title: const Text('Amphibie'),
+              value: _amphibious,
+              onChanged: (v) => setState(() => _amphibious = v),
+            ),
           ],
         ),
       ),
@@ -68,6 +75,7 @@ class _AircraftFormDialogState extends State<_AircraftFormDialog> {
               'registration': _reg.text.trim().toUpperCase(),
               'label': _label.text.trim(),
               'active': _active,
+              'amphibious': _amphibious,
             });
           },
           child: const Text('Enregistrer'),

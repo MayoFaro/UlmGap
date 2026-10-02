@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Caller, CallerProfile, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { PricingMode, checkPayer, decideStatus } from "../rules/flights";
+import type { Pricing } from "../rules/pricing";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import { checkHorizon, validateFlightId, validateFlightInput } from "./validation";
 
@@ -39,7 +40,6 @@ export async function createFlight(
       refusalReason: null,
       customAmount: null,
       shortFlightAmount: null,
-      pricingSnapshot: null, // figé au passage en valide à partir du plan 3
       isClosed: false,
       actualFlightMinutes: null,
       closedBy: null,
@@ -79,6 +79,8 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
       previousMode: ((f.get("passengers") as string[] | undefined) ?? []).length === 0
         ? (f.get("pricingMode") as PricingMode)
         : undefined,
+      existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
+      previousStatus: f.get("status") as string,
       decide: (crew) => decideStatus(me, crew, input.passengers.length),
     });
     touchLocks(tx, p.locks);

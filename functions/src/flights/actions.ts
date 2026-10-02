@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Caller, CallerProfile, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import type { PricingMode } from "../rules/flights";
+import type { Pricing } from "../rules/pricing";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import {
   FlightInput, checkDuration, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
@@ -52,6 +53,8 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
     const p = await planFlight(tx, db, {
       id: ref.id, input, mayChoose: true,
       previousMode: f.get("pricingMode") as PricingMode,
+      existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
+      previousStatus: f.get("status") as string,
       decide: () => ({ ok: true, status: "valide", instructorUid }),
     });
     touchLocks(tx, p.locks);

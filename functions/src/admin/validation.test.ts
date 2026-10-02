@@ -57,7 +57,7 @@ test("validateUserPatch : ne garde que les champs fournis, email interdit", () =
 
 test("validateAircraft : normalise, défauts, rejets", () => {
   assert.deepEqual(validateAircraft({ registration: " f-jabc ", label: " ULM 1 " }),
-    { registration: "F-JABC", label: "ULM 1", active: true });
+    { registration: "F-JABC", label: "ULM 1", active: true, amphibious: false });
   assert.equal(validateAircraft({ id: "a1", registration: "F-JABC", label: "x", active: false }).id, "a1");
   assert.throws(() => validateAircraft({ registration: "", label: "x" }), ValidationError);
   assert.throws(() => validateAircraft({ registration: "F-JABC", label: "" }), ValidationError);
@@ -66,4 +66,8 @@ test("validateAircraft : normalise, défauts, rejets", () => {
 test("validateAircraft : immatriculation limitée aux lettres, chiffres et tirets", () => {
   assert.throws(() => validateAircraft({ registration: "F/JABC", label: "x" }), ValidationError);
   assert.throws(() => validateAircraft({ registration: "F JABC", label: "x" }), ValidationError);
+});
+
+test("validateAircraft : amphibie", () => {
+  assert.equal(validateAircraft({ registration: "F-JA", label: "x", amphibious: true }).amphibious, true);
 });

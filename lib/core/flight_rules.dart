@@ -97,6 +97,7 @@ class RuleFlight {
     required this.crew,
     this.status = 'valide',
     this.deleted = false,
+    this.closed = false,
   });
 
   final String? id;
@@ -106,18 +107,27 @@ class RuleFlight {
   final List<String> crew;
   final String status;
   final bool deleted;
+
+  /// Vol clôturé : jamais en conflit (révision du 2026-10-01).
+  final bool closed;
 }
 
-/// Vols valide non supprimés, bornes ouvertes, même appareil ou même personne.
+/// Vols valide non supprimés et non clôturés, bornes ouvertes, même appareil
+/// ou même personne (miroir de functions/src/rules/flights.ts).
 RuleFlight? findConflict(RuleFlight c, Iterable<RuleFlight> others) {
   for (final o in others) {
     if (o.id != null && o.id == c.id) continue;
-    if (o.status != 'valide' || o.deleted) continue;
+    if (o.status != 'valide' || o.deleted || o.closed) continue;
     if (!(c.start < o.end && o.start < c.end)) continue;
     if (o.aircraftId == c.aircraftId || o.crew.any(c.crew.contains)) return o;
   }
   return null;
 }
+
+/// Révision du 2026-10-01 : les conflits bloquent la planification, jamais
+/// la conduite (vol clôturé ou départ atteint).
+bool isPlanning({required int start, required int now, required bool closed}) =>
+    !closed && start > now;
 
 /// Cause d'un conflit : l'appareil d'abord, sinon les personnes communes.
 ({String kind, List<String> members}) conflictCause(RuleFlight candidate, RuleFlight other) {

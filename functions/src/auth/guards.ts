@@ -39,3 +39,15 @@ export async function requireAdmin(
   const me = await requireActiveUser(db, caller);
   if (!me.isAdmin) throw new HttpsError("permission-denied", "Réservé aux administrateurs.");
 }
+
+/** Utilisateur actif, instructeur ou admin, sinon HttpsError. */
+export async function requireStaff(
+  db: FirebaseFirestore.Firestore,
+  caller: Caller | undefined,
+): Promise<CallerProfile> {
+  const me = await requireActiveUser(db, caller);
+  if (!me.isAdmin && me.profile !== "instructeur") {
+    throw new HttpsError("permission-denied", "Réservé aux instructeurs et aux admins.");
+  }
+  return me;
+}

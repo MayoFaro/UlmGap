@@ -1,14 +1,25 @@
 import 'dart:async';
 
+import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
+import 'package:ulmgap/data/account_movement.dart';
 import 'package:ulmgap/data/admin_api.dart';
 import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/auth_service.dart';
 import 'package:ulmgap/data/crew_member.dart';
+import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/user_repository.dart';
+
+/// Émet [initial] puis relaie [rest] (même schéma que FakeAuthService.changes :
+/// une valeur de départ suivie d'un flux contrôlable, pour simuler une
+/// écoute Firestore qui reçoit sa valeur courante puis les mises à jour).
+Stream<T> _seeded<T>(T initial, Stream<T> rest) async* {
+  yield initial;
+  yield* rest;
+}
 
 class FakeAuthService implements AuthService {
   final _ctrl = StreamController<AuthSnapshot?>.broadcast();
@@ -64,6 +75,7 @@ AppUser testUser({
   String? profile = 'eleve',
   String category = 'EXT',
   String shortName = 'JDU',
+  int balance = 0,
 }) =>
     AppUser.fromMap(uid, {
       'displayName': 'Jean Dupont',
@@ -73,7 +85,7 @@ AppUser testUser({
       'category': category,
       'isAdmin': isAdmin,
       'active': active,
-      'balance': 0,
+      'balance': balance,
     });
 
 // --- ajouts Task 8 ---
@@ -141,6 +153,12 @@ Flight testFlight({
   String pricingMode = 'standard',
   String? refusalReason,
   bool deleted = false,
+  bool isClosed = false,
+  int? actualFlightMinutes,
+  int? billedAmount,
+  String? billedTo,
+  String? payerUidField,
+  Map<String, dynamic>? pricingSnapshot,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -156,8 +174,13 @@ Flight testFlight({
     'refusalReason': refusalReason,
     'createdBy': createdBy,
     'pricingMode': pricingMode,
-    'isClosed': false,
+    'isClosed': isClosed,
     'deleted': deleted,
+    'actualFlightMinutes': actualFlightMinutes,
+    'billedAmount': billedAmount,
+    'billedTo': billedTo,
+    'payerUid': payerUidField,
+    'pricingSnapshot': pricingSnapshot,
   });
 }
 
@@ -250,4 +273,111 @@ class FakeFlightApi implements FlightApi {
     _fail();
     cancelled.add(id);
   }
+}
+
+// --- ajouts Task 8 (finances) ---
+class FakeFinanceApi implements FinanceApi {
+  Pricing pricing = defaultPricing;
+  List<AppUser> accounts = [];
+  final Map<String, List<AccountMovement>> movements = {};
+  List<Flight> flights = [];
+  int balance = 0; // rendu par credit/correct
+  Object? failWith; // si défini, les actions échouent
+
+  /// Si défini, watchAccounts reste en direct (fix round 1, Task 11) : chaque
+  /// abonnement reçoit d'abord `accounts`, puis les émissions ajoutées ici
+  /// (mêmes solde/liste pour tous les écrans, comme un flux Firestore).
+  StreamController<List<AppUser>>? accountsLive;
+
+  Pricing? updatedPricing;
+  final credited = <Map<String, dynamic>>[];
+  final corrected = <Map<String, dynamic>>[];
+  final closed = <Map<String, dynamic>>[];
+  final adminUpdated = <String, Map<String, dynamic>>{};
+  final adminDeleted = <String>[];
+
+  void _fail() {
+    if (failWith != null) throw failWith!;
+  }
+
+  @override
+  Stream<Pricing> watchPricing() => Stream.value(pricing);
+
+  @override
+  Future<void> updatePricing(Pricing p) async {
+    _fail();
+    updatedPricing = p;
+  }
+
+  @override
+  Stream<List<AccountMovement>> watchMovements(String uid) =>
+      Stream.value(movements[uid] ?? const []);
+
+  @override
+  Stream<List<AppUser>> watchAccounts() {
+    final ctrl = accountsLive;
+    if (ctrl == null) return Stream.value(accounts);
+    return _seeded(accounts, ctrl.stream);
+  }
+
+  @override
+  Future<int> credit(String uid, int amount, String? reason) async {
+    _fail();
+    credited.add({'uid': uid, 'amount': amount, 'reason': reason});
+    return balance;
+  }
+
+  @override
+  Future<int> correct(String uid, int newBalance, String reason) async {
+    _fail();
+    corrected.add({'uid': uid, 'newBalance': newBalance, 'reason': reason});
+    return balance;
+  }
+
+  @override
+  Future<void> closeFlight(
+    String flightId, {
+    required int actualMinutes,
+    int? shortFlightAmount,
+    int? customAmount,
+    required int landings,
+    int waterLandings = 0,
+  }) async {
+    _fail();
+    closed.add({
+      'flightId': flightId,
+      'actualMinutes': actualMinutes,
+      'landings': landings,
+      'waterLandings': waterLandings,
+      'shortFlightAmount': shortFlightAmount,
+      'customAmount': customAmount,
+    });
+  }
+
+  @override
+  Future<void> adminUpdateFlight(String flightId, Map<String, dynamic> payload) async {
+    _fail();
+    adminUpdated[flightId] = payload;
+  }
+
+  @override
+  Future<void> adminDeleteFlight(String flightId) async {
+    _fail();
+    adminDeleted.add(flightId);
+  }
+
+  @override
+  Stream<List<Flight>> watchFlightsBetween(DateTime from, DateTime to) => Stream.value(
+        flights.where((f) => !f.start.isBefore(from) && f.start.isBefore(to)).toList(),
+      );
+
+  @override
+  Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => Stream.value(
+        flights.where((f) => f.payerUidField == payerUid && !f.isClosed).toList(),
+      );
+
+  @override
+  Stream<List<Flight>> watchValidUnclosedFlights() => Stream.value(
+        flights.where((f) => f.status == FlightStatus.valide && !f.isClosed).toList(),
+      );
 }

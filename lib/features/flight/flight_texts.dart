@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/formats.dart';
+import '../../core/money.dart';
 import '../../data/crew_member.dart';
 import '../../data/flight.dart';
 import '../../data/flight_api.dart';
@@ -38,6 +39,40 @@ const highlightBorder = Color(0xFF1E88E5);
 /// Vol refusé (ou demande expirée) : carte grisée, jamais surlignée.
 const refusedFill = Color(0xFFEEEEEE);
 const refusedBorder = Color(0xFFBDBDBD);
+
+/// « 1 h 30 », « 0 h 45 » (Task 9 : durée réelle d'un vol clôturé).
+String formatDurationHm(int minutes) {
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  return '$h h ${m.toString().padLeft(2, '0')}';
+}
+
+/// « 2 att. » ou « 2 att. · 1 am. » ; vide pour un vol clôturé avant le
+/// plan 4b (sans nombres).
+String landingsText(int? landings, int? waterLandings, {String separator = ' · '}) {
+  if (landings == null) return '';
+  final water = waterLandings ?? 0;
+  return water > 0 ? '$landings att.$separator$water am.' : '$landings att.';
+}
+
+/// En tête de fenêtre pour un vol clôturé (Task 9, spec plan 3 §4.3 ;
+/// atterrissages et amerrissages au plan 4b).
+String closedSummary({
+  required int actualMinutes,
+  required int billedAmount,
+  required String billedTo,
+  required String debitedShortName,
+  int? landings,
+  int? waterLandings,
+}) {
+  final duration = formatDurationHm(actualMinutes);
+  final amount = formatFcfa(billedAmount);
+  final base = billedTo == 'off_app'
+      ? 'Clôturé : $duration, $amount facturé hors app'
+      : 'Clôturé : $duration, $amount débité sur le compte de $debitedShortName';
+  final counts = landingsText(landings, waterLandings, separator: ', ');
+  return counts.isEmpty ? base : '$base, $counts';
+}
 
 /// Explique la cause d'un conflit : appareil (prioritaire) ou personne commune.
 String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {

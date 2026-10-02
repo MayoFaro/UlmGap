@@ -17,5 +17,9 @@ if (files.length === 0) {
   console.log(`Aucun test ${kind}.`);
   process.exit(0);
 }
-const r = spawnSync(process.execPath, ["--test", ...files], { stdio: "inherit" });
+// Les tests d'intégration mutent le document global settings/pricing : les
+// fichiers doivent s'exécuter l'un après l'autre (pas de parallélisme entre
+// fichiers), d'où --test-concurrency=1 pour "int" seulement.
+const args = kind === "int" ? ["--test", "--test-concurrency=1", ...files] : ["--test", ...files];
+const r = spawnSync(process.execPath, args, { stdio: "inherit" });
 process.exit(r.status ?? 1);

@@ -76,3 +76,16 @@ Comptes créés (e-mail `test-<code>@ulmgap.invalid`) :
 | instr-gap | Instructeur GAP | instructeur | GAP |
 | instr-gr | Instructeur GR | instructeur | GR |
 | gest-gap | Gestionnaire GAP | — | GAP |
+
+## Crédit initial des comptes (dev)
+
+Réservé à `ulmgap-dev` (ou un projet d'émulateur `demo-*`) : refusé sur tout
+autre projet, y compris la prod. Crédite chaque compte existant de
+500 000 FCFA (montant personnalisable) par une transaction `credit` de motif
+« Crédit initial (tests) ». Relançable sans risque : un compte déjà crédité
+(une transaction de ce motif existe déjà) est ignoré.
+
+```bash
+cd functions && npm run build
+node scripts/seed-dev-credit.js --project ulmgap-dev [--amount 500000]
+```

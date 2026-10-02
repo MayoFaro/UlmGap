@@ -5,9 +5,14 @@ import '../../core/async_state.dart';
 import '../../data/aircraft.dart';
 import '../../data/services.dart';
 import 'aircraft_form_dialog.dart';
+import '../../data/app_user.dart';
+import '../home/app_nav.dart';
 
 class AircraftAdminScreen extends StatelessWidget {
-  const AircraftAdminScreen({super.key});
+  const AircraftAdminScreen({super.key, this.me});
+
+  /// Compte connecté : icônes de navigation (absentes si null).
+  final AppUser? me;
 
   Future<void> _save(BuildContext context, Map<String, dynamic>? input) async {
     if (input == null) return;
@@ -25,7 +30,10 @@ class AircraftAdminScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = AppServices.of(context).admin!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Appareils')),
+      appBar: AppBar(
+        title: const Text('Appareils'),
+        actions: me == null ? null : appNavActions(context, me!, current: AppDestination.aircraft),
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Nouvel appareil',
         child: const Icon(Icons.add),
@@ -48,7 +56,7 @@ class AircraftAdminScreen extends StatelessWidget {
                   textColor: a.active ? null : Theme.of(context).disabledColor,
                   leading: const Icon(Icons.airplanemode_active),
                   title: Text(a.label),
-                  subtitle: Text(a.registration),
+                  subtitle: Text(a.amphibious ? '${a.registration} · amphibie' : a.registration),
                   trailing: a.active ? null : const Chip(label: Text('Inactif')),
                   onTap: () async {
                     final input = await showAircraftFormDialog(context, aircraft: a);

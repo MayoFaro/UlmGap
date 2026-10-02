@@ -1,8 +1,7 @@
 // Validation (pure) des entrées des fonctions de vol.
 import { ValidationError, obj, text } from "../admin/validation";
+import { MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
 
-/** Durée prévue minimale. Le plan 3 la lira dans settings/pricing. */
-export const MIN_PLANNED_MINUTES = 45;
 /** Durée prévue maximale. */
 export const MAX_PLANNED_HOURS = 12;
 /** Horizon maximal de planification, en jours avant le départ. */
@@ -65,11 +64,22 @@ function passengerList(v: unknown): string[] {
 }
 
 export function checkDuration(start: number, end: number): void {
-  if (end - start < MIN_PLANNED_MINUTES * 60_000) {
-    throw new ValidationError(`Durée prévue minimale : ${MIN_PLANNED_MINUTES} min.`);
+  if (end <= start) {
+    throw new ValidationError("L'heure de fin doit suivre le départ.");
   }
   if (end - start > MAX_PLANNED_HOURS * 3_600_000) {
     throw new ValidationError(`Durée prévue maximale : ${MAX_PLANNED_HOURS} h.`);
+  }
+}
+
+/**
+ * Durée prévue minimale (settings/pricing, spec §2.4) : vérifiée par
+ * planFlight, pas par la validation pure (le minimum peut changer sans
+ * redéployer les fonctions).
+ */
+export function checkMinDuration(start: number, end: number, minPlannedMinutes: number): void {
+  if (end - start < minPlannedMinutes * 60_000) {
+    throw new ValidationError(`Durée prévue minimale : ${minPlannedMinutes} min.`);
   }
 }
 
@@ -128,4 +138,100 @@ export function validateRefusal(data: unknown): { flightId: string; reason: stri
   const raw = typeof d.reason === "string" ? d.reason.trim() : "";
   if (raw.length > 200) throw new ValidationError("Motif trop long (200 caractères au maximum).");
   return { flightId, reason: raw || null };
+}
+
+function actualMinutes(v: unknown): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 720) {
+    throw new ValidationError("Durée réelle invalide (1 à 720 min).");
+  }
+  return v;
+}
+
+/** Nombre d'atterrissages ou d'amerrissages saisi à la clôture (plan 4b). */
+function count(v: unknown, label: string): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 99) {
+    throw new ValidationError(`Nombre ${label} invalide (0 à 99).`);
+  }
+  return v;
+}
+
+/** Plan 4b, décision 3 : au moins un posé au total. */
+export function checkLandingsTotal(landings: number, waterLandings: number): void {
+  if (landings + waterLandings < 1) throw new ValidationError("Au moins un atterrissage ou amerrissage.");
+}
+
+/** Plafond des montants saisis à la clôture (décision 5, spec §2.4). */
+function manualAmount(v: unknown, field: string): number | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
+    throw new ValidationError(`${field} invalide.`);
+  }
+  if (v > MAX_MANUAL_AMOUNT) {
+    throw new ValidationError(`Montant trop élevé (${formatFcfa(MAX_MANUAL_AMOUNT)} au maximum).`);
+  }
+  return v;
+}
+
+export function validateClosing(data: unknown): {
+  flightId: string;
+  actualMinutes: number;
+  shortFlightAmount: number | null;
+  customAmount: number | null;
+  landings: number;
+  waterLandings: number;
+} {
+  const d = obj(data);
+  const flightId = validateFlightId(d);
+  const landings = count(d.landings, "d'atterrissages");
+  const waterLandings = d.waterLandings === undefined ? 0 : count(d.waterLandings, "d'amerrissages");
+  checkLandingsTotal(landings, waterLandings);
+  return {
+    flightId,
+    actualMinutes: actualMinutes(d.actualMinutes),
+    shortFlightAmount: manualAmount(d.shortFlightAmount, "Montant à facturer"),
+    customAmount: manualAmount(d.customAmount, "Montant différent"),
+    landings,
+    waterLandings,
+  };
+}
+
+export interface AdminUpdate {
+  flightId: string;
+  input: FlightInput;
+  pricingMode?: "standard" | "fuel_only" | "custom";
+  actualMinutes?: number;
+  shortFlightAmount?: number | null;
+  customAmount?: number | null;
+  landings?: number;
+  waterLandings?: number;
+}
+
+/**
+ * Correction admin (adminUpdateFlight) : les champs du vol comme
+ * validateFlightInput, et les champs de clôture comme validateClosing.
+ * Champs de clôture absents = inchangés ; `null` efface un montant. Le mode
+ * est rendu à part (« custom » n'existe qu'à la clôture), jamais dans `input`.
+ */
+export function validateAdminUpdate(data: unknown): AdminUpdate {
+  const d = obj(data);
+  const flightId = validateFlightId(d);
+  const input = validateFlightInput({ ...d, pricingMode: undefined });
+  const out: AdminUpdate = { flightId, input };
+  if (d.pricingMode !== undefined) {
+    out.pricingMode = d.pricingMode === "custom" ? "custom" : mode(d.pricingMode);
+  }
+  if (d.actualMinutes !== undefined) out.actualMinutes = actualMinutes(d.actualMinutes);
+  if (d.landings !== undefined) out.landings = count(d.landings, "d'atterrissages");
+  if (d.waterLandings !== undefined) out.waterLandings = count(d.waterLandings, "d'amerrissages");
+  if (d.shortFlightAmount !== undefined) {
+    out.shortFlightAmount = manualAmount(d.shortFlightAmount, "Montant à facturer");
+  }
+  if (d.customAmount !== undefined) out.customAmount = manualAmount(d.customAmount, "Montant différent");
+  if (out.pricingMode === "custom" && d.customAmount !== undefined && out.customAmount == null) {
+    throw new ValidationError("Montant différent obligatoire en mode « montant différent ».");
+  }
+  if ((out.pricingMode === "standard" || out.pricingMode === "fuel_only") && out.customAmount != null) {
+    throw new ValidationError("Montant différent incompatible avec ce mode.");
+  }
+  return out;
 }
