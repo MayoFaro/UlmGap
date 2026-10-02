@@ -23,7 +23,8 @@ avec :
   à la clôture ;
 - un **carnet de vol** avec le temps de vol total par pilote (révision du
   2026-09-30 : plus de compteur par appareil) ;
-- un relevé admin de tout ce qui a été facturé.
+- un relevé admin de tout ce qui a été facturé ;
+- un **suivi carburant** par appareil (révision du 2026-10-02, §9).
 
 ## Décisions structurantes
 
@@ -103,6 +104,11 @@ exposer à tous les soldes, e-mails ou catégories.
 `registration` (immatriculation), `label` (« ULM 1 »…), `active`, `amphibious`
 (révision du 2026-10-01 : amerrissages saisis à la clôture).
 
+Carburant actuel (révision du 2026-10-02, §9), écrit seulement par
+`closeFlight` et `adminUpdateFlight`, jamais par `adminUpsertAircraft` :
+`fuelLiters` (int?, `null` : inconnu), `fuelFlightId` et `fuelFlightStart`
+(le vol clôturé dont vient la valeur, et son départ).
+
 ### 2.4 `settings/pricing`, modifiable par un admin
 
 | Champ | Défaut | Rôle |
@@ -140,6 +146,10 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | `actualFlightMinutes` **(contrat)** | int? | Saisi à la clôture |
 | `landings` | int? | Nombre d'atterrissages, saisi à la clôture (révision du 2026-10-01) |
 | `waterLandings` | int? | Nombre d'amerrissages, saisi à la clôture d'un appareil `amphibious` ; 0 sinon |
+| `fuelStartExpectedLiters` | int? | Carburant actuel de l'appareil affiché à la clôture (`null` : inconnu) (§9) |
+| `fuelStartLiters` | int? | Carburant au départ : la valeur affichée, ou la valeur corrigée par l'équipage (§9) |
+| `fuelAddedLiters` | int? | Carburant ajouté par l'équipage, avant ou après le vol (§9) |
+| `fuelEndLiters` | int? | Carburant à bord une fois l'appareil rangé (§9) |
 | `closedBy`, `closedAt` | uid, timestamp | |
 | `billedAmount` | int? | Montant final, fixé à la clôture |
 | `billedTo` | string? | `account` (débité sur un solde) / `off_app` (facturé hors app) |
@@ -203,7 +213,7 @@ En `demande`, `instructorUid` = l'instructeur de l'équipage.
 | `refuseFlight` (motif facultatif) | L'instructeur désigné, ou un admin | `demande` → `refuse` |
 | `updateFlight` | Le créateur, avant le départ | Mêmes règles qu'à la création. Si un non-instructeur modifie un vol avec instructeur, il redevient `demande`. Un vol `refuse` modifié repart en `demande` |
 | `cancelFlight` | Le créateur, l'instructeur désigné ou un admin, avant le départ | `deleted: true` |
-| `closeFlight` (minutes réelles, atterrissages, amerrissages) | Tout membre de `crew` ou un admin, dès le jour du vol (§3.1) | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
+| `closeFlight` (minutes réelles, atterrissages, amerrissages, carburant §9) | Tout membre de `crew` ou un admin, dès le jour du vol (§3.1) | Clôture et fige le vol, puis facturation (§4). **Le premier qui clôture l'emporte** : une seconde clôture est refusée |
 | `adminUpdateFlight` | Admin, à tout moment, vols clôturés compris | Modification libre, sans matrice mais avec conflits. Sur un vol clôturé, régularisation automatique (§4.5) |
 
 ### 3.4 Contrôles communs
@@ -385,6 +395,7 @@ l'écran affiché est grisée.
   passager sans compte, une case « Montant différent (facturé hors app) »
   permet de saisir le montant : le vol passe alors en `custom` et aucun solde
   n'est débité.
+- **Carburant** (révision du 2026-10-02) : voir §9.
 
 **Carnet de vol** (révision du 2026-09-30 : remplace les écrans « Vols
 effectués » et « Compteurs »)
@@ -552,3 +563,80 @@ et `users/{uid}.active == true`.
 Limite assumée : ces rôles donnent techniquement au compte de service d'AppGAP
 la lecture de toute la base UlmGap (soldes et historiques compris). Seules les
 données du contrat sont recopiées.
+
+## 9. Suivi carburant (révision du 2026-10-02)
+
+But : savoir combien de carburant se trouve dans chaque appareil, et suivre
+une tendance de consommation. Toutes les valeurs sont des **déclarations de
+l'équipage**, en litres entiers de **0 à 100**. Le serveur ne fait **aucun
+calcul** entre elles : seul l'écran « Suivi carburant » calcule, à titre
+indicatif, la consommation estimée.
+
+### 9.1 Saisie à la clôture
+
+Le dialogue « Clôturer le vol » ajoute un bloc « Carburant », après les
+atterrissages :
+- « Carburant prévu au départ : 40 L » : carburant actuel de l'appareil, soit
+  la valeur « rangé » déclarée par l'équipage du vol précédent ;
+- case « Carburant réel à bord non conforme » ; cochée, elle fait apparaître
+  le champ obligatoire « Carburant réel au départ (L) ». Si le carburant de
+  l'appareil est **inconnu** (aucun vol précédent avec carburant), la case
+  disparaît et le champ « Carburant au départ (L) » est affiché d'emblée,
+  obligatoire ;
+- « Carburant ajouté (L) » : obligatoire, vide au départ (0 se saisit) ;
+  avant ou après le vol, peu importe ;
+- « Carburant à bord, appareil rangé (L) » : obligatoire, vide au départ.
+
+`closeFlight` reçoit `fuelStartExpected` (valeur affichée, ou `null`),
+`fuelStart`, `fuelAdded`, `fuelEnd` ; `fuelStartExpected` à `null` ou entier,
+les trois autres obligatoires ; entiers de 0 à 100, mêmes messages côté app et
+côté serveur. Le vol enregistre les quatre valeurs (§2.5).
+
+### 9.2 Carburant actuel de l'appareil
+
+Dans la même transaction que la clôture, `fuelEnd` est recopié sur
+l'appareil (`fuelLiters`, `fuelFlightId`, `fuelFlightStart`) **si** ce vol
+part au même moment ou après `fuelFlightStart`, ou si l'appareil n'a pas encore de
+valeur. Un vol clôturé en retard, après un vol plus récent, ne remplace donc
+pas un état plus récent.
+
+Pas de saisie directe par un admin : un plein fait hors vol est déclaré par
+l'équipage suivant, avec « non conforme ». Si un admin supprime le vol source,
+l'appareil garde sa valeur.
+
+### 9.3 Correction admin
+
+`adminUpdateFlight` d'un vol clôturé accepte `fuelStart`, `fuelAdded`,
+`fuelEnd` (facultatifs, mêmes bornes ; `fuelStartExpected` ne se corrige pas).
+Pour un vol clôturé avant cette révision, ils restent facultatifs. Si le vol
+est la source du carburant de l'appareil (`fuelFlightId`) et que son appareil
+ne change pas, `fuelLiters` suit le nouveau `fuelEnd`. Sinon, aucun appareil
+n'est modifié.
+
+### 9.4 Affichages
+
+- « Carburant : 40 L » (ou « Carburant : inconnu ») : dans le formulaire de
+  vol sous le choix de l'appareil, sur la fiche d'un vol non clôturé, dans
+  Administration → Appareils. Un appui ouvre « Suivi carburant ».
+- Fiche d'un vol clôturé : « Carburant : départ 40 L · ajouté 20 L · rangé
+  35 L », suivi de « (prévu 30 L) » ou « (prévu inconnu) » en cas d'écart.
+
+### 9.5 Écran « Suivi carburant »
+
+Ouvert par tout utilisateur, titre « Suivi carburant · F-XXXX » :
+- en haut, le carburant actuel ;
+- **consommation estimée** : Σ (départ + ajouté − rangé) / Σ
+  `actualFlightMinutes`, en L/h, sur les vols clôturés non supprimés de
+  l'appareil qui ont les trois valeurs ; « Consommation estimée : 14,2 L/h
+  (12 vols, 18 h 30) ». Calculée dans l'app, indicative ; elle s'affine au fil
+  des vols. Masquée tant qu'aucun vol ne compte ;
+- liste de ces vols, du plus récent au plus ancien (départ) : date, équipage,
+  « Départ 40 L · +20 L · Rangé 35 L ». Un **écart** (départ ≠ prévu, ou
+  prévu inconnu) est surligné en orange : « Écart au départ : prévu 30 L,
+  réel 40 L ». Un appui ouvre la fiche du vol.
+
+Requête : `flights` filtrés sur `aircraftId`, tri et filtres dans l'app ; ni
+index ni règle nouvelle. Aucun champ du contrat du pont ne change.
+
+**Déploiement** : `closeFlight` exige les champs carburant ; l'app et les
+Functions se déploient ensemble.
