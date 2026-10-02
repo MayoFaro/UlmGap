@@ -15,7 +15,7 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-01-ulmgap-04b-atterrissages.md`
 - Plan 5, Node 22, notifications push et rappels de clôture (terminé) :
   `docs/superpowers/plans/2026-10-01-ulmgap-05-notifications.md`
-- Plan 7, suivi carburant (terminé, branche `feature/carburant`, pas encore fusionné) :
+- Plan 7, suivi carburant (terminé) :
   `docs/superpowers/plans/2026-10-02-ulmgap-07-carburant.md` (spec §9)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
@@ -25,7 +25,8 @@ doivent jamais accéder à AppGAP.
   3. finances (forfaits, crédit FCFA, relevé) ;
   4. carnet de vol (vols effectués, temps de vol total, clôture) ;
   5. notifications et rappels de clôture ;
-  6. adaptation du pont AppGAP (dans le repo `~/StudioProjects/app_gap`).
+  6. adaptation du pont AppGAP (dans le repo `~/StudioProjects/app_gap`) ;
+  7. suivi carburant par appareil.
 
 ## Règles de travail
 
@@ -60,9 +61,10 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-10-02
 
-- Plans 1 à 5 terminés et **tous fusionnés dans `main`** (2026-10-02).
-  Plan 7 (suivi carburant) terminé sur la branche `feature/carburant`, pas
-  encore fusionné.
+- Plans 1 à 5 et 7 terminés et **tous fusionnés dans `main`** (2026-10-02).
+  Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
+  la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
+  lancement de l'app (spec §5, §9).
 - Plan 6 (pont AppGAP) fait dans le dépôt AppGAP : worktree
   `~/StudioProjects/app_gap-plan6`, branche `feature/ulm-bridge-plan6`
   (créée depuis le `main` local d'AppGAP, qui a 17 commits du pont non
