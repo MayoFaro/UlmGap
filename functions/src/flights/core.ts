@@ -6,8 +6,8 @@ import type { Profile } from "../admin/validation";
 import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
-  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, isPlanning, payerOf,
-  resolvePricingMode,
+  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
+  isPlanning, payerOf, resolvePricingMode,
 } from "../rules/flights";
 import {
   availableCredit, estimatedCost, formatFcfa, Pricing, toCategory,
@@ -214,13 +214,19 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   const d = a.decide(crew);
   if (!d.ok) throw new HttpsError("permission-denied", d.reason);
 
-  const pricingMode = a.forcedMode ?? resolvePricingMode({
+  // Spec §10.1 : vol d'instruction réservé à un instructeur + un autre membre.
+  if (a.input.instruction && !isInstructionEligible(crew)) {
+    throw new HttpsError("invalid-argument",
+      "Vol d'instruction : il faut un instructeur et un autre membre avec compte.");
+  }
+
+  const pricingMode: PricingMode = a.input.baptism ? "baptism" : (a.forcedMode ?? resolvePricingMode({
     allGap: crew.every((c) => c.category === "GAP"),
     hasPassenger: a.input.passengers.length > 0,
     mayChoose: a.mayChoose,
     requested: a.input.pricingMode,
     previous: a.previousMode,
-  });
+  }));
 
   let locks: Ref[] = [];
   if (d.status === "valide") {
@@ -244,12 +250,12 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
     ? (a.existingSnapshot && a.previousStatus === "valide" ? a.existingSnapshot : pricing)
     : null;
 
-  // Décision 1 : crédit contrôlé dès la demande. `pricingMode` vaut toujours
-  // "standard" ou "fuel_only" à ce stade (le mode "custom" ne se décide qu'à
-  // la clôture, spec §4.1).
+  // Décision 1 : crédit contrôlé dès la demande, sauf baptême (spec §10.2).
+  // `pricingMode` vaut "standard", "fuel_only" ou "baptism" à ce stade (le mode
+  // "custom" ne se décide qu'à la clôture, spec §4.1).
   const payerUid = payerOf(a.input.crew);
   const payer = crew.find((c) => c.uid === payerUid)!;
-  if (!a.skipCredit) {
+  if (!a.skipCredit && pricingMode !== "baptism") {
     locks = await checkCredit(tx, db, locks, {
       id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
       shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000,
@@ -271,6 +277,7 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       instructorUid: d.instructorUid,
       status: d.status,
       pricingMode,
+      instruction: a.input.instruction,
       payerUid,
       pricingSnapshot,
       updatedAt: FieldValue.serverTimestamp(),

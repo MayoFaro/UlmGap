@@ -262,3 +262,40 @@ test("planification : un vol validé à venir non clôturé bloque toujours", as
   await assert.rejects(createFlight(pilot, draft(a, [pilot.uid], { start: at(10), end: at(11) })),
     (e) => code(e) === "failed-precondition" && details(e)?.conflict !== undefined);
 });
+
+test("vol d'instruction : enregistré avec un instructeur et un élève", async () => {
+  const ins = await seedUser({ profile: "instructeur" });
+  const stu = await seedUser({ profile: "eleve" });
+  const a = await seedAircraft();
+  const { id } = await createFlight(ins, { ...draft(a, [stu.uid, ins.uid]), instruction: true });
+  assert.equal((await get(id)).instruction, true);
+});
+
+test("vol d'instruction hors condition : refusé", async () => {
+  const ins = await seedUser({ profile: "instructeur" });
+  const ins2 = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  for (const crew of [[ins.uid], [ins.uid, ins2.uid]]) {
+    await assert.rejects(createFlight(ins, { ...draft(a, crew), instruction: true }),
+      (e) => code(e) === "invalid-argument" &&
+        (e as Error).message === "Vol d'instruction : il faut un instructeur et un autre membre avec compte.");
+  }
+});
+
+test("baptême : mode baptism, pas de contrôle de crédit (solde nul)", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await createFlight(pilot, { ...draft(a, [pilot.uid], { passengers: ["Paul"] }), baptism: true });
+  const f = await get(id);
+  assert.equal(f.pricingMode, "baptism");
+  assert.equal(f.instruction, false);
+});
+
+test("baptême retiré avec le passager : mode recalculé", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft();
+  const d = draft(a, [pilot.uid], { passengers: ["Paul"] });
+  const { id } = await createFlight(pilot, { ...d, baptism: true });
+  await updateFlight(pilot, { flightId: id, ...d, passengers: [] });
+  assert.equal((await get(id)).pricingMode, "standard");
+});

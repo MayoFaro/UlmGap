@@ -48,8 +48,15 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       passengers: (f.get("passengers") as string[] | undefined) ?? [],
       pricingMode: changes.pricingMode,
       instruction: changes.instruction ?? (f.get("instruction") === true),
-      baptism: changes.baptism ?? (f.get("baptism") === true),
+      baptism: false,
     };
+    // Le baptême se lit dans le mode du vol ; sans passager il n'existe pas.
+    input.baptism = input.passengers.length > 0 &&
+      (changes.baptism ?? (f.get("pricingMode") === "baptism"));
+    if (changes.baptism && input.passengers.length === 0) {
+      throw new HttpsError("invalid-argument",
+        "Baptême de l'air réservé à un vol avec un passager sans compte.");
+    }
     asInvalid(() => checkDuration(input.start, input.end));
     asInvalid(() => checkHorizon(input.start, now));
     if (input.start <= now) throw new HttpsError("failed-precondition", "L'heure de départ est passée.");
