@@ -118,6 +118,8 @@ Carburant actuel (révision du 2026-10-02, §9), écrit seulement par
 | `minPlannedMinutes` | 45 | Durée minimale d'un vol **prévu** |
 | `overtimeHourly` | `{GAP: 12000, GR: 30000, MIL: 30000, EXT: 30000}` | Taux horaire du dépassement, par appartenance |
 | `fuelHourlyRate` | 12 000 FCFA/h | Mode « carburant seulement » |
+| `instructionCredit` | 20 000 FCFA | Crédit de l'instructeur par vol d'instruction (§10) |
+| `baptismFee` | 70 000 FCFA | Baptême de l'air, facturé hors app (§10) |
 
 ### 2.5 `flights/{id}`, écrit uniquement par les Functions
 
@@ -137,7 +139,9 @@ leur sens ne doivent changer sans mettre à jour le pont.
 | `status` **(contrat)** | string | `demande` / `valide` / `refuse` |
 | `refusalReason` | string? | Motif de refus |
 | `createdBy` | uid | |
-| `pricingMode` | string | `standard` / `fuel_only` / `custom` |
+| `pricingMode` | string | `standard` / `fuel_only` / `custom` / `baptism` (§10) |
+| `instruction` | bool | Case « Vol d'instruction » (§10) |
+| `instructionCreditUid`, `instructionCreditAmount` | uid?, int? | Crédit instruction versé à la clôture (§10) |
 | `customAmount` | int? | Montant « facturé hors app » saisi à la clôture (mode `custom`) |
 | `shortFlightAmount` | int? | Montant saisi à la clôture d'un vol réel de moins de `minPlannedMinutes` (§4.3) |
 | `payerUid` | uid | Premier inscrit dans `crew` (§4.2). Son solde n’est pas débité si le vol finit en `custom` |
@@ -167,9 +171,9 @@ dont au moins un membre avec compte. Deux instructeurs peuvent voler ensemble.
 |---|---|
 | `userUid` | Compte concerné |
 | `amount` | int, positif pour un crédit, négatif pour un débit |
-| `type` | `credit` / `correction` / `flight` / `flight_adjustment` |
+| `type` | `credit` / `correction` / `flight` / `flight_adjustment` / `instruction` (§10) |
 | `reason` | Texte, **obligatoire** pour un montant négatif saisi à la main |
-| `flightId` | Pour `flight` / `flight_adjustment` |
+| `flightId` | Pour `flight` / `flight_adjustment` / `instruction` |
 | `by` | uid de l'auteur, ou `system` |
 | `at` | timestamp serveur |
 | `balanceAfter` | Solde après le mouvement |
@@ -285,6 +289,7 @@ tarifs de `pricingSnapshot`.
 | `standard`, vol **réel** de moins de 45 min | `shortFlightAmount`, **saisi à la clôture** | Solde du payeur |
 | `fuel_only` | `fuelHourlyRate` × `d` / 60 | Solde du payeur |
 | `custom` | `customAmount` | Hors app (`billedTo: off_app`) |
+| `baptism` | `baptismFee`, quelle que soit la durée (§10) | Hors app (`billedTo: off_app`) |
 
 - Le résultat est arrondi au franc le plus proche.
 - Un vol ne peut pas être **prévu** sous 45 min (§3.4). Le cas « moins de
@@ -666,3 +671,62 @@ index ni règle nouvelle. Aucun champ du contrat du pont ne change.
 
 **Déploiement** : `closeFlight` exige les champs carburant ; l'app et les
 Functions se déploient ensemble.
+
+## 10. Vol d'instruction et baptême de l'air (révision du 2026-10-05)
+
+### 10.1 Vol d'instruction
+
+- **Case « Vol d'instruction »** (`flights.instruction`) dans le formulaire de
+  vol (création, modification, validation), visible seulement si l'équipage
+  compte **exactement un instructeur et un autre membre avec compte**. Deux
+  instructeurs ensemble, ou un instructeur avec un passager sans compte : pas
+  d'instruction. La case se décoche si l'équipage ne remplit plus la
+  condition. Modifiable par le créateur, l'instructeur qui valide ou un admin,
+  jusqu'à la clôture. Le serveur refuse `instruction: true` hors condition.
+- **À la clôture**, si `instruction` est vrai et `actualFlightMinutes` ≥ 45 :
+  l'instructeur de l'équipage est crédité de `instructionCredit` (tarifs
+  figés du vol, sinon courants) : transaction `instruction`, motif « Crédit
+  instruction », dans la même transaction Firestore que la clôture, avec la
+  notification habituelle d'un mouvement. Le vol enregistre
+  `instructionCreditUid` et `instructionCreditAmount`.
+- **Aucune mention à la clôture** ni sur le vol (ni aperçu, ni dialogue, ni
+  résumé du vol clôturé) : le crédit n'est visible que dans l'historique du
+  compte de l'instructeur. La fiche du vol indique seulement « Vol
+  d'instruction (XXX) ».
+- **Correction ou suppression admin** d'un vol clôturé : le crédit dû est
+  recalculé (case, durée, instructeur) ; l'écart avec le crédit versé est
+  régularisé par des transactions `instruction`, motif « Régularisation
+  crédit instruction » (retrait, ajout, ou les deux en cas de changement
+  d'instructeur), dans la même transaction que la correction. Suppression :
+  retrait du crédit versé.
+- **Historique** (Mon compte, fiche Pilotes) : « Crédit instruction — vol du
+  12 oct. », « Régularisation crédit instruction — vol du 12 oct. ».
+
+### 10.2 Baptême de l'air
+
+- La fenêtre « Ajouter un passager sans compte » a, en plus du nom, une case
+  **« Baptême de l'air »**. La ligne du passager affiche « Passager sans
+  compte · Baptême de l'air » et permet de cocher ou décocher le baptême tant
+  que le vol est modifiable (jusqu'au départ). Retirer le passager retire le
+  baptême.
+- Le vol passe en mode **`baptism`**, prioritaire sur `standard` et
+  `fuel_only` (la case « Carburant seulement » est masquée) : facturé **hors
+  app** (`billedTo: off_app`), **`baptismFee` quelle que soit la durée**.
+  Aucun solde débité, aucun contrôle de crédit disponible. L'aperçu affiche
+  « Baptême de l'air : 70 000 FCFA, facturé hors app ».
+- À la clôture : ni « Montant à facturer » ni « Montant différent » ; montant
+  affiché « 70 000 FCFA facturé hors app ».
+- Après la clôture, seul l'admin le change (correction admin), avec la
+  régularisation habituelle (§4.5).
+- Fiche du vol : tarification « Baptême de l'air ». Relevé des vols facturés
+  et export CSV : mode « Baptême de l'air », compté dans « facturé hors app ».
+
+### 10.3 Tarifs et déploiement
+
+- Administration → Tarifs : « Crédit instruction » et « Baptême de
+  l'air » (`instructionCredit`, `baptismFee`), figés dans `pricingSnapshot`
+  à la validation comme les autres tarifs ; un vol figé avant cette révision
+  utilise les valeurs par défaut.
+- Ni règle Firestore, ni index, ni champ du contrat du pont ne changent.
+- Les Functions de vol, de clôture, de correction et de tarifs se déploient
+  avec l'app.
