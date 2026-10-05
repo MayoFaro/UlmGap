@@ -52,6 +52,9 @@ class _FlightScreenState extends State<FlightScreen> {
   final _destination = TextEditingController();
   final _destinationFocus = FocusNode();
   bool _fuelOnly = false;
+  // Plan 8 : vol d'instruction et baptême de l'air (passager sans compte).
+  bool _instruction = false;
+  bool _baptism = false;
   bool _saving = false;
 
   // --- Task 10 (finances) : correction admin d'un vol clôturé ---
@@ -134,6 +137,8 @@ class _FlightScreenState extends State<FlightScreen> {
       _passenger = f.passengers.isEmpty ? null : f.passengers.first;
       _destination.text = f.destination;
       _fuelOnly = f.pricingMode == 'fuel_only';
+      _instruction = f.instruction;
+      _baptism = f.isBaptism;
       // Task 10 : préremplissage des champs de clôture pour une correction
       // admin éventuelle (aperçu de régularisation calculé avant même que le
       // bouton « Corriger » ne soit pressé n'est pas nécessaire ici : ces
@@ -227,6 +232,11 @@ class _FlightScreenState extends State<FlightScreen> {
   PilotProfile? _profile(String uid) => uid == _me.uid ? _me.profile : _dir[uid]?.profile;
   UserCategory? _category(String uid) => uid == _me.uid ? _me.category : _categories[uid];
 
+  /// Case « Vol d'instruction » : exactement un instructeur et un autre
+  /// équipier (miroir du serveur).
+  bool get _instructionEligible =>
+      isInstructionEligible([for (final u in _crew) RulePerson(u, _profile(u)?.code)]);
+
   bool get _allGap => _crew.every((u) => _category(u) == UserCategory.gap);
   bool get _showFuelChoice => _mayChoose && _allGap && _passenger == null;
 
@@ -257,6 +267,7 @@ class _FlightScreenState extends State<FlightScreen> {
   ///   reste correct tant que seule SA propre catégorie (toujours connue)
   ///   entre en jeu.
   String get _pricingMode {
+    if (_passenger != null && _baptism) return 'baptism';
     final stored = widget.flight;
     final storedHadNoPassenger = stored == null || stored.passengers.isEmpty;
     final previous = storedHadNoPassenger ? stored?.pricingMode : null;
@@ -345,6 +356,7 @@ class _FlightScreenState extends State<FlightScreen> {
     if (_finance == null) return null;
     final category = _category(_debitedUid);
     if (category == null) return null;
+    if (_pricingMode == 'baptism') return null; // facturé hors app
     return computedCost(_pricingMode, _end.difference(_start).inMinutes, category, _pricingForCost);
   }
 
@@ -399,6 +411,9 @@ class _FlightScreenState extends State<FlightScreen> {
   /// Lignes « Coût estimé » / « Crédit disponible », affichées dans l'aperçu
   /// (saisie) ou en tête de fiche (consultation d'un vol non clôturé).
   List<Widget> _financeLines(BuildContext context) {
+    if (_passenger != null && _baptism) {
+      return [Text('Baptême de l\'air : ${formatFcfa(_pricingForCost.baptismFee)}, facturé hors app')];
+    }
     final cost = _estimatedCost;
     if (cost == null) return const [];
     final widgets = <Widget>[Text('Coût estimé : ${formatFcfa(cost)}')];
@@ -583,11 +598,16 @@ class _FlightScreenState extends State<FlightScreen> {
     // Contrôleur possédé par le dialogue lui-même (et non disposé ici juste
     // après le pop) : sinon le TextField est encore affiché pendant
     // l'animation de fermeture et Flutter l'utilise après dispose().
-    final name = await showDialog<String>(
+    final r = await showDialog<({String name, bool baptism})>(
       context: context,
       builder: (_) => const _PassengerDialog(),
     );
-    if (name != null && name.isNotEmpty) setState(() => _passenger = name);
+    if (r != null && r.name.isNotEmpty) {
+      setState(() {
+        _passenger = r.name;
+        _baptism = r.baptism;
+      });
+    }
   }
 
   // --- enregistrement / actions ---
@@ -655,6 +675,8 @@ class _FlightScreenState extends State<FlightScreen> {
         crew: _crew,
         passengers: [if (_passenger != null) _passenger!],
         pricingMode: _showFuelChoice ? (_fuelOnly ? 'fuel_only' : 'standard') : null,
+        instruction: _instruction && _instructionEligible,
+        baptism: _passenger != null && _baptism,
       );
 
   /// Exécute une action serveur, gère erreurs et succès communs (spec §11-12) :
@@ -703,6 +725,8 @@ class _FlightScreenState extends State<FlightScreen> {
             'destination': d.destination,
             'aircraftId': d.aircraftId,
             if (d.pricingMode != null) 'pricingMode': d.pricingMode,
+            'instruction': d.instruction,
+            'baptism': d.baptism,
           });
           return 'Vol validé.';
         case _Mode.view:
@@ -719,6 +743,15 @@ class _FlightScreenState extends State<FlightScreen> {
       if (u != creator && _profile(u) == PilotProfile.instructeur) return _short(u);
     }
     return null;
+  }
+
+  /// Trigramme de l'instructeur d'un vol d'instruction (membre de profil
+  /// instructeur), sans aucune mention du crédit (spec plan 8).
+  String _instructorLabel(Flight f) {
+    for (final u in f.crew) {
+      if (_profile(u) == PilotProfile.instructeur) return _short(u);
+    }
+    return '…';
   }
 
   Future<void> _refuse() async {
@@ -1021,6 +1054,8 @@ class _FlightScreenState extends State<FlightScreen> {
               ListTile(title: const Text('Motif du refus'), subtitle: Text(f.refusalReason!)),
             if (f.instructorUid != null)
               ListTile(title: Text('Instructeur désigné : ${_short(f.instructorUid!)}')),
+            if (f.instruction)
+              ListTile(title: Text('Vol d\'instruction (${_instructorLabel(f)})')),
             ListTile(title: const Text('Tarification'), subtitle: Text(pricingModeLabel(f.pricingMode))),
             // Task 9 : coût estimé / crédit disponible d'un vol non clôturé,
             // hors mode saisie (l'aperçu ci-dessous les affiche alors à la
@@ -1097,21 +1132,32 @@ class _FlightScreenState extends State<FlightScreen> {
             ListTile(
               leading: const Icon(Icons.person_outline),
               title: Text(_passenger!),
-              subtitle: const Text('Passager sans compte'),
+              subtitle: Text(_baptism ? 'Passager sans compte · Baptême de l\'air' : 'Passager sans compte'),
               trailing: !_crewEditable
                   ? null
-                  : IconButton(
-                      tooltip: 'Retirer le passager',
-                      icon: const Icon(Icons.close),
-                      // Task 10 (fix round 1) : sans passager, « Montant
-                      // différent » n'a plus de sens (closingBill le refuse) ;
-                      // réinitialiser évite d'envoyer customAmount à tort si
-                      // la case était restée cochée depuis une correction.
-                      onPressed: () => setState(() {
-                        _passenger = null;
-                        _correctCustomChecked = false;
-                      }),
-                    ),
+                  : Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+                      Tooltip(
+                        message: 'Baptême de l\'air',
+                        child: Checkbox(
+                          key: const Key('passenger-baptism-toggle'),
+                          value: _baptism,
+                          onChanged: (v) => setState(() => _baptism = v ?? false),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Retirer le passager',
+                        icon: const Icon(Icons.close),
+                        // Task 10 (fix round 1) : sans passager, « Montant
+                        // différent » n'a plus de sens (closingBill le refuse) ;
+                        // réinitialiser évite d'envoyer customAmount à tort si
+                        // la case était restée cochée depuis une correction.
+                        onPressed: () => setState(() {
+                          _passenger = null;
+                          _baptism = false;
+                          _correctCustomChecked = false;
+                        }),
+                      ),
+                    ]),
             ),
           if (_crewEditable && aboard < 2)
             Wrap(spacing: 8, children: [
@@ -1157,6 +1203,13 @@ class _FlightScreenState extends State<FlightScreen> {
               ),
             ),
           ),
+          if (_instructionEligible)
+            CheckboxListTile(
+              key: const Key('f-instruction'),
+              title: const Text('Vol d\'instruction'),
+              value: _instruction,
+              onChanged: _fieldsEditable ? (v) => setState(() => _instruction = v ?? false) : null,
+            ),
           if (_showFuelChoice)
             CheckboxListTile(
               key: const Key('f-fuel'),
@@ -1296,6 +1349,7 @@ class _PassengerDialog extends StatefulWidget {
 
 class _PassengerDialogState extends State<_PassengerDialog> {
   final _c = TextEditingController();
+  bool _baptism = false;
 
   @override
   void dispose() {
@@ -1307,15 +1361,24 @@ class _PassengerDialogState extends State<_PassengerDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Passager sans compte'),
-      content: TextField(
-        key: const Key('passenger-name'),
-        controller: _c,
-        decoration: const InputDecoration(labelText: 'Nom'),
-      ),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(
+          key: const Key('passenger-name'),
+          controller: _c,
+          decoration: const InputDecoration(labelText: 'Nom'),
+        ),
+        CheckboxListTile(
+          key: const Key('passenger-baptism'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Baptême de l\'air'),
+          value: _baptism,
+          onChanged: (v) => setState(() => _baptism = v ?? false),
+        ),
+      ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
         FilledButton(
-            onPressed: () => Navigator.pop(context, _c.text.trim()),
+            onPressed: () => Navigator.pop(context, (name: _c.text.trim(), baptism: _baptism)),
             child: const Text('Ajouter')),
       ],
     );

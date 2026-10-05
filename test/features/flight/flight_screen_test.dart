@@ -1439,4 +1439,161 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Vol clôturé.'), findsOneWidget);
   });
+
+  // --- Plan 8 : vol d'instruction et baptême de l'air ---
+
+  FakeFlightApi instructionApi() => api()..directory = [...api().directory, member('stu', 'STU', 'eleve')];
+
+  Future<void> fillCreation(WidgetTester tester) async {
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+  }
+
+  Future<void> addBaptismPassenger(WidgetTester tester, {bool baptism = true}) async {
+    await tester.tap(find.text('Ajouter un passager sans compte'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('passenger-name')), 'Paul');
+    if (baptism) {
+      await tester.tap(find.byKey(const Key('passenger-baptism')));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('Ajouter'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('instruction : instructeur + élève → case visible, cochée envoyée', (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('f-instruction')), findsNothing);
+    await addMember(tester, 'stu');
+    expect(find.byKey(const Key('f-instruction')), findsOneWidget);
+    expect(find.text('Vol d\'instruction'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await fillCreation(tester);
+    await save(tester);
+    expect(a.created.single['instruction'], true);
+    expect(a.created.single['baptism'], false);
+  });
+
+  testWidgets('instruction : case absente seul ou à deux instructeurs, décochée si l\'élève part',
+      (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('f-instruction')), findsNothing); // seul
+    await addMember(tester, 'ins');
+    expect(find.byKey(const Key('f-instruction')), findsNothing); // deux instructeurs
+
+    await tester.pumpWidget(const SizedBox());
+    final b = instructionApi();
+    await tester.pumpWidget(host(b, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'stu');
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Retirer').last); // l'élève
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('f-instruction')), findsNothing);
+    await fillCreation(tester);
+    await save(tester);
+    expect(b.created.single['instruction'], false);
+  });
+
+  testWidgets('baptême : fenêtre passager, ligne, aperçu hors app, payload même sans crédit',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(
+        a, testUser(uid: 'u1', profile: 'instructeur', category: 'GAP', balance: 0),
+        finance: FakeFinanceApi()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter un passager sans compte'));
+    await tester.pumpAndSettle();
+    expect(find.text('Baptême de l\'air'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('passenger-name')), 'Paul');
+    await tester.tap(find.byKey(const Key('passenger-baptism')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Passager sans compte · Baptême de l\'air'), findsOneWidget);
+    await pickAircraft(tester);
+    final p = preview(tester);
+    expect(p, contains('Mode : Baptême de l\'air'));
+    expect(p, contains('Baptême de l\'air : ${formatFcfa(70000)}, facturé hors app'));
+    expect(p, isNot(contains('Coût estimé')));
+    expect(p, isNot(contains('Crédit disponible')));
+    expect(find.byKey(const Key('f-fuel')), findsNothing);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await save(tester);
+    expect(find.textContaining('Crédit insuffisant'), findsNothing);
+    expect(a.created.single['baptism'], true);
+  });
+
+  testWidgets('baptême : case de la ligne passager, décocher et retirer', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addBaptismPassenger(tester);
+    expect(preview(tester), contains('Mode : Baptême de l\'air'));
+    expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).value, true);
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    expect(preview(tester), isNot(contains('Baptême de l\'air')));
+    expect(find.text('Passager sans compte'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    expect(preview(tester), contains('Mode : Baptême de l\'air'));
+    await tester.tap(find.byTooltip('Retirer le passager'));
+    await tester.pumpAndSettle();
+    await fillCreation(tester);
+    await save(tester);
+    expect(a.created.single['baptism'], false);
+  });
+
+  testWidgets('consultation d\'un vol d\'instruction : trigramme, aucune mention de crédit',
+      (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'ins1', start: DateTime(2026, 10, 13, 9), crew: ['stu', 'ins'], createdBy: 'stu',
+        instructorUid: 'ins', instruction: true,
+        instructionCreditUid: 'ins', instructionCreditAmount: 20000);
+    await tester.pumpWidget(host(instructionApi(), testUser(uid: 'u9', profile: 'eleve'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Vol d\'instruction (INS)'), findsOneWidget);
+    expect(find.textContaining('Crédit instruction'), findsNothing);
+  });
+
+  testWidgets('validation : instruction et baptême envoyés dans les changes', (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    final f = testFlight(
+        id: 'v1', start: DateTime(2026, 10, 13, 9), status: 'demande',
+        crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins');
+    await tester.pumpWidget(host(a, testUser(uid: 'ins', profile: 'instructeur'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Valider'));
+    await tester.pumpAndSettle();
+    expect(a.validated['v1']!['instruction'], true);
+    expect(a.validated['v1']!['baptism'], false);
+  });
+
+  testWidgets('modification d\'un vol en baptême : case du passager cochée', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'b1', start: DateTime(2026, 10, 13, 9), crew: ['u1'], passengers: ['Paul'],
+        pricingMode: 'baptism');
+    await tester.pumpWidget(
+        host(api(), testUser(uid: 'u1', profile: 'lache_toute_mission'), flight: f));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).value, true);
+    expect(find.text('Passager sans compte · Baptême de l\'air'), findsOneWidget);
+  });
 }
