@@ -1,7 +1,7 @@
 // Validation (pure) des tarifs (settings/pricing, spec §2.4) et des crédits /
 // corrections de compte (task 5).
 import { obj, ValidationError } from "../admin/validation";
-import { Category, Pricing } from "../rules/pricing";
+import { BAPTISM_TIERS, BaptismTier, Category, Pricing } from "../rules/pricing";
 
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
 
@@ -24,15 +24,30 @@ function byCategory(v: unknown, field: string, max: number): Record<Category, nu
   return out;
 }
 
+function baptismFees(v: unknown): Record<BaptismTier, number> {
+  const d = record(v, "baptismFees");
+  const out = {} as Record<BaptismTier, number>;
+  for (const t of BAPTISM_TIERS) out[t] = intInRange(d[t], `baptismFees.${t}`, 0, 1_000_000);
+  return out;
+}
+
 /** Toutes les clés sont exigées ; valeurs entières dans les plages de la spec §2.4. */
 export function validatePricing(data: unknown): Pricing {
   const d = record(data, "tarifs");
+  const includedMinutes = intInRange(d.includedMinutes, "includedMinutes", 1, 600);
+  const toleranceMinutes = intInRange(d.toleranceMinutes, "toleranceMinutes", 1, 600);
+  if (toleranceMinutes < includedMinutes) {
+    throw new ValidationError("La tolérance doit être au moins égale au temps couvert.");
+  }
   return {
     flatFee: byCategory(d.flatFee, "flatFee", 1_000_000),
-    includedMinutes: intInRange(d.includedMinutes, "includedMinutes", 1, 600),
+    includedMinutes,
+    toleranceMinutes,
     minPlannedMinutes: intInRange(d.minPlannedMinutes, "minPlannedMinutes", 1, 600),
     overtimeHourly: byCategory(d.overtimeHourly, "overtimeHourly", 1_000_000),
     fuelHourlyRate: intInRange(d.fuelHourlyRate, "fuelHourlyRate", 0, 1_000_000),
+    instructionCredit: intInRange(d.instructionCredit, "instructionCredit", 0, 1_000_000),
+    baptismFees: baptismFees(d.baptismFees),
   };
 }
 

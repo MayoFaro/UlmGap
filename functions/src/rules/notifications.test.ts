@@ -81,6 +81,10 @@ test("mouvement : intéressé et instructeurs, sauf l'auteur ; montants signés"
     userUid: "ldx", shortName: "LDX", amount: 3_000, balanceAfter: 0, type: "flight_adjustment",
     actor: "adm", instructors: [],
   }).message.body.startsWith("Régularisation : +"), true);
+  assert.equal(movementPush({
+    userUid: "ins", shortName: "INS", amount: 20_000, balanceAfter: 20_000, type: "instruction",
+    actor: "ldx", instructors: [],
+  }).message.body.startsWith(`Crédit instruction : +${formatFcfa(20_000)}`), true);
 });
 
 test("reminderDue : 24 h après la fin, puis toutes les 48 h", () => {

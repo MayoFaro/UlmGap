@@ -186,4 +186,25 @@ void main() {
     expect(find.text('1 h 15'), findsOneWidget);
     expect(find.text('—'), findsOneWidget);
   });
+
+  testWidgets('relevé : mode « Baptême Nyonye »', (tester) async {
+    _useTallView(tester);
+    final finance = FakeFinanceApi()
+      ..flights = [
+        testFlight(id: 'f1', start: DateTime(2026, 10, 5), isClosed: true,
+            passengers: const ['Paul'], pricingMode: 'baptism', baptismTier: 'nyonye',
+            actualFlightMinutes: 30, billedAmount: 90000, billedTo: 'off_app'),
+      ];
+    await tester.pumpWidget(host(finance, FakeFlightApi()));
+    await tester.pump();
+    expect(find.text('Baptême Nyonye'), findsOneWidget);
+  });
+
+  test('billingCsvRows : mode « Baptême Nyonye »', () {
+    final f = testFlight(
+        id: 'f1', passengers: const ['Paul'], isClosed: true, billedAmount: 90000,
+        billedTo: 'off_app', pricingMode: 'baptism', baptismTier: 'nyonye');
+    final rows = billingCsvRows([f], {'u1': member('u1', 'DPS', 'instructeur')});
+    expect(rows.single[6], 'Baptême Nyonye');
+  });
 }

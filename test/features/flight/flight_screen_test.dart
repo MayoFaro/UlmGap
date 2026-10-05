@@ -266,7 +266,27 @@ void main() {
     expect(
         preview(tester),
         contains(
-            'Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:30–10:30 (LAC).'));
+            'Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:30–10:30 (LAC) (30 min d\'écart minimum).'));
+  });
+
+  testWidgets('conflit signalé dans l\'aperçu à 20 min d\'écart (battement de 30 min)', (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..flights = [
+        testFlight(
+            id: 'o',
+            start: DateTime(2026, 10, 12, 8, 10),
+            end: DateTime(2026, 10, 12, 9, 10),
+            crew: ['lac'],
+            aircraft: 'F-JABC'),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'lache_toute_mission')));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    expect(
+        preview(tester),
+        contains(
+            'Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 08:10–09:10 (LAC) (30 min d\'écart minimum).'));
   });
 
   testWidgets('carburant seulement : proposé à un instructeur GAP pour un vol entre GAP',
@@ -309,7 +329,7 @@ void main() {
     await pickAircraft(tester);
     await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
     await save(tester);
-    expect(find.text('Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:00–10:00 (INS).'),
+    expect(find.text('Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:00–10:00 (INS) (30 min d\'écart minimum).'),
         findsOneWidget);
   });
 
@@ -646,7 +666,7 @@ void main() {
   });
 
   testWidgets(
-      'clôture : 90 min GAP → aperçu 15 000 FCFA, closeFlight(actualMinutes: 90) puis retour '
+      'clôture : 90 min GAP → aperçu 18 000 FCFA, closeFlight(actualMinutes: 90) puis retour '
       'au planning', (tester) async {
     _useTallView(tester);
     final start = DateTime(2026, 10, 12, 5);
@@ -663,7 +683,8 @@ void main() {
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('closing-minutes')), findsOneWidget);
-    expect(find.text('Montant : ${formatFcfa(15000)}'), findsOneWidget);
+    // 90 min GAP : 12 000 + 12 000 × (90 - 60) / 60 = 18 000 (plan 9).
+    expect(find.text('Montant : ${formatFcfa(18000)}'), findsOneWidget);
     await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
@@ -883,7 +904,7 @@ void main() {
     final f = testFlight(
         id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account',
         fuelStartExpected: 30, fuelStart: 40, fuelAdded: 20, fuelEnd: 35);
     await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
     await tester.pumpAndSettle();
@@ -896,10 +917,10 @@ void main() {
     final f = testFlight(
         id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
     await tester.pumpAndSettle();
-    expect(find.text('Clôturé : 1 h 30, ${formatFcfa(15000)} débité sur le compte de JDU'),
+    expect(find.text('Clôturé : 1 h 30, ${formatFcfa(18000)} débité sur le compte de JDU'),
         findsOneWidget);
     expect(find.text('Clôturer'), findsNothing);
     expect(find.text('Enregistrer'), findsNothing);
@@ -917,7 +938,7 @@ void main() {
     final f = testFlight(
         id: 'ac1', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -930,9 +951,9 @@ void main() {
     expect(find.byKey(const Key('correct-minutes')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('correct-minutes')), '120');
     await tester.pumpAndSettle();
-    // 120 min GAP standard : 12 000 (forfait) + (120-75) min à 12 000/h = 21 000,
-    // contre 15 000 facturés initialement : le compte (inchangé) est
-    // remboursé des 15 000 déjà débités puis débité des 21 000 dus, soit un
+    // 120 min GAP standard : 12 000 (forfait) + (120-60) min à 12 000/h = 24 000,
+    // contre 18 000 facturés initialement : le compte (inchangé) est
+    // remboursé des 18 000 déjà débités puis débité des 24 000 dus, soit un
     // débit supplémentaire net de 6 000 (régularisation négative).
     expect(find.text('Régularisation : ${formatFcfa(-6000)} sur le compte de JDU'),
         findsOneWidget);
@@ -957,7 +978,7 @@ void main() {
     final f = testFlight(
         id: 'ac1b', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f));
     await tester.pumpAndSettle();
@@ -979,7 +1000,7 @@ void main() {
     final f = testFlight(
         id: 'ac2', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1', 'b'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -991,9 +1012,9 @@ void main() {
     // Mettre B (deuxième de l'équipage) en premier : nouveau compte débité.
     await tester.tap(find.byTooltip('Mettre en premier'));
     await tester.pumpAndSettle();
-    expect(find.text('Régularisation : +${formatFcfa(15000)} sur le compte de JDU'),
+    expect(find.text('Régularisation : +${formatFcfa(18000)} sur le compte de JDU'),
         findsOneWidget);
-    expect(find.text('Régularisation : ${formatFcfa(-15000)} sur le compte de BBB'),
+    expect(find.text('Régularisation : ${formatFcfa(-18000)} sur le compte de BBB'),
         findsOneWidget);
     await tester.tap(find.text('Enregistrer la correction'));
     await tester.pumpAndSettle();
@@ -1071,7 +1092,7 @@ void main() {
     final f = testFlight(
         id: 'ac5', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account',
         passengers: const ['Paul']);
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
@@ -1100,7 +1121,7 @@ void main() {
     final f = testFlight(
         id: 'ad1', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         api(), testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -1143,7 +1164,7 @@ void main() {
     final f = testFlight(
         id: 'z2', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
     await tester.pumpAndSettle();
     expect(find.text('Corriger'), findsNothing);
@@ -1374,7 +1395,7 @@ void main() {
     final f = testFlight(
         id: 'cc1', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -1438,5 +1459,360 @@ void main() {
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(find.text('Vol clôturé.'), findsOneWidget);
+  });
+
+  // --- Plan 8 : vol d'instruction et baptême de l'air ---
+
+  FakeFlightApi instructionApi() => api()..directory = [...api().directory, member('stu', 'STU', 'eleve')];
+
+  Future<void> fillCreation(WidgetTester tester) async {
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+  }
+
+  /// Choisit un forfait dans la fenêtre passager (plan 9).
+  Future<void> pickTier(WidgetTester tester, String label) async {
+    await tester.tap(find.descendant(
+        of: find.byKey(const Key('passenger-baptism-tier')), matching: find.text(label)));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> addBaptismPassenger(WidgetTester tester,
+      {bool baptism = true, String tier = 'Nyonye'}) async {
+    await tester.tap(find.text('Ajouter un passager sans compte'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('passenger-name')), 'Paul');
+    if (baptism) {
+      await tester.tap(find.byKey(const Key('passenger-baptism')));
+      await tester.pumpAndSettle();
+      await pickTier(tester, tier);
+    }
+    await tester.tap(find.text('Ajouter'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('instruction : instructeur + élève → case visible, cochée envoyée', (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('f-instruction')), findsNothing);
+    await addMember(tester, 'stu');
+    expect(find.byKey(const Key('f-instruction')), findsOneWidget);
+    expect(find.text('Vol d\'instruction'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await fillCreation(tester);
+    await save(tester);
+    expect(a.created.single['instruction'], true);
+    expect(a.created.single['baptism'], false);
+  });
+
+  testWidgets('instruction : case absente seul ou à deux instructeurs, décochée si l\'élève part',
+      (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('f-instruction')), findsNothing); // seul
+    await addMember(tester, 'ins');
+    expect(find.byKey(const Key('f-instruction')), findsNothing); // deux instructeurs
+
+    await tester.pumpWidget(const SizedBox());
+    final b = instructionApi();
+    await tester.pumpWidget(host(b, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'stu');
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Retirer').last); // l'élève
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('f-instruction')), findsNothing);
+    await fillCreation(tester);
+    await save(tester);
+    expect(b.created.single['instruction'], false);
+  });
+
+  testWidgets('instruction : élève retiré puis remis → case réapparue décochée', (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'stu');
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Retirer').last);
+    await tester.pumpAndSettle();
+    await addMember(tester, 'stu');
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('f-instruction'))).value, false);
+  });
+
+  testWidgets('baptême : fenêtre passager, forfait Nyonye, ligne, aperçu hors app, payload même sans crédit',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(
+        a, testUser(uid: 'u1', profile: 'instructeur', category: 'GAP', balance: 0),
+        finance: FakeFinanceApi()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter un passager sans compte'));
+    await tester.pumpAndSettle();
+    expect(find.text('Baptême de l\'air'), findsOneWidget);
+    expect(find.byKey(const Key('passenger-baptism-tier')), findsNothing);
+    await tester.enterText(find.byKey(const Key('passenger-name')), 'Paul');
+    await tester.tap(find.byKey(const Key('passenger-baptism')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('passenger-baptism-tier')), findsOneWidget);
+    await pickTier(tester, 'Nyonye');
+    await tester.tap(find.text('Ajouter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Passager sans compte · Baptême Nyonye'), findsOneWidget);
+    await pickAircraft(tester);
+    final p = preview(tester);
+    expect(p, contains('Mode : Baptême Nyonye'));
+    expect(p, contains('Baptême Nyonye : ${formatFcfa(90000)}, facturé hors app'));
+    expect(p, isNot(contains('Coût estimé')));
+    expect(p, isNot(contains('Crédit disponible')));
+    expect(find.byKey(const Key('f-fuel')), findsNothing);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await save(tester);
+    expect(find.textContaining('Crédit insuffisant'), findsNothing);
+    expect(a.created.single['baptism'], true);
+    expect(a.created.single['baptismTier'], 'nyonye');
+  });
+
+  testWidgets('baptême coché sans forfait : « Ajouter » refusé avec le message du serveur',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter un passager sans compte'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('passenger-name')), 'Paul');
+    await tester.tap(find.byKey(const Key('passenger-baptism')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choisissez le forfait du baptême (Local, Nyonye ou Awagne).'),
+        findsOneWidget);
+    expect(find.byKey(const Key('passenger-name')), findsOneWidget); // fenêtre toujours ouverte
+    await pickTier(tester, 'Local');
+    await tester.tap(find.text('Ajouter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Passager sans compte · Baptême Local'), findsOneWidget);
+  });
+
+  testWidgets('baptême : forfait de la ligne passager (Awagne), décocher et retirer',
+      (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addBaptismPassenger(tester);
+    expect(preview(tester), contains('Mode : Baptême Nyonye'));
+    expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).value, true);
+
+    await tester.tap(find.byKey(const Key('passenger-baptism-tier-line')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Awagne').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Passager sans compte · Baptême Awagne'), findsOneWidget);
+    expect(preview(tester), contains('Baptême Awagne : ${formatFcfa(110000)}, facturé hors app'));
+    await fillCreation(tester);
+    await save(tester);
+    expect(a.created.single['baptismTier'], 'awagne');
+
+    // Décocher : retour à un passager ordinaire, forfait null dans le payload.
+    await tester.pumpWidget(const SizedBox());
+    final b = api();
+    await tester.pumpWidget(host(b, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addBaptismPassenger(tester);
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    expect(preview(tester), isNot(contains('Baptême')));
+    expect(find.text('Passager sans compte'), findsOneWidget);
+    expect(find.byKey(const Key('passenger-baptism-tier-line')), findsNothing);
+    await fillCreation(tester);
+    await save(tester);
+    expect(b.created.single['baptism'], false);
+    expect(b.created.single.containsKey('baptismTier'), isTrue);
+    expect(b.created.single['baptismTier'], isNull);
+  });
+
+  testWidgets('baptême : décocher, recocher puis retirer le passager', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addBaptismPassenger(tester);
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    expect(preview(tester), contains('Mode : Baptême Nyonye'));
+    await tester.tap(find.byTooltip('Retirer le passager'));
+    await tester.pumpAndSettle();
+    await fillCreation(tester);
+    await save(tester);
+    expect(a.created.single['baptism'], false);
+    expect(a.created.single['baptismTier'], isNull);
+  });
+
+  testWidgets('consultation d\'un vol d\'instruction : trigramme, aucune mention de crédit',
+      (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'ins1', start: DateTime(2026, 10, 13, 9), crew: ['stu', 'ins'], createdBy: 'stu',
+        instructorUid: 'ins', instruction: true,
+        instructionCreditUid: 'ins', instructionCreditAmount: 20000);
+    await tester.pumpWidget(host(instructionApi(), testUser(uid: 'u9', profile: 'eleve'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Vol d\'instruction (INS)'), findsOneWidget);
+    expect(find.textContaining('Crédit instruction'), findsNothing);
+  });
+
+  testWidgets('validation : instruction et baptême envoyés dans les changes', (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    final f = testFlight(
+        id: 'v1', start: DateTime(2026, 10, 13, 9), status: 'demande',
+        crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins');
+    await tester.pumpWidget(host(a, testUser(uid: 'ins', profile: 'instructeur'), flight: f));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Valider'));
+    await tester.pumpAndSettle();
+    expect(a.validated['v1']!['instruction'], true);
+    expect(a.validated['v1']!['baptism'], false);
+    expect(a.validated['v1']!.containsKey('baptismTier'), isTrue);
+    expect(a.validated['v1']!['baptismTier'], isNull);
+  });
+
+  testWidgets('modification d\'un vol en baptême : case du passager cochée', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'b1', start: DateTime(2026, 10, 13, 9), crew: ['u1'], passengers: ['Paul'],
+        pricingMode: 'baptism', baptismTier: 'awagne');
+    await tester.pumpWidget(
+        host(api(), testUser(uid: 'u1', profile: 'lache_toute_mission'), flight: f));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).value, true);
+    expect(find.text('Passager sans compte · Baptême Awagne'), findsOneWidget);
+  });
+
+  testWidgets('fiche d\'un vol baptême Awagne : Tarification = Baptême Awagne', (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'b2', start: DateTime(2026, 10, 13, 9), crew: ['u1'], passengers: ['Paul'],
+        pricingMode: 'baptism', baptismTier: 'awagne');
+    await tester.pumpWidget(host(api(), testUser(uid: 'u9', profile: 'eleve'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.text('Tarification'), findsOneWidget);
+    expect(find.text('Baptême Awagne'), findsOneWidget);
+  });
+
+  Future<void> openCorrection(WidgetTester tester, FakeFlightApi a, Flight f, FakeFinanceApi finance) async {
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('correction admin : instruction modifiable, instruction et baptism envoyés',
+      (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-ins', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins', status: 'valide',
+        isClosed: true, actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, instructionApi(), f, finance);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('f-instruction'))).onChanged,
+        isNotNull);
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ci-ins']!;
+    expect(payload['instruction'], true);
+    expect(payload.containsKey('baptism'), isTrue);
+    expect(payload['baptism'], false);
+  });
+
+  testWidgets('correction admin d\'un baptême : pas de montant différent ni de montant à facturer, '
+      'pas de pricingMode', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-bap', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 20, billedAmount: 70000, billedTo: 'off_app',
+        passengers: const ['Paul'], pricingMode: 'baptism', baptismTier: 'local');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, api(), f, finance);
+    expect(find.byKey(const Key('correct-custom-check')), findsNothing);
+    expect(find.byKey(const Key('correct-short-amount')), findsNothing);
+    expect(find.text('Montant différent (facturé hors app)'), findsNothing);
+    expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).onChanged,
+        isNotNull);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ci-bap']!;
+    expect(payload['baptism'], true);
+    expect(payload['baptismTier'], 'local');
+    expect(payload.containsKey('instruction'), isTrue);
+    expect(payload.containsKey('pricingMode'), isFalse);
+    expect(payload.containsKey('customAmount'), isFalse);
+    expect(payload.containsKey('shortFlightAmount'), isFalse);
+  });
+
+  testWidgets('correction admin : décocher le baptême renvoie baptism false', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-bap2', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 70000, billedTo: 'off_app',
+        passengers: const ['Paul'], pricingMode: 'baptism', baptismTier: 'local');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, api(), f, finance);
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    // Hors baptême, « Montant différent » réapparaît, décoché.
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('correct-custom-check'))).value,
+        false);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ci-bap2']!['baptism'], false);
+    expect(finance.adminUpdated['ci-bap2']!['baptismTier'], isNull);
+    expect(finance.adminUpdated['ci-bap2']!.containsKey('customAmount'), isFalse);
+  });
+
+  testWidgets('correction admin d\'un baptême clôturé : forfait modifiable, baptismTier envoyé',
+      (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-bap3', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 20, billedAmount: 70000, billedTo: 'off_app',
+        passengers: const ['Paul'], pricingMode: 'baptism', baptismTier: 'local');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, api(), f, finance);
+    await tester.tap(find.byKey(const Key('passenger-baptism-tier-line')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Awagne').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ci-bap3']!['baptism'], true);
+    expect(finance.adminUpdated['ci-bap3']!['baptismTier'], 'awagne');
   });
 }

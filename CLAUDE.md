@@ -17,6 +17,13 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-01-ulmgap-05-notifications.md`
 - Plan 7, suivi carburant (terminé) :
   `docs/superpowers/plans/2026-10-02-ulmgap-07-carburant.md` (spec §9)
+- Plan 8, crédit instruction et vols de baptême (terminé, **branche
+  `feature/instruction-bapteme`, pas encore fusionnée**) :
+  `docs/superpowers/plans/2026-10-05-ulmgap-08-instruction-bapteme.md`
+  (spec §10)
+- Plan 9, dépassement dès 60 min, trois forfaits de baptême, battement de
+  30 min (terminé, même branche) :
+  `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -86,20 +93,38 @@ d'où le JDK d'Android Studio.
   `closeFlight` exige désormais les champs carburant : **en dev, l'app
   installée doit être reconstruite**, un ancien build ne peut plus clôturer
   un vol.
+- Plan 8 en dev (branche `feature/instruction-bapteme`, non fusionnée) :
+  `createFlight`, `updateFlight`, `validateFlight`, `closeFlight`,
+  `adminUpdateFlight`, `adminDeleteFlight` et `adminUpdatePricing`
+  redéployées. **L'app installée en dev doit être reconstruite** : le
+  formulaire envoie les nouveaux indicateurs et `adminUpdatePricing` exige
+  les deux nouveaux tarifs.
+- Plan 9 en dev (même branche, non fusionnée) : `createFlight`,
+  `updateFlight`, `validateFlight`, `closeFlight`, `adminUpdateFlight`,
+  `adminDeleteFlight` et `adminUpdatePricing` redéployées. **L'app installée
+  en dev doit être reconstruite.** **Régler « Temps couvert par le forfait »
+  à 60 dans Administration → Tarifs** : le document `settings/pricing` de dev
+  contient encore 75 et garderait l'ancienne règle de dépassement.
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
-  **toutes les Functions dans leur version du plan 7** (Node 22, dont la
+  **toutes les Functions dans leur version du plan 9** (Node 22, dont la
   tâche planifiée `closingReminders` : le déploiement active Cloud
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
   d'atterrissages et les champs carburant, `correctAccount` le nouveau
-  solde). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
-  iOS installé antérieur au plan 7 doit être mis à jour : il ne peut plus
-  clôturer un vol. Ensuite :
+  solde, `adminUpdatePricing` les tarifs `instructionCredit`,
+  `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
+  iOS installé antérieur au plan 9 doit être mis à jour : il ne peut plus
+  clôturer un vol ni enregistrer les tarifs. Ensuite :
   - premier admin (`cd functions && npm run build && node
     scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
     (e-mail et mot de passe, création de compte par l'utilisateur
     désactivée) ;
   - marquer l'ULM amphibie dans Administration → Appareils ;
+  - vérifier Administration → Tarifs : « Temps couvert par le forfait » 60,
+    « Tolérance jusqu'à » 75 et les trois forfaits baptême (Local 70 000,
+    Nyonye 90 000, Awagne 110 000) : si le document des tarifs de prod a
+    déjà été enregistré, il peut garder 75 pour « Temps couvert » et donc
+    l'ancienne règle de dépassement ;
   - clé VAPID web du projet prod (voir plus bas), à reporter dans
     `lib/core/env.dart` avant le build web de prod.
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :

@@ -25,6 +25,11 @@ class Decision {
   bool get ok => status != null;
 }
 
+/// Vol d'instruction possible : exactement deux membres d'équipage dont un
+/// seul instructeur (miroir de functions/src/rules/flights.ts).
+bool isInstructionEligible(List<RulePerson> crew) =>
+    crew.length == 2 && crew.where((p) => p.profile == 'instructeur').length == 1;
+
 String? designatedInstructor(String creatorUid, List<RulePerson> crew) {
   for (final p in crew) {
     if (p.uid != creatorUid && p.profile == 'instructeur') return p.uid;
@@ -112,13 +117,18 @@ class RuleFlight {
   final bool closed;
 }
 
-/// Vols valide non supprimés et non clôturés, bornes ouvertes, même appareil
-/// ou même personne (miroir de functions/src/rules/flights.ts).
+/// Plan 9 : battement fixe entre deux vols (même appareil ou même personne).
+const flightBufferMinutes = 30;
+const _bufferMs = flightBufferMinutes * 60000;
+
+/// Vols valide non supprimés et non clôturés, bornes ouvertes (un écart
+/// d'exactement 30 min est accepté), même appareil ou même personne (miroir
+/// de functions/src/rules/flights.ts).
 RuleFlight? findConflict(RuleFlight c, Iterable<RuleFlight> others) {
   for (final o in others) {
     if (o.id != null && o.id == c.id) continue;
     if (o.status != 'valide' || o.deleted || o.closed) continue;
-    if (!(c.start < o.end && o.start < c.end)) continue;
+    if (!(c.start < o.end + _bufferMs && o.start < c.end + _bufferMs)) continue;
     if (o.aircraftId == c.aircraftId || o.crew.any(c.crew.contains)) return o;
   }
   return null;

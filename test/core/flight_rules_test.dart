@@ -48,10 +48,17 @@ void main() {
     });
   }
 
+  for (final c in (fx['instruction'] as List).cast<Map<String, dynamic>>()) {
+    test('instruction : ${c['name']}', () {
+      expect(isInstructionEligible(crew(c['crew'] as List)), c['expected']);
+    });
+  }
+
+  // Les heures des cas `conflicts` sont en minutes ; findConflict travaille en ms.
   RuleFlight rf(Map<String, dynamic> m) => RuleFlight(
         id: m['id'] as String?,
-        start: m['start'] as int,
-        end: m['end'] as int,
+        start: (m['start'] as int) * 60000,
+        end: (m['end'] as int) * 60000,
         aircraftId: m['aircraftId'] as String,
         crew: (m['crew'] as List).cast<String>(),
         status: (m['status'] as String?) ?? 'valide',

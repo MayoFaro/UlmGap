@@ -8,7 +8,11 @@ import { Caller, requireAdmin } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { designatedInstructor, PricingMode } from "../rules/flights";
-import { adjustments, closingBill, computedCost, Pricing, toCategory } from "../rules/pricing";
+import {
+  adjustments, closingBill, computedCost, instructionAdjustments, instructionCreditDue, Pricing,
+  pricingWithDefaults, toCategory,
+} from "../rules/pricing";
+import type { Profile } from "../admin/validation";
 import { planFlight, touchLocks } from "./core";
 import { checkHorizon, checkLandingsTotal, validateAdminUpdate, validateFlightId } from "./validation";
 import { closingEnd } from "../rules/closing";
@@ -80,9 +84,10 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     // Mode : celui demandé par l'admin est imposé ; un montant différent seul
     // vaut « custom » ; un vol « custom » le reste. Sinon, le mode est
     // recalculé (spec §4.1) : un vol carburant dont l'équipage n'est plus
-    // tout GAP repasse en standard.
+    // tout GAP repasse en standard. Plan 8 : un baptême l'emporte (mode
+    // imposé par planFlight).
     const previousMode = f.get("pricingMode") as PricingMode;
-    const mode: PricingMode | undefined = v.pricingMode ??
+    const mode: PricingMode | undefined = v.input.baptism ? undefined : v.pricingMode ??
       (v.customAmount != null || previousMode === "custom" ? "custom" : undefined);
     // Plan 4b : sur un vol clôturé, nombres fusionnés avec les valeurs
     // stockées (1 atterrissage pour un vol clôturé avant le plan 4b),
@@ -141,7 +146,27 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     // compte débité).
     const oldPayer = payerUidOf(f);
     const newPayer = p.fields.payerUid as string;
-    const accounts = await readAccounts(tx, db, oldPayer ? [oldPayer, newPayer] : [newPayer]);
+    // Plan 8 (spec §10.1) : tarifs d'avant le plan 8 complétés ; crédit
+    // d'instruction recalculé sur l'équipage corrigé (lu avant toute
+    // écriture), régularisé par rapport au crédit déjà versé.
+    const pricing = pricingWithDefaults(p.fields.pricingSnapshot as Pricing);
+    const crewSnaps = await tx.getAll(...input.crew.map((u) => db.collection("users").doc(u)));
+    const people = crewSnaps.map((s) => ({
+      uid: s.id, profile: (s.get("profile") as Profile | undefined) ?? null,
+    }));
+    const credit = instructionCreditDue({
+      instruction: input.instruction, actualMinutes, crew: people, pricing,
+    });
+    const instructionMoves = instructionAdjustments(
+      {
+        uid: (f.get("instructionCreditUid") as string | null | undefined) ?? null,
+        amount: (f.get("instructionCreditAmount") as number | null | undefined) ?? 0,
+      },
+      credit ?? { uid: null, amount: 0 },
+    );
+    const accounts = await readAccounts(tx, db, [
+      ...(oldPayer ? [oldPayer] : []), newPayer, ...instructionMoves.map((m) => m.uid),
+    ]);
     const customAmount = mode === "custom"
       ? (v.customAmount !== undefined ? v.customAmount : (f.get("customAmount") as number | null) ?? null)
       : null;
@@ -151,9 +176,8 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     const shortFlightAmount = v.shortFlightAmount !== undefined
       ? v.shortFlightAmount
       : (f.get("shortFlightAmount") as number | null | undefined) ?? null;
-    const billMode = p.fields.pricingMode as "standard" | "fuel_only";
+    const billMode = p.fields.pricingMode as "standard" | "fuel_only" | "baptism";
     const category = toCategory(accounts.users.get(newPayer)!.get("category"));
-    const pricing = p.fields.pricingSnapshot as Pricing;
     let bill;
     try {
       bill = closingBill({
@@ -164,6 +188,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
         shortFlightAmount,
         customAmount,
         hasPassenger: input.passengers.length > 0,
+        baptismTier: input.baptism ? input.baptismTier : null,
       });
     } catch (e) {
       throw new HttpsError("invalid-argument", (e as Error).message);
@@ -179,13 +204,25 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       },
       { billedTo: bill.billedTo, payerUid: newPayer, amount: bill.billedAmount },
     );
+    // Soldes enchaînés : un compte peut recevoir une régularisation de vol
+    // puis une d'instruction.
+    const balances = new Map([...accounts.users].map(([uid, snap]) => [uid, balanceOf(snap)]));
     const posted: WrittenMovement[] = [];
     for (const m of moves) {
       const balanceAfter = postMovement(tx, db, {
         uid: m.uid, amount: m.amount, type: "flight_adjustment", reason: "Régularisation",
-        flightId: ref.id, by, currentBalance: balanceOf(accounts.users.get(m.uid)),
+        flightId: ref.id, by, currentBalance: balances.get(m.uid)!,
       });
+      balances.set(m.uid, balanceAfter);
       posted.push({ uid: m.uid, amount: m.amount, balanceAfter, type: "flight_adjustment" });
+    }
+    for (const m of instructionMoves) {
+      const balanceAfter = postMovement(tx, db, {
+        uid: m.uid, amount: m.amount, type: "instruction", reason: "Régularisation crédit instruction",
+        flightId: ref.id, by, currentBalance: balances.get(m.uid)!,
+      });
+      balances.set(m.uid, balanceAfter);
+      posted.push({ uid: m.uid, amount: m.amount, balanceAfter, type: "instruction" });
     }
     touchLocks(tx, [...p.locks, ...accounts.locks.filter((l) => !p.locks.some((k) => k.path === l.path))]);
     tx.update(ref, {
@@ -198,9 +235,11 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       pricingMode: bill.pricingMode,
       customAmount,
       // Montant à facturer conservé seulement s'il sert (vol standard sous la
-      // durée minimale), jamais périmé.
-      shortFlightAmount: bill.pricingMode !== "custom" &&
+      // durée minimale), jamais périmé ; jamais pour un baptême.
+      shortFlightAmount: billMode !== "baptism" && bill.pricingMode !== "custom" &&
         computedCost(billMode, actualMinutes, category, pricing) === null ? shortFlightAmount : null,
+      instructionCreditUid: credit?.uid ?? null,
+      instructionCreditAmount: credit?.amount ?? null,
       ...(v.fuelStart !== undefined ? { fuelStartLiters: v.fuelStart } : {}),
       ...(v.fuelAdded !== undefined ? { fuelAddedLiters: v.fuelAdded } : {}),
       ...(v.fuelEnd !== undefined ? { fuelEndLiters: v.fuelEnd } : {}),
@@ -220,29 +259,50 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
   const flightId = asInvalid(() => validateFlightId(data));
   const ref = db.collection("flights").doc(flightId);
 
-  const { cancelled, refund } = await db.runTransaction(async (tx) => {
+  const { cancelled, written } = await db.runTransaction(async (tx) => {
     const f = await loadAny(tx, ref);
-    let refund: WrittenMovement | null = null;
-    // Remboursement d'un vol clôturé débité sur un compte.
+    const written: WrittenMovement[] = [];
+    const closed = f.get("isClosed") === true;
+    // Remboursement d'un vol clôturé débité sur un compte ; plan 8 : reprise
+    // du crédit d'instruction versé (comptes lus ensemble, avant écriture).
     const payer = payerUidOf(f);
-    if (f.get("isClosed") === true && f.get("billedTo") === "account" && payer) {
-      const accounts = await readAccounts(tx, db, [payer]);
-      const amount = f.get("billedAmount") as number;
-      const balanceAfter = postMovement(tx, db, {
-        uid: payer, amount, type: "flight_adjustment",
-        reason: "Annulation du vol", flightId: ref.id, by,
-        currentBalance: balanceOf(accounts.users.get(payer)),
-      });
-      refund = { uid: payer, amount, balanceAfter, type: "flight_adjustment" };
+    const refundPayer = closed && f.get("billedTo") === "account" && payer ? payer : null;
+    // Crédit nul ou absent (crédit désactivé dans Tarifs) : rien à reprendre.
+    const creditAmount = (f.get("instructionCreditAmount") as number | null | undefined) ?? 0;
+    const creditUid = closed && creditAmount > 0
+      ? (f.get("instructionCreditUid") as string | null | undefined) ?? null : null;
+    const uids = [...(refundPayer ? [refundPayer] : []), ...(creditUid ? [creditUid] : [])];
+    if (uids.length > 0) {
+      const accounts = await readAccounts(tx, db, uids);
+      const balances = new Map([...accounts.users].map(([uid, snap]) => [uid, balanceOf(snap)]));
+      if (refundPayer) {
+        const amount = f.get("billedAmount") as number;
+        const balanceAfter = postMovement(tx, db, {
+          uid: refundPayer, amount, type: "flight_adjustment",
+          reason: "Annulation du vol", flightId: ref.id, by,
+          currentBalance: balances.get(refundPayer)!,
+        });
+        balances.set(refundPayer, balanceAfter);
+        written.push({ uid: refundPayer, amount, balanceAfter, type: "flight_adjustment" });
+      }
+      if (creditUid) {
+        const amount = -creditAmount;
+        const balanceAfter = postMovement(tx, db, {
+          uid: creditUid, amount, type: "instruction",
+          reason: "Régularisation crédit instruction", flightId: ref.id, by,
+          currentBalance: balances.get(creditUid)!,
+        });
+        written.push({ uid: creditUid, amount, balanceAfter, type: "instruction" });
+      }
       touchLocks(tx, accounts.locks);
     }
     // Suppression logique uniquement (contrat AppGAP).
     tx.update(ref, { deleted: true, updatedAt: FieldValue.serverTimestamp() });
     // Spec §6.1 : un vol validé non clôturé supprimé = vol annulé.
-    return { cancelled: f.get("status") === "valide" && f.get("isClosed") !== true, refund };
+    return { cancelled: f.get("status") === "valide" && !closed, written };
   });
   if (cancelled) await notifyFlight(db, flightId, (f, names) => cancelledPush(f, names, by));
-  if (refund) await notifyMovements(db, by, [refund]);
+  if (written.length > 0) await notifyMovements(db, by, written);
 }
 
 export const adminUpdateFlightFn = onCall((req) =>

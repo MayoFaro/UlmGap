@@ -28,21 +28,21 @@ async function seedPastFlight(fields: Record<string, unknown>): Promise<string> 
   });
 }
 
-test("clôture 90 min GAP par un membre de l'équipage : solde −15 000, transaction et vol à jour", async () => {
+test("clôture 90 min GAP par un membre de l'équipage : solde −18 000, transaction et vol à jour", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
   const mate = await seedUser({ profile: "eleve" });
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid, mate.uid], payerUid: pilot.uid, aircraftId: a });
 
   const r = await closeFlight(mate, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90 });
-  assert.deepEqual(r, { billedAmount: 15_000, billedTo: "account" });
+  assert.deepEqual(r, { billedAmount: 18_000, billedTo: "account" });
 
-  assert.equal((await getUser(pilot.uid)).balance, 1_000_000 - 15_000);
+  assert.equal((await getUser(pilot.uid)).balance, 1_000_000 - 18_000);
   const txs = await flightTx(id);
   assert.equal(txs.length, 1);
   assert.equal(txs[0].type, "flight");
-  assert.equal(txs[0].amount, -15_000);
-  assert.equal(txs[0].balanceAfter, 1_000_000 - 15_000);
+  assert.equal(txs[0].amount, -18_000);
+  assert.equal(txs[0].balanceAfter, 1_000_000 - 18_000);
   assert.equal(txs[0].userUid, pilot.uid);
   assert.equal(txs[0].flightId, id);
   assert.equal(txs[0].by, mate.uid);
@@ -50,7 +50,7 @@ test("clôture 90 min GAP par un membre de l'équipage : solde −15 000, transa
   const f = await getFlight(id);
   assert.equal(f.isClosed, true);
   assert.equal(f.actualFlightMinutes, 90);
-  assert.equal(f.billedAmount, 15_000);
+  assert.equal(f.billedAmount, 18_000);
   assert.equal(f.billedTo, "account");
   assert.equal(f.closedBy, mate.uid);
   assert.ok(f.closedAt);
@@ -289,4 +289,77 @@ test("carburant manquant : invalid-argument, vol non clôturé", async () => {
     (e) => code(e) === "invalid-argument" && (e as Error).message === "Carburant rangé invalide (0 à 100 L).",
   );
   assert.equal((await getFlight(id)).isClosed, false);
+});
+
+test("vol d'instruction de 45 min : instructeur crédité de 20 000, ligne « Crédit instruction »", async () => {
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const id = await seedPastFlight({ crew: [stu.uid, ins.uid], aircraftId: a, instruction: true });
+  await closeFlight(stu, { ...FUEL, flightId: id, actualMinutes: 45, landings: 1, fuelEnd: 30 });
+  assert.equal((await getUser(ins.uid)).balance, 20_000);
+  const t = (await flightTx(id)).find((x) => x.type === "instruction")!;
+  assert.equal(t.userUid, ins.uid);
+  assert.equal(t.amount, 20_000);
+  assert.equal(t.reason, "Crédit instruction");
+  const f = await getFlight(id);
+  assert.equal(f.instructionCreditUid, ins.uid);
+  assert.equal(f.instructionCreditAmount, 20_000);
+});
+
+test("vol d'instruction de 44 min ou case décochée : pas de crédit", async () => {
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const short = await seedPastFlight({ crew: [stu.uid, ins.uid], aircraftId: a, instruction: true });
+  await closeFlight(stu, { ...FUEL, flightId: short, actualMinutes: 44, landings: 1, shortFlightAmount: 8_000, fuelEnd: 32 });
+  const plain = await seedPastFlight({ crew: [stu.uid, ins.uid], aircraftId: await seedAircraft(), instruction: false });
+  await closeFlight(stu, { ...FUEL, flightId: plain, actualMinutes: 90, landings: 1, fuelEnd: 20 });
+  assert.equal((await getUser(ins.uid)).balance, 0);
+  assert.equal((await getFlight(short)).instructionCreditUid, null);
+});
+
+test("vol d'instruction figé avant le plan 8 : crédit par défaut (20 000)", async () => {
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { instructionCredit: _i, baptismFees: _b, ...oldSnapshot } = DEFAULT_PRICING;
+  const id = await seedPastFlight({ crew: [stu.uid, ins.uid], aircraftId: a, instruction: true,
+    pricingSnapshot: oldSnapshot });
+  await closeFlight(stu, { ...FUEL, flightId: id, actualMinutes: 60, landings: 1, fuelEnd: 25 });
+  assert.equal((await getUser(ins.uid)).balance, 20_000);
+});
+
+test("baptême Awagne : 110 000 hors app, aucun débit", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
+  const a = await seedAircraft();
+  const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, passengers: ["Paul"],
+    pricingMode: "baptism", baptismTier: "awagne" });
+  const r = await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 20, landings: 1, fuelEnd: 35 });
+  assert.deepEqual(r, { billedAmount: 110_000, billedTo: "off_app" });
+  assert.equal((await getUser(pilot.uid)).balance, 0);
+  assert.equal((await flightTx(id)).length, 0);
+});
+
+test("baptême sans forfait (plan 8) : facturé au forfait local, 70 000 hors app quelle que soit la durée", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
+  const a = await seedAircraft();
+  const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, passengers: ["Paul"], pricingMode: "baptism" });
+  const r = await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 20, landings: 1, fuelEnd: 35 });
+  assert.deepEqual(r, { billedAmount: 70_000, billedTo: "off_app" });
+  assert.equal((await getUser(pilot.uid)).balance, 0);
+  assert.equal((await flightTx(id)).length, 0);
+  assert.equal((await getFlight(id)).pricingMode, "baptism");
+});
+
+test("instructeur payeur de son propre vol d'instruction : débit puis crédit enchaînés", async () => {
+  const ins = await seedUser({ profile: "instructeur", category: "GAP", balance: 100_000 });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const a = await seedAircraft();
+  const id = await seedPastFlight({ crew: [ins.uid, stu.uid], payerUid: ins.uid, aircraftId: a, instruction: true });
+  await closeFlight(ins, { ...FUEL, flightId: id, actualMinutes: 60, landings: 1, fuelEnd: 25 });
+  const txs = await flightTx(id);
+  assert.equal(txs.length, 2);
+  const debit = txs.find((x) => x.type === "flight")!;
+  assert.equal((await getUser(ins.uid)).balance, 100_000 + debit.amount + 20_000);
 });

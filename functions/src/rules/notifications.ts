@@ -71,11 +71,12 @@ export function reminderPush(f: FlightInfo, names: Record<string, string>): Push
     `${flightLine(f, names)}. Pensez à le clôturer dans le carnet de vol.`);
 }
 
-const MOVEMENT_LABELS = { credit: "Crédit", correction: "Correction", flight_adjustment: "Régularisation" };
+const MOVEMENT_LABELS = { credit: "Crédit", correction: "Correction", flight_adjustment: "Régularisation",
+  instruction: "Crédit instruction" };
 
 export function movementPush(a: {
   userUid: string; shortName: string; amount: number; balanceAfter: number;
-  type: "credit" | "correction" | "flight_adjustment"; actor: string; instructors: string[];
+  type: "credit" | "correction" | "flight_adjustment" | "instruction"; actor: string; instructors: string[];
 }): Push {
   const signed = a.amount > 0 ? `+${formatFcfa(a.amount)}` : formatFcfa(a.amount);
   return push([a.userUid, ...a.instructors], a.actor, `Compte de ${a.shortName}`,

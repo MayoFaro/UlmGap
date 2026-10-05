@@ -1,6 +1,6 @@
 // Validation (pure) des entrées des fonctions de vol.
-import { ValidationError, obj, text } from "../admin/validation";
-import { MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
+import { ValidationError, bool, obj, text } from "../admin/validation";
+import { BAPTISM_TIERS, BaptismTier, MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
 
 /** Durée prévue maximale. */
 export const MAX_PLANNED_HOURS = 12;
@@ -18,6 +18,10 @@ export interface FlightInput {
   crew: string[];
   passengers: string[];
   pricingMode?: ChosenMode;
+  instruction: boolean;
+  baptism: boolean;
+  /** Obligatoire si `baptism`, sinon null. */
+  baptismTier: BaptismTier | null;
 }
 
 export interface ReviewChanges {
@@ -26,6 +30,9 @@ export interface ReviewChanges {
   destination?: string;
   aircraftId?: string;
   pricingMode?: ChosenMode;
+  instruction?: boolean;
+  baptism?: boolean;
+  baptismTier?: BaptismTier;
 }
 
 function time(v: unknown, field: string): number {
@@ -33,6 +40,13 @@ function time(v: unknown, field: string): number {
     throw new ValidationError(`${field} invalide.`);
   }
   return v;
+}
+
+export function baptismTier(v: unknown): BaptismTier {
+  if (!BAPTISM_TIERS.includes(v as BaptismTier)) {
+    throw new ValidationError("Choisissez le forfait du baptême (Local, Nyonye ou Awagne).");
+  }
+  return v as BaptismTier;
 }
 
 function mode(v: unknown): ChosenMode {
@@ -105,7 +119,14 @@ export function validateFlightInput(data: unknown): FlightInput {
     destination: text(d.destination, "Destination", 80),
     aircraftId: checkNoSlash(text(d.aircraftId, "Appareil", 128), "Appareil"),
     crew, passengers,
+    instruction: bool(d.instruction, "Vol d'instruction", false),
+    baptism: bool(d.baptism, "Baptême de l'air", false),
+    baptismTier: null,
   };
+  if (out.baptism && passengers.length === 0) {
+    throw new ValidationError("Baptême de l'air réservé à un vol avec un passager sans compte.");
+  }
+  if (out.baptism) out.baptismTier = baptismTier(d.baptismTier);
   if (d.pricingMode !== undefined) out.pricingMode = mode(d.pricingMode);
   return out;
 }
@@ -129,6 +150,10 @@ export function validateReviewChanges(data: unknown): { flightId: string; change
     changes.aircraftId = checkNoSlash(text(c.aircraftId, "Appareil", 128), "Appareil");
   }
   if (c.pricingMode !== undefined) changes.pricingMode = mode(c.pricingMode);
+  if (c.instruction !== undefined) changes.instruction = bool(c.instruction, "Vol d'instruction", false);
+  if (c.baptism !== undefined) changes.baptism = bool(c.baptism, "Baptême de l'air", false);
+  // null = absent (l'app l'envoie toujours) : validateFlight reprend alors le forfait enregistré.
+  if (c.baptismTier != null) changes.baptismTier = baptismTier(c.baptismTier);
   return { flightId, changes };
 }
 

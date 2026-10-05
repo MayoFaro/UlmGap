@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   checkPayer, conflictCause, decideStatus, designatedInstructor, findConflict, payerOf,
-  resolvePricingMode, isPlanning } from "./flights";
+  resolvePricingMode, isPlanning, isInstructionEligible } from "./flights";
 
 const fx = JSON.parse(fs.readFileSync(
   path.resolve(__dirname, "../../../test/fixtures/flight_rules.json"), "utf8"));
@@ -27,9 +27,12 @@ for (const c of fx.pricing) {
   });
 }
 
+// Les heures des cas `conflicts` sont en minutes ; findConflict travaille en ms.
+const toMs = <T extends { start: number; end: number }>(f: T): T => ({ ...f, start: f.start * 60_000, end: f.end * 60_000 });
+
 for (const c of fx.conflicts) {
   test(`conflit : ${c.name}`, () => {
-    assert.equal(findConflict(c.candidate, c.others)?.id ?? null, c.expected);
+    assert.equal(findConflict(toMs(c.candidate), c.others.map(toMs))?.id ?? null, c.expected);
   });
 }
 
@@ -55,8 +58,8 @@ for (const c of fx.payer) {
 
 for (const c of fx.conflicts.filter((x: { expectedCause?: unknown }) => x.expectedCause)) {
   test(`cause du conflit : ${c.name}`, () => {
-    const other = findConflict(c.candidate, c.others)!;
-    assert.deepEqual(conflictCause(c.candidate, other), c.expectedCause);
+    const other = findConflict(toMs(c.candidate), c.others.map(toMs))!;
+    assert.deepEqual(conflictCause(toMs(c.candidate), other), c.expectedCause);
   });
 }
 
@@ -72,4 +75,18 @@ test("isPlanning : contrôle des conflits pour un vol à venir non clôturé seu
   assert.equal(isPlanning(1000, 1000, false), false);
   assert.equal(isPlanning(1000, 2000, false), false);
   assert.equal(isPlanning(1000, 999, true), false);
+});
+
+for (const c of fx.instruction) {
+  test(`instruction : ${c.name}`, () => {
+    assert.equal(isInstructionEligible(c.crew), c.expected);
+  });
+}
+
+test("isInstructionEligible : exactement un instructeur et un autre membre avec compte", () => {
+  assert.equal(isInstructionEligible([{ uid: "s", profile: "eleve" }, { uid: "i", profile: "instructeur" }]), true);
+  assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }, { uid: "l", profile: "lache_toute_mission" }]), true);
+  assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }]), false);
+  assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }, { uid: "j", profile: "instructeur" }]), false);
+  assert.equal(isInstructionEligible([{ uid: "s", profile: "eleve" }, { uid: "l", profile: "lache_solo" }]), false);
 });

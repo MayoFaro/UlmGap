@@ -5,10 +5,13 @@ import { validateCorrection, validateCredit, validatePricing } from "./validatio
 
 const ok = {
   flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000, EXT: 70_000 },
-  includedMinutes: 75,
+  includedMinutes: 60,
+  toleranceMinutes: 75,
   minPlannedMinutes: 45,
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
+  instructionCredit: 20_000,
+  baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
 };
 
 test("validatePricing : cas nominal", () => {
@@ -19,9 +22,18 @@ test("validatePricing : champ manquant", () => {
   for (const bad of [
     { ...ok, flatFee: undefined },
     { ...ok, includedMinutes: undefined },
+    { ...ok, toleranceMinutes: undefined },
+    { ...ok, toleranceMinutes: 601 },
+    { ...ok, toleranceMinutes: 0 },
     { ...ok, minPlannedMinutes: undefined },
     { ...ok, overtimeHourly: undefined },
     { ...ok, fuelHourlyRate: undefined },
+    { ...ok, instructionCredit: undefined },
+    { ...ok, baptismFees: undefined },
+    { ...ok, baptismFees: { local: 70_000, nyonye: 90_000 } }, // awagne manquant
+    { ...ok, instructionCredit: -1 },
+    { ...ok, baptismFees: { ...ok.baptismFees, nyonye: -1 } },
+    { ...ok, baptismFees: { ...ok.baptismFees, awagne: 1_000_001 } },
     { ...ok, flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000 } }, // EXT manquant
     null,
     {},
@@ -57,7 +69,7 @@ test("validatePricing : hors plage", () => {
     () => validatePricing({ ...ok, flatFee: { ...ok.flatFee, GAP: 1_000_001 } }),
     ValidationError,
   );
-  assert.doesNotThrow(() => validatePricing({ ...ok, includedMinutes: 600, minPlannedMinutes: 600 }));
+  assert.doesNotThrow(() => validatePricing({ ...ok, includedMinutes: 600, toleranceMinutes: 600, minPlannedMinutes: 600 }));
 });
 
 test("validatePricing : message d'erreur au format attendu", () => {
@@ -132,4 +144,12 @@ test("validateCorrection : motif de plus de 200 caractères → message distinct
     (e: unknown) => e instanceof ValidationError && e.message === "Motif trop long (200 caractères au maximum).",
   );
   assert.equal(validateCorrection({ userUid: "u1", newBalance: 100, reason: "x".repeat(200) }).reason.length, 200);
+});
+
+test("validatePricing : tolérance inférieure au temps couvert refusée", () => {
+  assert.throws(
+    () => validatePricing({ ...ok, includedMinutes: 80, toleranceMinutes: 75 }),
+    (e: unknown) => e instanceof ValidationError && e.message === "La tolérance doit être au moins égale au temps couvert.",
+  );
+  assert.doesNotThrow(() => validatePricing({ ...ok, includedMinutes: 75, toleranceMinutes: 75 }));
 });

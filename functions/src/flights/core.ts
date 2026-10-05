@@ -6,11 +6,11 @@ import type { Profile } from "../admin/validation";
 import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
-  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, isPlanning, payerOf,
-  resolvePricingMode,
+  Decision, ExistingFlight, FLIGHT_BUFFER_MINUTES, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
+  isPlanning, payerOf, resolvePricingMode,
 } from "../rules/flights";
 import {
-  availableCredit, estimatedCost, formatFcfa, Pricing, toCategory,
+  availableCredit, estimatedCost, formatFcfa, Pricing, pricingWithDefaults, toCategory,
 } from "../rules/pricing";
 import { checkMinDuration, type FlightInput } from "./validation";
 
@@ -114,7 +114,7 @@ async function assertNoConflict(
   tx: Tx, db: Db, slot: { id: string; start: number; end: number; aircraftId: string; crew: string[] },
 ): Promise<void> {
   // Un seul filtre d'inégalité (index simple automatique) ; le reste en mémoire.
-  const snap = await tx.get(db.collection("flights").where("end", ">", Timestamp.fromMillis(slot.start)));
+  const snap = await tx.get(db.collection("flights").where("end", ">", Timestamp.fromMillis(slot.start - FLIGHT_BUFFER_MINUTES * 60_000)));
   const others: ExistingFlight[] = snap.docs.map((d) => ({
     id: d.id,
     start: (d.get("start") as FirebaseFirestore.Timestamp).toMillis(),
@@ -128,7 +128,7 @@ async function assertNoConflict(
   const c = findConflict(slot, others);
   if (!c) return;
   const doc = snap.docs.find((d) => d.id === c.id)!;
-  throw new HttpsError("failed-precondition", "Conflit avec un autre vol validé.", {
+  throw new HttpsError("failed-precondition", "Conflit avec un autre vol validé (30 min d'écart minimum).", {
     conflict: {
       start: c.start, end: c.end,
       aircraft: (doc.get("aircraft") as string | undefined) ?? "",
@@ -183,7 +183,9 @@ async function checkCredit(
     .map((d) => {
       const start = (d.get("start") as FirebaseFirestore.Timestamp).toMillis();
       const end = (d.get("end") as FirebaseFirestore.Timestamp).toMillis();
-      const otherPricing = (d.get("pricingSnapshot") as Pricing | null | undefined) ?? a.fallbackPricing;
+      // Ancien snapshot sans toleranceMinutes : complété par pricingWithDefaults.
+      const snapshot = d.get("pricingSnapshot") as Partial<Pricing> | null | undefined;
+      const otherPricing = snapshot ? pricingWithDefaults(snapshot) : a.fallbackPricing;
       return estimatedCost(
         d.get("pricingMode") as "standard" | "fuel_only", (end - start) / 60_000, category, otherPricing,
       );
@@ -214,13 +216,19 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   const d = a.decide(crew);
   if (!d.ok) throw new HttpsError("permission-denied", d.reason);
 
-  const pricingMode = a.forcedMode ?? resolvePricingMode({
+  // Spec §10.1 : vol d'instruction réservé à un instructeur + un autre membre.
+  if (a.input.instruction && !isInstructionEligible(crew)) {
+    throw new HttpsError("invalid-argument",
+      "Vol d'instruction : il faut un instructeur et un autre membre avec compte.");
+  }
+
+  const pricingMode: PricingMode = a.input.baptism ? "baptism" : (a.forcedMode ?? resolvePricingMode({
     allGap: crew.every((c) => c.category === "GAP"),
     hasPassenger: a.input.passengers.length > 0,
     mayChoose: a.mayChoose,
     requested: a.input.pricingMode,
     previous: a.previousMode,
-  });
+  }));
 
   let locks: Ref[] = [];
   if (d.status === "valide") {
@@ -241,15 +249,15 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   // règle du contrôleur), pour rester cohérent avec ce qui le facturera et
   // avec le calcul du crédit disponible des autres vols.
   const pricingSnapshot: Pricing | null = d.status === "valide"
-    ? (a.existingSnapshot && a.previousStatus === "valide" ? a.existingSnapshot : pricing)
+    ? (a.existingSnapshot && a.previousStatus === "valide" ? pricingWithDefaults(a.existingSnapshot) : pricing)
     : null;
 
-  // Décision 1 : crédit contrôlé dès la demande. `pricingMode` vaut toujours
-  // "standard" ou "fuel_only" à ce stade (le mode "custom" ne se décide qu'à
-  // la clôture, spec §4.1).
+  // Décision 1 : crédit contrôlé dès la demande, sauf baptême (spec §10.2).
+  // `pricingMode` vaut "standard", "fuel_only" ou "baptism" à ce stade (le mode
+  // "custom" ne se décide qu'à la clôture, spec §4.1).
   const payerUid = payerOf(a.input.crew);
   const payer = crew.find((c) => c.uid === payerUid)!;
-  if (!a.skipCredit) {
+  if (!a.skipCredit && pricingMode !== "baptism") {
     locks = await checkCredit(tx, db, locks, {
       id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
       shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000,
@@ -271,6 +279,8 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       instructorUid: d.instructorUid,
       status: d.status,
       pricingMode,
+      baptismTier: a.input.baptism ? a.input.baptismTier : null,
+      instruction: a.input.instruction,
       payerUid,
       pricingSnapshot,
       updatedAt: FieldValue.serverTimestamp(),

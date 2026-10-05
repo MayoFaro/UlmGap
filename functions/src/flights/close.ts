@@ -9,10 +9,12 @@ import { Caller, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
-import { closingBill, Pricing, toCategory } from "../rules/pricing";
+import { BaptismTier, closingBill, instructionCreditDue, Pricing, pricingWithDefaults, toCategory } from "../rules/pricing";
+import { notifyMovements, WrittenMovement } from "../notify/movements";
 import { isOnOrBeforeClubToday } from "../rules/club-day";
 import { closingEnd } from "../rules/closing";
 import { becomesFuelSource } from "../rules/fuel";
+import type { Profile } from "../admin/validation";
 import { touchLocks } from "./core";
 import { validateClosing } from "./validation";
 
@@ -42,7 +44,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
   const now = Date.now();
   const ref = db.collection("flights").doc(flightId);
 
-  return db.runTransaction(async (tx) => {
+  const { result, written } = await db.runTransaction(async (tx) => {
     const f = await loadClosable(tx, ref);
     const crew = (f.get("crew") as string[] | undefined) ?? [];
     if (!me.isAdmin && !crew.includes(me.uid)) {
@@ -70,38 +72,73 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     const lockRef = db.collection("flightLocks").doc(`user_${payerUid}`);
     await tx.get(lockRef);
     const snapshot = (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null;
-    const pricing = snapshot ?? await readPricing(tx, db);
+    // Plan 8 : un snapshot d'avant le plan 8 n'a pas les nouveaux tarifs.
+    const pricing = pricingWithDefaults(snapshot ?? await readPricing(tx, db));
+
+    // Plan 8 (spec §10.1) : équipage lu avant toute écriture, pour le crédit
+    // d'instruction ; le verrou de l'instructeur, s'il n'est pas le payeur.
+    const crewSnaps = await tx.getAll(...crew.map((u) => db.collection("users").doc(u)));
+    const people = crewSnaps.map((s) => ({
+      uid: s.id, profile: (s.get("profile") as Profile | undefined) ?? null,
+    }));
+    const credit = instructionCreditDue({
+      instruction: f.get("instruction") === true, actualMinutes, crew: people, pricing,
+    });
+    const creditLockRef = credit && credit.uid !== payerUid
+      ? db.collection("flightLocks").doc(`user_${credit.uid}`) : null;
+    if (creditLockRef) await tx.get(creditLockRef);
+    const instructorBalance = credit
+      ? (crewSnaps.find((s) => s.id === credit.uid)?.get("balance") as number | undefined) ?? 0
+      : 0;
 
     // 2. Facturation (tarifs figés si pricingSnapshot, courants sinon, décision 3).
     const passengers = (f.get("passengers") as string[] | undefined) ?? [];
     let bill;
     try {
       bill = closingBill({
-        mode: f.get("pricingMode") as "standard" | "fuel_only",
+        mode: f.get("pricingMode") as "standard" | "fuel_only" | "baptism",
         actualMinutes,
         category: toCategory(payerSnap.get("category")),
         pricing,
         shortFlightAmount,
         customAmount,
         hasPassenger: passengers.length > 0,
+        baptismTier: (f.get("baptismTier") as BaptismTier | null | undefined) ?? null,
       });
     } catch (e) {
       throw new HttpsError("invalid-argument", (e as Error).message);
     }
 
     // 3. Débit (aucun mouvement pour un vol facturé hors app).
+    let payerBalance = (payerSnap.get("balance") as number | undefined) ?? 0;
     if (bill.billedTo === "account") {
-      postMovement(tx, db, {
+      payerBalance = postMovement(tx, db, {
         uid: payerUid,
         amount: -bill.billedAmount,
         type: "flight",
         reason: "Vol",
         flightId: ref.id,
         by: me.uid,
-        currentBalance: (payerSnap.get("balance") as number | undefined) ?? 0,
+        currentBalance: payerBalance,
       });
     }
-    touchLocks(tx, [lockRef]);
+    touchLocks(tx, creditLockRef ? [lockRef, creditLockRef] : [lockRef]);
+
+    // 3 bis. Crédit d'instruction, enchaîné après le débit si l'instructeur
+    // est aussi le payeur.
+    let written: WrittenMovement | null = null;
+    if (credit) {
+      const balanceAfter = postMovement(tx, db, {
+        uid: credit.uid,
+        amount: credit.amount,
+        type: "instruction",
+        reason: "Crédit instruction",
+        flightId: ref.id,
+        by: me.uid,
+        currentBalance: credit.uid === payerUid ? payerBalance : instructorBalance,
+      });
+      written = { uid: credit.uid, amount: credit.amount, balanceAfter, type: "instruction" };
+    }
 
     // 4. Clôture du vol.
     tx.update(ref, {
@@ -119,6 +156,8 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
       customAmount,
       shortFlightAmount,
       pricingMode: bill.pricingMode,
+      instructionCreditUid: credit?.uid ?? null,
+      instructionCreditAmount: credit?.amount ?? null,
       fuelStartExpectedLiters: fuelStartExpected,
       fuelStartLiters: fuelStart,
       fuelAddedLiters: fuelAdded,
@@ -138,8 +177,10 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
       });
     }
 
-    return { billedAmount: bill.billedAmount, billedTo: bill.billedTo };
+    return { result: { billedAmount: bill.billedAmount, billedTo: bill.billedTo }, written };
   });
+  if (written) await notifyMovements(db, me.uid, [written]);
+  return result;
 }
 
 export const closeFlightFn = onCall((req) => closeFlight(req.auth as Caller | undefined, req.data));

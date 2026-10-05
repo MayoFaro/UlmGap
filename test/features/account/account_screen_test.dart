@@ -140,6 +140,8 @@ void main() {
         move('m1', 'flight', 'Vol', -15000),
         move('m2', 'flight_adjustment', 'Régularisation', -6000),
         move('m3', 'flight_adjustment', 'Annulation du vol', 21000),
+        move('m4', 'instruction', 'Crédit instruction', 20000),
+        move('m5', 'instruction', 'Régularisation crédit instruction', -20000),
       ];
     final flights = FakeFlightApi()..flights = [testFlight(id: 'f1', start: DateTime(2026, 10, 12, 9))];
     await tester.pumpWidget(host(finance, me, flights: flights));
@@ -148,6 +150,8 @@ void main() {
     expect(find.text('Vol du lundi 12 octobre'), findsOneWidget);
     expect(find.text('Régularisation — vol du lundi 12 octobre'), findsOneWidget);
     expect(find.text('Régularisation — vol du lundi 12 octobre — Annulation du vol'), findsOneWidget);
+    expect(find.text('Crédit instruction — vol du lundi 12 octobre'), findsOneWidget);
+    expect(find.text('Régularisation crédit instruction — vol du lundi 12 octobre'), findsOneWidget);
   });
 
   testWidgets('Se déconnecter : revient à la racine puis déconnecte', (tester) async {

@@ -20,9 +20,12 @@ after(async () => {
 const CUSTOM = {
   flatFee: { GAP: 13_000, GR: 31_000, MIL: 51_000, EXT: 71_000 },
   includedMinutes: 80,
+  toleranceMinutes: 85,
   minPlannedMinutes: 50,
   overtimeHourly: { GAP: 13_000, GR: 31_000, MIL: 31_000, EXT: 31_000 },
   fuelHourlyRate: 13_000,
+  instructionCredit: 21_000,
+  baptismFees: { local: 72_000, nyonye: 92_000, awagne: 112_000 },
 };
 
 test("readPricing : sans document → DEFAULT_PRICING", async () => {

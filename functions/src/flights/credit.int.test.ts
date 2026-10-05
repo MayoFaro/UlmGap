@@ -163,6 +163,27 @@ test("concurrence : deux créations simultanées du même compte débité, le cr
   assert.equal(code(rejected.reason), "failed-precondition");
 });
 
+test("crédit : l'ancien snapshot d'un autre vol (includedMinutes 75, sans tolérance) garde l'ancien calcul", async () => {
+  const me = await seedUser({ profile: "instructeur", category: "GAP", balance: 26_000 });
+  const a1 = await seedAircraft();
+  const a2 = await seedAircraft();
+  const { toleranceMinutes: _t, ...oldSnapshot } = { ...DEFAULT_PRICING, includedMinutes: 75 };
+  // Autre vol de 90 min avec ancien snapshot : 12 000 + 12 000 × 15 / 60 = 15 000.
+  await seedFlight({
+    start: at(200), end: at(200) + 90 * 60_000, crew: [me.uid], createdBy: me.uid, aircraftId: a1,
+    pricingSnapshot: oldSnapshot,
+  });
+  // Vol de 60 min (forfait 12 000) : disponible 26 000 − 15 000 = 11 000 < 12 000.
+  await assert.rejects(
+    createFlight(me, draft(a2, [me.uid])),
+    (e) => {
+      assert.equal(code(e), "failed-precondition");
+      assert.deepEqual(credit(e), { missing: 1_000, available: 11_000, cost: 12_000 });
+      return true;
+    },
+  );
+});
+
 // Outil de test : seedFlight renseigne payerUid (premier de l'équipage), sur
 // lequel porte la requête du contrôle de crédit.
 test("seedFlight : payerUid par défaut = premier de l'équipage", async () => {

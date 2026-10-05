@@ -3,20 +3,37 @@
 // test/fixtures/pricing_cases.json.
 import 'profiles.dart';
 
+/// Plan 9 : forfaits de baptême (clés de [Pricing.baptismFees]).
+const baptismTiers = ['local', 'nyonye', 'awagne'];
+
 class Pricing {
   const Pricing({
     required this.flatFee,
     required this.includedMinutes,
+    this.toleranceMinutes = 75,
     required this.minPlannedMinutes,
     required this.overtimeHourly,
     required this.fuelHourlyRate,
+    this.instructionCredit = 20000,
+    this.baptismFees = const {'local': 70000, 'nyonye': 90000, 'awagne': 110000},
   });
 
   final Map<UserCategory, int> flatFee;
+
+  /// Temps couvert par le forfait : le dépassement se compte à partir de là.
   final int includedMinutes;
+
+  /// Plan 9 : jusqu'à cette durée (incluse), le forfait seul est facturé.
+  final int toleranceMinutes;
   final int minPlannedMinutes;
   final Map<UserCategory, int> overtimeHourly;
   final int fuelHourlyRate;
+
+  /// Plan 8 : crédit versé à l'instructeur par vol d'instruction clôturé.
+  final int instructionCredit;
+
+  /// Plan 9 : prix d'un baptême de l'air par forfait (facturé hors app).
+  final Map<String, int> baptismFees;
 
   /// Fusionné sur [defaultPricing] : un champ absent (document manquant, ou
   /// champ manquant dedans) prend la valeur par défaut (spec §2.4).
@@ -37,18 +54,27 @@ class Pricing {
     return Pricing(
       flatFee: categoryMap(m['flatFee'], defaultPricing.flatFee),
       includedMinutes: (m['includedMinutes'] as num?)?.toInt() ?? defaultPricing.includedMinutes,
+      toleranceMinutes: (m['toleranceMinutes'] as num?)?.toInt() ?? defaultPricing.toleranceMinutes,
       minPlannedMinutes: (m['minPlannedMinutes'] as num?)?.toInt() ?? defaultPricing.minPlannedMinutes,
       overtimeHourly: categoryMap(m['overtimeHourly'], defaultPricing.overtimeHourly),
       fuelHourlyRate: (m['fuelHourlyRate'] as num?)?.toInt() ?? defaultPricing.fuelHourlyRate,
+      instructionCredit: (m['instructionCredit'] as num?)?.toInt() ?? defaultPricing.instructionCredit,
+      baptismFees: {
+        for (final t in baptismTiers)
+          t: (((m['baptismFees'] as Map?)?[t]) as num?)?.toInt() ?? defaultPricing.baptismFees[t]!,
+      },
     );
   }
 
   Map<String, dynamic> toMap() => {
         'flatFee': {for (final e in flatFee.entries) e.key.code: e.value},
         'includedMinutes': includedMinutes,
+        'toleranceMinutes': toleranceMinutes,
         'minPlannedMinutes': minPlannedMinutes,
         'overtimeHourly': {for (final e in overtimeHourly.entries) e.key.code: e.value},
         'fuelHourlyRate': fuelHourlyRate,
+        'instructionCredit': instructionCredit,
+        'baptismFees': {for (final t in baptismTiers) t: baptismFees[t]!},
       };
 }
 
@@ -60,7 +86,8 @@ final Pricing defaultPricing = Pricing(
     UserCategory.mil: 50000,
     UserCategory.ext: 70000,
   },
-  includedMinutes: 75,
+  includedMinutes: 60,
+  toleranceMinutes: 75,
   minPlannedMinutes: 45,
   overtimeHourly: const {
     UserCategory.gap: 12000,
@@ -69,6 +96,8 @@ final Pricing defaultPricing = Pricing(
     UserCategory.ext: 30000,
   },
   fuelHourlyRate: 12000,
+  instructionCredit: 20000,
+  baptismFees: {'local': 70000, 'nyonye': 90000, 'awagne': 110000},
 );
 
 /// Plafond des montants saisis à la clôture (shortFlightAmount, customAmount).
@@ -80,6 +109,8 @@ int? computedCost(String mode, int minutes, UserCategory category, Pricing p) {
     return (p.fuelHourlyRate * minutes / 60).round();
   }
   if (minutes < p.minPlannedMinutes) return null;
+  if (minutes <= p.toleranceMinutes) return p.flatFee[category]!;
+  // Jamais de dépassement négatif (snapshot incohérent : tolérance < temps couvert).
   final extra = minutes - p.includedMinutes;
   final overtimeMinutes = extra > 0 ? extra : 0;
   return (p.flatFee[category]! + p.overtimeHourly[category]! * overtimeMinutes / 60).round();
@@ -107,7 +138,12 @@ ClosingBill closingBill({
   int? shortFlightAmount,
   int? customAmount,
   required bool hasPassenger,
+  String? baptismTier,
 }) {
+  // Baptême de l'air : forfait du tier (local par défaut) hors app, montants saisis ignorés.
+  if (mode == 'baptism') {
+    return (billedAmount: pricing.baptismFees[baptismTier ?? 'local']!, billedTo: 'off_app', pricingMode: 'baptism');
+  }
   if (customAmount != null) {
     if (!hasPassenger) {
       throw ArgumentError('Montant différent réservé aux vols avec un passager sans compte.');

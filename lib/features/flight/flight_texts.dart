@@ -23,8 +23,23 @@ Color statusColor(FlightStatus s) => switch (s) {
 String pricingModeLabel(String mode) => switch (mode) {
       'fuel_only' => 'Carburant seulement',
       'custom' => 'Facturé hors app',
+      'baptism' => 'Baptême de l\'air',
       _ => 'Standard',
     };
+
+/// Plan 9 : forfait de baptême (local par défaut, comme la facturation).
+String baptismTierLabel(String? tier) => switch (tier) {
+      'nyonye' => 'Nyonye',
+      'awagne' => 'Awagne',
+      _ => 'Local',
+    };
+
+/// Message de refus d'un baptême sans forfait (identique au serveur).
+const baptismTierMissingMessage = 'Choisissez le forfait du baptême (Local, Nyonye ou Awagne).';
+
+/// Mode de tarification d'un vol, avec le forfait en cas de baptême.
+String flightPricingLabel(String mode, String? baptismTier) =>
+    mode == 'baptism' ? 'Baptême ${baptismTierLabel(baptismTier)}' : pricingModeLabel(mode);
 
 /// « DPS/LDX », passagers sans compte compris.
 String crewText(List<String> crew, List<String> passengers, Map<String, CrewMember> dir) =>
@@ -96,9 +111,9 @@ String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {
   final crew = crewText(c.crew, c.passengers, dir);
   if (c.kind == 'crew') {
     final members = c.members.map((u) => dir[u]?.shortName ?? '?').join('/');
-    return 'Conflit : $members est déjà sur le vol du $when (${c.aircraft}, $crew).';
+    return 'Conflit : $members est déjà sur le vol du $when (${c.aircraft}, $crew) (30 min d\'écart minimum).';
   }
-  return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew).';
+  return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew) (30 min d\'écart minimum).';
 }
 
 /// Plan 7 (spec §9.4) : carburant déclaré à la clôture.

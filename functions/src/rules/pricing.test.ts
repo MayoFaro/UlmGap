@@ -3,7 +3,8 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
-  adjustments, closingBill, computedCost, DEFAULT_PRICING, formatFcfa, toCategory,
+  adjustments, closingBill, computedCost, DEFAULT_PRICING, formatFcfa, instructionAdjustments,
+  instructionCreditDue, Pricing, pricingWithDefaults, toCategory,
 } from "./pricing";
 
 const fx = JSON.parse(fs.readFileSync(
@@ -12,10 +13,13 @@ const fx = JSON.parse(fs.readFileSync(
 test("DEFAULT_PRICING reproduit la spec §2.4", () => {
   assert.deepEqual(DEFAULT_PRICING, {
     flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000, EXT: 70_000 },
-    includedMinutes: 75,
+    includedMinutes: 60,
+    toleranceMinutes: 75,
     minPlannedMinutes: 45,
     overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
     fuelHourlyRate: 12_000,
+    instructionCredit: 20_000,
+    baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
   });
 });
 
@@ -44,7 +48,7 @@ for (const c of fx.closing) {
     const args = {
       mode: c.mode, actualMinutes: c.actualMinutes, category: c.category, pricing: DEFAULT_PRICING,
       shortFlightAmount: c.shortFlightAmount ?? null, customAmount: c.customAmount ?? null,
-      hasPassenger: c.hasPassenger,
+      hasPassenger: c.hasPassenger, baptismTier: c.baptismTier ?? null,
     };
     if (c.expectedError) {
       assert.throws(() => closingBill(args), new Error(c.expectedError));
@@ -59,3 +63,69 @@ for (const c of fx.adjustments) {
     assert.deepEqual(adjustments(c.before, c.after), c.expected);
   });
 }
+
+test("closingBill baptism : forfait du tier hors app, quelle que soit la durée", () => {
+  for (const actualMinutes of [20, 60, 200]) {
+    for (const [tier, fee] of [["local", 70_000], ["nyonye", 90_000], ["awagne", 110_000]] as const) {
+      assert.deepEqual(
+        closingBill({ mode: "baptism", actualMinutes, category: "EXT", pricing: DEFAULT_PRICING, hasPassenger: true,
+          shortFlightAmount: 5_000, customAmount: 9_000, baptismTier: tier }),
+        { billedAmount: fee, billedTo: "off_app", pricingMode: "baptism" });
+    }
+  }
+  // Sans tier (données du plan 8) : forfait local.
+  assert.equal(closingBill({ mode: "baptism", actualMinutes: 20, category: "EXT", pricing: DEFAULT_PRICING,
+    hasPassenger: true }).billedAmount, 70_000);
+});
+
+test("pricingWithDefaults : snapshot ancien sans les nouveaux champs", () => {
+  const old = { ...DEFAULT_PRICING } as Partial<Pricing>;
+  delete old.instructionCredit;
+  delete old.baptismFees;
+  const p = pricingWithDefaults(old);
+  assert.equal(p.instructionCredit, 20_000);
+  assert.deepEqual(p.baptismFees, DEFAULT_PRICING.baptismFees);
+  assert.equal(pricingWithDefaults({ baptismFees: { nyonye: 95_000 } as Pricing["baptismFees"] }).baptismFees.nyonye, 95_000);
+  assert.deepEqual(pricingWithDefaults(null), DEFAULT_PRICING);
+  assert.equal(pricingWithDefaults({ ...DEFAULT_PRICING, instructionCredit: 15_000 }).instructionCredit, 15_000);
+});
+
+test("ancien snapshot (includedMinutes 75, sans toleranceMinutes) : ancien calcul, jamais négatif", () => {
+  const old = pricingWithDefaults({ ...DEFAULT_PRICING, includedMinutes: 75, toleranceMinutes: undefined });
+  assert.equal(old.toleranceMinutes, 75);
+  assert.equal(computedCost("standard", 60, "GAP", old), 12_000);
+  assert.equal(computedCost("standard", 75, "GAP", old), 12_000);
+  assert.equal(computedCost("standard", 90, "GAP", old), 15_000); // 12 000 + 12 000 × 15 / 60
+  // Snapshot incohérent (tolérance par défaut 75 < includedMinutes 80) : pas de dépassement négatif.
+  const odd = pricingWithDefaults({ ...DEFAULT_PRICING, includedMinutes: 80, toleranceMinutes: undefined });
+  assert.equal(computedCost("standard", 78, "GAP", odd), 12_000);
+});
+
+const ins = { uid: "i", profile: "instructeur" as const };
+const stu = { uid: "s", profile: "eleve" as const };
+
+test("instructionCreditDue : seuil 45 min, instructeur crédité", () => {
+  const p = DEFAULT_PRICING;
+  assert.deepEqual(instructionCreditDue({ instruction: true, actualMinutes: 45, crew: [stu, ins], pricing: p }),
+    { uid: "i", amount: 20_000 });
+  assert.equal(instructionCreditDue({ instruction: true, actualMinutes: 44, crew: [stu, ins], pricing: p }), null);
+  assert.equal(instructionCreditDue({ instruction: false, actualMinutes: 90, crew: [stu, ins], pricing: p }), null);
+  assert.equal(instructionCreditDue({ instruction: true, actualMinutes: 90, crew: [ins], pricing: p }), null);
+  assert.equal(instructionCreditDue({ instruction: true, actualMinutes: 90,
+    crew: [ins, { uid: "j", profile: "instructeur" }], pricing: p }), null);
+});
+
+test("instructionCreditDue : crédit réglé à 0 → aucun crédit", () => {
+  const p = { ...DEFAULT_PRICING, instructionCredit: 0 };
+  assert.equal(instructionCreditDue({ instruction: true, actualMinutes: 90, crew: [stu, ins], pricing: p }), null);
+});
+
+test("instructionAdjustments : retrait, ajout, changement d'instructeur, inchangé", () => {
+  assert.deepEqual(instructionAdjustments({ uid: null, amount: 0 }, { uid: "i", amount: 20_000 }),
+    [{ uid: "i", amount: 20_000 }]);
+  assert.deepEqual(instructionAdjustments({ uid: "i", amount: 20_000 }, { uid: null, amount: 0 }),
+    [{ uid: "i", amount: -20_000 }]);
+  assert.deepEqual(instructionAdjustments({ uid: "i", amount: 20_000 }, { uid: "j", amount: 20_000 }),
+    [{ uid: "i", amount: -20_000 }, { uid: "j", amount: 20_000 }]);
+  assert.deepEqual(instructionAdjustments({ uid: "i", amount: 20_000 }, { uid: "i", amount: 20_000 }), []);
+});

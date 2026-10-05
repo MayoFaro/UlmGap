@@ -17,7 +17,7 @@ const ok = {
 test("validateFlightInput : normalise, passagers par défaut vides", () => {
   assert.deepEqual(validateFlightInput(ok), {
     start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
-    crew: ["u1", "u2"], passengers: [],
+    crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null,
   });
   assert.equal(validateFlightInput({ ...ok, crew: ["u1"], passengers: [" Paul "], pricingMode: "fuel_only" })
     .passengers[0], "Paul");
@@ -178,7 +178,7 @@ test("validateAdminUpdate : champs du vol, champs de clôture facultatifs (absen
     flightId: "f1",
     input: {
       start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
-      crew: ["u1", "u2"], passengers: [],
+      crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null,
     },
   });
   assert.deepEqual(
@@ -189,7 +189,7 @@ test("validateAdminUpdate : champs du vol, champs de clôture facultatifs (absen
       flightId: "f1",
       input: {
         start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
-        crew: ["u1", "u2"], passengers: [],
+        crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null,
       },
       pricingMode: "fuel_only", actualMinutes: 30, shortFlightAmount: null,
     },
@@ -300,4 +300,58 @@ test("validateAdminUpdate : carburant facultatif, mêmes bornes", () => {
   const v = validateAdminUpdate({ ...base, fuelStart: 10, fuelAdded: 20, fuelEnd: 5 });
   assert.deepEqual([v.fuelStart, v.fuelAdded, v.fuelEnd], [10, 20, 5]);
   assert.throws(() => validateAdminUpdate({ ...base, fuelEnd: 150 }), ValidationError);
+});
+
+test("validateFlightInput : instruction et baptism booléens, faux par défaut", () => {
+  const v = validateFlightInput(ok);
+  assert.equal(v.instruction, false);
+  assert.equal(v.baptism, false);
+  const w = validateFlightInput({ ...ok, crew: ["u1"], passengers: ["Paul"], instruction: true, baptism: true, baptismTier: "nyonye" });
+  assert.equal(w.instruction, true);
+  assert.equal(w.baptism, true);
+  assert.equal(w.baptismTier, "nyonye");
+  assert.throws(() => validateFlightInput({ ...ok, instruction: "oui" }), ValidationError);
+});
+
+test("validateFlightInput : baptême sans passager refusé", () => {
+  assert.throws(() => validateFlightInput({ ...ok, baptism: true }),
+    (e: unknown) => e instanceof ValidationError &&
+      e.message === "Baptême de l'air réservé à un vol avec un passager sans compte.");
+});
+
+test("validateFlightInput : forfait de baptême obligatoire et valide, ignoré hors baptême", () => {
+  const b = { ...ok, crew: ["u1"], passengers: ["Paul"], baptism: true };
+  const msg = "Choisissez le forfait du baptême (Local, Nyonye ou Awagne).";
+  for (const bad of [{}, { baptismTier: null }, { baptismTier: "autre" }, { baptismTier: 3 }]) {
+    assert.throws(() => validateFlightInput({ ...b, ...bad }),
+      (e: unknown) => e instanceof ValidationError && e.message === msg, JSON.stringify(bad));
+  }
+  for (const t of ["local", "nyonye", "awagne"]) {
+    assert.equal(validateFlightInput({ ...b, baptismTier: t }).baptismTier, t);
+  }
+  assert.equal(validateFlightInput({ ...ok, baptismTier: "awagne" }).baptismTier, null);
+  assert.equal(validateFlightInput({ ...ok, baptismTier: "autre" }).baptismTier, null);
+  // L'app envoie toujours baptismTier (null hors baptême) : accepté.
+  assert.equal(validateFlightInput({ ...ok, baptism: false, baptismTier: null }).baptismTier, null);
+});
+
+test("validateReviewChanges : un forfait null (envoyé par l'app hors baptême) vaut absent", () => {
+  const r = validateReviewChanges({ flightId: "f1", changes: { baptism: false, baptismTier: null } });
+  assert.equal(r.changes.baptism, false);
+  assert.equal(r.changes.baptismTier, undefined);
+});
+
+test("validateReviewChanges : forfait de baptême facultatif mais valide", () => {
+  assert.equal(validateReviewChanges({ flightId: "f1", changes: { baptismTier: "awagne" } }).changes.baptismTier, "awagne");
+  assert.equal(validateReviewChanges({ flightId: "f1" }).changes.baptismTier, undefined);
+  assert.throws(() => validateReviewChanges({ flightId: "f1", changes: { baptismTier: "autre" } }),
+    (e: unknown) => e instanceof ValidationError &&
+      e.message === "Choisissez le forfait du baptême (Local, Nyonye ou Awagne).");
+});
+
+test("validateReviewChanges : instruction et baptism facultatifs", () => {
+  const { changes } = validateReviewChanges({ flightId: "f1", changes: { instruction: true, baptism: false } });
+  assert.equal(changes.instruction, true);
+  assert.equal(changes.baptism, false);
+  assert.equal(validateReviewChanges({ flightId: "f1" }).changes.instruction, undefined);
 });

@@ -52,21 +52,22 @@ async function correction(id: string, o: Record<string, unknown> = {}) {
     start: (f.start as admin.firestore.Timestamp).toMillis(),
     end: (f.end as admin.firestore.Timestamp).toMillis(),
     destination: f.destination, aircraftId: f.aircraftId, crew: f.crew, passengers: f.passengers,
+    instruction: f.instruction === true, baptism: f.pricingMode === "baptism", baptismTier: f.baptismTier ?? null,
     ...o,
   };
 }
 
-test("vol clôturé GAP 90 min corrigé à 120 min : régularisation de −6 000, billedAmount 21 000", async () => {
+test("vol clôturé GAP 90 min corrigé à 120 min : régularisation de −6 000, billedAmount 24 000", async () => {
   const boss = await seedUser({ profile: null, isAdmin: true });
   const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
   const a = await seedAircraft();
   const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
-  assert.equal((await getFlight(id)).billedAmount, 15_000);
+  assert.equal((await getFlight(id)).billedAmount, 18_000); // 12 000 + 12 000 × 30 / 60
 
   await adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 }));
 
   const f = await getFlight(id);
-  assert.equal(f.billedAmount, 21_000);
+  assert.equal(f.billedAmount, 24_000); // 12 000 + 12 000 × 60 / 60
   assert.equal(f.billedTo, "account");
   assert.equal(f.actualFlightMinutes, 120);
   assert.equal(f.isClosed, true);
@@ -77,12 +78,12 @@ test("vol clôturé GAP 90 min corrigé à 120 min : régularisation de −6 000
   assert.equal(adj[0].userUid, pilot.uid);
   assert.equal(adj[0].reason, "Régularisation");
   assert.equal(adj[0].by, boss.uid);
-  assert.equal(adj[0].balanceAfter, 1_000_000 - 21_000);
-  assert.equal(await balance(pilot.uid), 1_000_000 - 21_000);
+  assert.equal(adj[0].balanceAfter, 1_000_000 - 24_000);
+  assert.equal(await balance(pilot.uid), 1_000_000 - 24_000);
   await assertInvariant(id);
 });
 
-test("vol clôturé : changement de compte débité → +15 000 à l'ancien, −débit au nouveau", async () => {
+test("vol clôturé : changement de compte débité → +18 000 à l'ancien, −débit au nouveau", async () => {
   const boss = await seedUser({ profile: null, isAdmin: true });
   const gap = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
   const gr = await seedUser({ profile: "lache_toute_mission", category: "GR", active: false });
@@ -92,16 +93,16 @@ test("vol clôturé : changement de compte débité → +15 000 à l'ancien, −
   // Membre inactif accepté (comptes actifs non contrôlés).
   await adminUpdateFlight(boss, await correction(id, { crew: [gr.uid, gap.uid] }));
 
-  // GR, 90 min : 30 000 + 30 000 × 15 / 60 = 37 500.
+  // GR, 90 min : 30 000 + 30 000 × 30 / 60 = 45 000.
   const f = await getFlight(id);
   assert.equal(f.payerUid, gr.uid);
-  assert.equal(f.billedAmount, 37_500);
+  assert.equal(f.billedAmount, 45_000);
   assert.equal(await balance(gap.uid), 1_000_000);
-  assert.equal(await balance(gr.uid), 1_000_000 - 37_500);
+  assert.equal(await balance(gr.uid), 1_000_000 - 45_000);
   const adj = (await flightTx(id)).filter((t) => t.type === "flight_adjustment");
   assert.deepEqual(
     adj.map((t) => [t.userUid, t.amount]).sort(),
-    [[gap.uid, 15_000], [gr.uid, -37_500]].sort(),
+    [[gap.uid, 18_000], [gr.uid, -45_000]].sort(),
   );
   await assertInvariant(id);
 });
@@ -167,7 +168,7 @@ test("vol non clôturé : créneau en conflit refusé ; champs de clôture refus
 
   await assert.rejects(
     adminUpdateFlight(boss, await correction(id, { start: at(10.5), end: at(11.5) })),
-    (e) => code(e) === "failed-precondition" && (e as Error).message === "Conflit avec un autre vol validé.",
+    (e) => code(e) === "failed-precondition" && (e as Error).message === "Conflit avec un autre vol validé (30 min d'écart minimum).",
   );
   await assert.rejects(
     adminUpdateFlight(boss, await correction(id, { actualMinutes: 60 })),
@@ -210,7 +211,7 @@ test("suppression d'un vol clôturé : remboursement et deleted: true ; seconde 
   assert.equal(await balance(pilot.uid), 1_000_000);
   const adj = (await flightTx(id)).filter((t) => t.type === "flight_adjustment");
   assert.equal(adj.length, 1);
-  assert.equal(adj[0].amount, 15_000);
+  assert.equal(adj[0].amount, 18_000);
   assert.equal(adj[0].reason, "Annulation du vol");
   assert.equal(adj[0].by, boss.uid);
   await assertInvariant(id);
@@ -256,13 +257,13 @@ test("vol clôturé GAP + passager (carburant) : pilote remplacé par un EXT san
   // Condition « tous GAP » perdue → standard (spec §4.1), même sans pricingMode.
   await adminUpdateFlight(boss, await correction(id, { crew: [ext.uid] }));
 
-  // EXT, 90 min : 70 000 + 30 000 × 15 / 60 = 77 500.
+  // EXT, 90 min : 70 000 + 30 000 × 30 / 60 = 85 000.
   const f = await getFlight(id);
   assert.equal(f.pricingMode, "standard");
-  assert.equal(f.billedAmount, 77_500);
+  assert.equal(f.billedAmount, 85_000);
   assert.equal(f.payerUid, ext.uid);
   assert.equal(await balance(gap.uid), 1_000_000);
-  assert.equal(await balance(ext.uid), 1_000_000 - 77_500);
+  assert.equal(await balance(ext.uid), 1_000_000 - 85_000);
   await assertInvariant(id);
 });
 
@@ -294,7 +295,7 @@ test("vol clôturé court (montant à facturer) corrigé à 90 min : shortFlight
   await adminUpdateFlight(boss, await correction(id, { actualMinutes: 90 }));
 
   const f = await getFlight(id);
-  assert.equal(f.billedAmount, 15_000);
+  assert.equal(f.billedAmount, 18_000); // GAP 90 min : 12 000 + 12 000 × 30 / 60
   assert.equal(f.shortFlightAmount, null);
   await assertInvariant(id);
 
@@ -451,4 +452,174 @@ test("carburant sur un vol non clôturé : refusé", async () => {
   const id = await seedFlight({ start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: pilot.uid });
   await assert.rejects(adminUpdateFlight(boss, await correction(id, { fuelEnd: 10 })),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "Réservé aux vols clôturés.");
+});
+
+// Plan 8 (spec §10) : crédit d'instruction régularisé, baptême.
+
+test("correction : vol d'instruction décoché → crédit repris", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  assert.equal(await balance(ins.uid), 20_000);
+  await adminUpdateFlight(boss, await correction(id, { instruction: false }));
+  assert.equal(await balance(ins.uid), 0);
+  const t = (await flightTx(id)).filter((x) => x.type === "instruction");
+  assert.deepEqual(t.map((x) => x.amount).sort((p, q) => p - q), [-20_000, 20_000]);
+  assert.equal(t.find((x) => x.amount < 0)!.reason, "Régularisation crédit instruction");
+  assert.equal((await getFlight(id)).instructionCreditUid, null);
+});
+
+test("correction : durée passée à 44 min → crédit repris ; repassée à 60 → recrédité", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 44, shortFlightAmount: 8_000 }));
+  assert.equal(await balance(ins.uid), 0);
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 60 }));
+  assert.equal(await balance(ins.uid), 20_000);
+});
+
+test("correction : changement d'instructeur → retrait chez l'ancien, crédit chez le nouveau", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const ins2 = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { crew: [stu.uid, ins2.uid] }));
+  assert.equal(await balance(ins.uid), 0);
+  assert.equal(await balance(ins2.uid), 20_000);
+  assert.equal((await getFlight(id)).instructionCreditUid, ins2.uid);
+});
+
+test("correction sans changement : aucune nouvelle ligne instruction", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { destination: "Kara" }));
+  assert.equal((await flightTx(id)).filter((x) => x.type === "instruction").length, 1);
+});
+
+test("suppression d'un vol d'instruction clôturé : crédit repris", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminDeleteFlight(boss, { flightId: id });
+  assert.equal(await balance(ins.uid), 0);
+  await assertInvariant(id);
+});
+
+test("correction : vol standard passé en baptême → débit remboursé, 70 000 hors app", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a },
+    { actualMinutes: 90 });
+  const before = await balance(pilot.uid);
+  await adminUpdateFlight(boss, await correction(id, { baptism: true, baptismTier: "local" }));
+  const f = await getFlight(id);
+  assert.equal(f.pricingMode, "baptism");
+  assert.equal(f.baptismTier, "local");
+  assert.equal(f.billedTo, "off_app");
+  assert.equal(f.billedAmount, 70_000);
+  assert.ok(await balance(pilot.uid) > before);
+  await assertInvariant(id);
+});
+
+test("correction : baptême Local → Awagne, 110 000 hors app, aucun mouvement de solde", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss,
+    { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a, pricingMode: "baptism", baptismTier: "local" },
+    { actualMinutes: 30 });
+  assert.equal((await getFlight(id)).billedAmount, 70_000);
+  const before = await balance(pilot.uid);
+  await adminUpdateFlight(boss, await correction(id, { baptismTier: "awagne" }));
+  const f = await getFlight(id);
+  assert.equal(f.billedAmount, 110_000);
+  assert.equal(f.billedTo, "off_app");
+  assert.equal(f.baptismTier, "awagne");
+  assert.equal(await balance(pilot.uid), before);
+  await assertInvariant(id);
+});
+
+test("correction : retirer le baptême efface le forfait", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss,
+    { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a, pricingMode: "baptism", baptismTier: "nyonye" },
+    { actualMinutes: 30 });
+  await adminUpdateFlight(boss, await correction(id, { baptism: false, baptismTier: null }));
+  const f = await getFlight(id);
+  assert.equal(f.baptismTier, null);
+  assert.notEqual(f.pricingMode, "baptism");
+  await assertInvariant(id);
+});
+
+// Deux mouvements sur un même compte dans une transaction admin : l'instructeur
+// est payeur (premier de l'équipage) et crédité de l'instruction.
+
+type Mv = { amount: number; balanceAfter: number; type: string };
+
+/** Les `at` d'une même transaction sont égaux : on reconstitue la chaîne depuis le solde initial. */
+function assertChain(initial: number, final: number, txs: Mv[]): void {
+  let cur = initial;
+  const rest = [...txs];
+  while (rest.length > 0) {
+    const i = rest.findIndex((t) => t.balanceAfter - t.amount === cur);
+    assert.notEqual(i, -1, "chaîne de balanceAfter incohérente");
+    cur = rest.splice(i, 1)[0].balanceAfter;
+  }
+  assert.equal(cur, final);
+  assert.equal(final, initial + txs.reduce((s, t) => s + t.amount, 0));
+}
+
+async function instructorPayerFlight() {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", category: "GAP", balance: 500_000 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [ins.uid, stu.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  assert.equal((await getFlight(id)).payerUid, ins.uid);
+  return { boss, ins, id };
+}
+
+test("correction à 44 min : ajustement du vol et retrait du crédit sur le même compte", async () => {
+  const { boss, ins, id } = await instructorPayerFlight();
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 44, shortFlightAmount: 8_000 }));
+  const mine = (await flightTx(id)).filter((t) => t.userUid === ins.uid) as Mv[];
+  assert.deepEqual(mine.map((t) => t.type).sort(),
+    ["flight", "flight_adjustment", "instruction", "instruction"]);
+  assertChain(500_000, await balance(ins.uid), mine);
+  await assertInvariant(id);
+});
+
+test("suppression : remboursement et reprise du crédit sur le même compte", async () => {
+  const { boss, ins, id } = await instructorPayerFlight();
+  await adminDeleteFlight(boss, { flightId: id });
+  const mine = (await flightTx(id)).filter((t) => t.userUid === ins.uid) as (Mv & { reason: string })[];
+  assert.deepEqual(mine.map((t) => t.type).sort(),
+    ["flight", "flight_adjustment", "instruction", "instruction"]);
+  const removal = mine.find((t) => t.type === "instruction" && t.amount < 0)!;
+  assert.equal(removal.amount, -20_000);
+  assert.equal(removal.reason, "Régularisation crédit instruction");
+  assertChain(500_000, await balance(ins.uid), mine);
+  assert.equal(await balance(ins.uid), 500_000);
+  await assertInvariant(id);
 });
