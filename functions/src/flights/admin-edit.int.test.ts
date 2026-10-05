@@ -537,3 +537,56 @@ test("correction : vol standard passé en baptême → débit remboursé, 70 000
   assert.ok(await balance(pilot.uid) > before);
   await assertInvariant(id);
 });
+
+// Deux mouvements sur un même compte dans une transaction admin : l'instructeur
+// est payeur (premier de l'équipage) et crédité de l'instruction.
+
+type Mv = { amount: number; balanceAfter: number; type: string };
+
+/** Les `at` d'une même transaction sont égaux : on reconstitue la chaîne depuis le solde initial. */
+function assertChain(initial: number, final: number, txs: Mv[]): void {
+  let cur = initial;
+  const rest = [...txs];
+  while (rest.length > 0) {
+    const i = rest.findIndex((t) => t.balanceAfter - t.amount === cur);
+    assert.notEqual(i, -1, "chaîne de balanceAfter incohérente");
+    cur = rest.splice(i, 1)[0].balanceAfter;
+  }
+  assert.equal(cur, final);
+  assert.equal(final, initial + txs.reduce((s, t) => s + t.amount, 0));
+}
+
+async function instructorPayerFlight() {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", category: "GAP", balance: 500_000 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [ins.uid, stu.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  assert.equal((await getFlight(id)).payerUid, ins.uid);
+  return { boss, ins, id };
+}
+
+test("correction à 44 min : ajustement du vol et retrait du crédit sur le même compte", async () => {
+  const { boss, ins, id } = await instructorPayerFlight();
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 44, shortFlightAmount: 8_000 }));
+  const mine = (await flightTx(id)).filter((t) => t.userUid === ins.uid) as Mv[];
+  assert.deepEqual(mine.map((t) => t.type).sort(),
+    ["flight", "flight_adjustment", "instruction", "instruction"]);
+  assertChain(500_000, await balance(ins.uid), mine);
+  await assertInvariant(id);
+});
+
+test("suppression : remboursement et reprise du crédit sur le même compte", async () => {
+  const { boss, ins, id } = await instructorPayerFlight();
+  await adminDeleteFlight(boss, { flightId: id });
+  const mine = (await flightTx(id)).filter((t) => t.userUid === ins.uid) as (Mv & { reason: string })[];
+  assert.deepEqual(mine.map((t) => t.type).sort(),
+    ["flight", "flight_adjustment", "instruction", "instruction"]);
+  const removal = mine.find((t) => t.type === "instruction" && t.amount < 0)!;
+  assert.equal(removal.amount, -20_000);
+  assert.equal(removal.reason, "Régularisation crédit instruction");
+  assertChain(500_000, await balance(ins.uid), mine);
+  assert.equal(await balance(ins.uid), 500_000);
+  await assertInvariant(id);
+});
