@@ -132,7 +132,8 @@ export function adjustments(
 export function instructionCreditDue(a: {
   instruction: boolean; actualMinutes: number; crew: Person[]; pricing: Pricing;
 }): { uid: string; amount: number } | null {
-  if (!a.instruction || a.actualMinutes < INSTRUCTION_MIN_MINUTES || !isInstructionEligible(a.crew)) {
+  // Crédit réglé à 0 dans Tarifs : le crédit est désactivé.
+  if (a.pricing.instructionCredit <= 0 || !a.instruction || a.actualMinutes < INSTRUCTION_MIN_MINUTES || !isInstructionEligible(a.crew)) {
     return null;
   }
   const instructor = a.crew.find((p) => p.profile === "instructeur")!;

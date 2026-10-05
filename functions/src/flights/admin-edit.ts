@@ -266,7 +266,10 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
     // du crédit d'instruction versé (comptes lus ensemble, avant écriture).
     const payer = payerUidOf(f);
     const refundPayer = closed && f.get("billedTo") === "account" && payer ? payer : null;
-    const creditUid = closed ? (f.get("instructionCreditUid") as string | null | undefined) ?? null : null;
+    // Crédit nul ou absent (crédit désactivé dans Tarifs) : rien à reprendre.
+    const creditAmount = (f.get("instructionCreditAmount") as number | null | undefined) ?? 0;
+    const creditUid = closed && creditAmount > 0
+      ? (f.get("instructionCreditUid") as string | null | undefined) ?? null : null;
     const uids = [...(refundPayer ? [refundPayer] : []), ...(creditUid ? [creditUid] : [])];
     if (uids.length > 0) {
       const accounts = await readAccounts(tx, db, uids);
@@ -282,7 +285,7 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
         written.push({ uid: refundPayer, amount, balanceAfter, type: "flight_adjustment" });
       }
       if (creditUid) {
-        const amount = -((f.get("instructionCreditAmount") as number | null | undefined) ?? 0);
+        const amount = -creditAmount;
         const balanceAfter = postMovement(tx, db, {
           uid: creditUid, amount, type: "instruction",
           reason: "Régularisation crédit instruction", flightId: ref.id, by,

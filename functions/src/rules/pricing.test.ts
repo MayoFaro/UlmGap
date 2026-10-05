@@ -98,6 +98,11 @@ test("instructionCreditDue : seuil 45 min, instructeur crédité", () => {
     crew: [ins, { uid: "j", profile: "instructeur" }], pricing: p }), null);
 });
 
+test("instructionCreditDue : crédit réglé à 0 → aucun crédit", () => {
+  const p = { ...DEFAULT_PRICING, instructionCredit: 0 };
+  assert.equal(instructionCreditDue({ instruction: true, actualMinutes: 90, crew: [stu, ins], pricing: p }), null);
+});
+
 test("instructionAdjustments : retrait, ajout, changement d'instructeur, inchangé", () => {
   assert.deepEqual(instructionAdjustments({ uid: null, amount: 0 }, { uid: "i", amount: 20_000 }),
     [{ uid: "i", amount: 20_000 }]);
