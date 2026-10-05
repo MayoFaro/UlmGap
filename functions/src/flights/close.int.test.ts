@@ -28,21 +28,21 @@ async function seedPastFlight(fields: Record<string, unknown>): Promise<string> 
   });
 }
 
-test("clôture 90 min GAP par un membre de l'équipage : solde −15 000, transaction et vol à jour", async () => {
+test("clôture 90 min GAP par un membre de l'équipage : solde −18 000, transaction et vol à jour", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
   const mate = await seedUser({ profile: "eleve" });
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid, mate.uid], payerUid: pilot.uid, aircraftId: a });
 
   const r = await closeFlight(mate, { ...FUEL, landings: 1, flightId: id, actualMinutes: 90 });
-  assert.deepEqual(r, { billedAmount: 15_000, billedTo: "account" });
+  assert.deepEqual(r, { billedAmount: 18_000, billedTo: "account" });
 
-  assert.equal((await getUser(pilot.uid)).balance, 1_000_000 - 15_000);
+  assert.equal((await getUser(pilot.uid)).balance, 1_000_000 - 18_000);
   const txs = await flightTx(id);
   assert.equal(txs.length, 1);
   assert.equal(txs[0].type, "flight");
-  assert.equal(txs[0].amount, -15_000);
-  assert.equal(txs[0].balanceAfter, 1_000_000 - 15_000);
+  assert.equal(txs[0].amount, -18_000);
+  assert.equal(txs[0].balanceAfter, 1_000_000 - 18_000);
   assert.equal(txs[0].userUid, pilot.uid);
   assert.equal(txs[0].flightId, id);
   assert.equal(txs[0].by, mate.uid);
@@ -50,7 +50,7 @@ test("clôture 90 min GAP par un membre de l'équipage : solde −15 000, transa
   const f = await getFlight(id);
   assert.equal(f.isClosed, true);
   assert.equal(f.actualFlightMinutes, 90);
-  assert.equal(f.billedAmount, 15_000);
+  assert.equal(f.billedAmount, 18_000);
   assert.equal(f.billedTo, "account");
   assert.equal(f.closedBy, mate.uid);
   assert.ok(f.closedAt);

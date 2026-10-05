@@ -7,6 +7,7 @@ class Pricing {
   const Pricing({
     required this.flatFee,
     required this.includedMinutes,
+    this.toleranceMinutes = 75,
     required this.minPlannedMinutes,
     required this.overtimeHourly,
     required this.fuelHourlyRate,
@@ -15,7 +16,12 @@ class Pricing {
   });
 
   final Map<UserCategory, int> flatFee;
+
+  /// Temps couvert par le forfait : le dépassement se compte à partir de là.
   final int includedMinutes;
+
+  /// Plan 9 : jusqu'à cette durée (incluse), le forfait seul est facturé.
+  final int toleranceMinutes;
   final int minPlannedMinutes;
   final Map<UserCategory, int> overtimeHourly;
   final int fuelHourlyRate;
@@ -45,6 +51,7 @@ class Pricing {
     return Pricing(
       flatFee: categoryMap(m['flatFee'], defaultPricing.flatFee),
       includedMinutes: (m['includedMinutes'] as num?)?.toInt() ?? defaultPricing.includedMinutes,
+      toleranceMinutes: (m['toleranceMinutes'] as num?)?.toInt() ?? defaultPricing.toleranceMinutes,
       minPlannedMinutes: (m['minPlannedMinutes'] as num?)?.toInt() ?? defaultPricing.minPlannedMinutes,
       overtimeHourly: categoryMap(m['overtimeHourly'], defaultPricing.overtimeHourly),
       fuelHourlyRate: (m['fuelHourlyRate'] as num?)?.toInt() ?? defaultPricing.fuelHourlyRate,
@@ -56,6 +63,7 @@ class Pricing {
   Map<String, dynamic> toMap() => {
         'flatFee': {for (final e in flatFee.entries) e.key.code: e.value},
         'includedMinutes': includedMinutes,
+        'toleranceMinutes': toleranceMinutes,
         'minPlannedMinutes': minPlannedMinutes,
         'overtimeHourly': {for (final e in overtimeHourly.entries) e.key.code: e.value},
         'fuelHourlyRate': fuelHourlyRate,
@@ -72,7 +80,8 @@ final Pricing defaultPricing = Pricing(
     UserCategory.mil: 50000,
     UserCategory.ext: 70000,
   },
-  includedMinutes: 75,
+  includedMinutes: 60,
+  toleranceMinutes: 75,
   minPlannedMinutes: 45,
   overtimeHourly: const {
     UserCategory.gap: 12000,
@@ -94,6 +103,8 @@ int? computedCost(String mode, int minutes, UserCategory category, Pricing p) {
     return (p.fuelHourlyRate * minutes / 60).round();
   }
   if (minutes < p.minPlannedMinutes) return null;
+  if (minutes <= p.toleranceMinutes) return p.flatFee[category]!;
+  // Jamais de dépassement négatif (snapshot incohérent : tolérance < temps couvert).
   final extra = minutes - p.includedMinutes;
   final overtimeMinutes = extra > 0 ? extra : 0;
   return (p.flatFee[category]! + p.overtimeHourly[category]! * overtimeMinutes / 60).round();

@@ -13,7 +13,8 @@ const fx = JSON.parse(fs.readFileSync(
 test("DEFAULT_PRICING reproduit la spec §2.4", () => {
   assert.deepEqual(DEFAULT_PRICING, {
     flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000, EXT: 70_000 },
-    includedMinutes: 75,
+    includedMinutes: 60,
+    toleranceMinutes: 75,
     minPlannedMinutes: 45,
     overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
     fuelHourlyRate: 12_000,
@@ -82,6 +83,17 @@ test("pricingWithDefaults : snapshot ancien sans les nouveaux champs", () => {
   assert.equal(p.baptismFee, 70_000);
   assert.deepEqual(pricingWithDefaults(null), DEFAULT_PRICING);
   assert.equal(pricingWithDefaults({ ...DEFAULT_PRICING, instructionCredit: 15_000 }).instructionCredit, 15_000);
+});
+
+test("ancien snapshot (includedMinutes 75, sans toleranceMinutes) : ancien calcul, jamais négatif", () => {
+  const old = pricingWithDefaults({ ...DEFAULT_PRICING, includedMinutes: 75, toleranceMinutes: undefined });
+  assert.equal(old.toleranceMinutes, 75);
+  assert.equal(computedCost("standard", 60, "GAP", old), 12_000);
+  assert.equal(computedCost("standard", 75, "GAP", old), 12_000);
+  assert.equal(computedCost("standard", 90, "GAP", old), 15_000); // 12 000 + 12 000 × 15 / 60
+  // Snapshot incohérent (tolérance par défaut 75 < includedMinutes 80) : pas de dépassement négatif.
+  const odd = pricingWithDefaults({ ...DEFAULT_PRICING, includedMinutes: 80, toleranceMinutes: undefined });
+  assert.equal(computedCost("standard", 78, "GAP", odd), 12_000);
 });
 
 const ins = { uid: "i", profile: "instructeur" as const };

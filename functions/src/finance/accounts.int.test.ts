@@ -106,8 +106,8 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
   ]);
   assert.equal(results.filter((r) => r.status === "fulfilled").length, 2);
 
-  // GAP 90 min = 15 000 (spec §2.4 : flatFee 12 000 pour 75 min incluses + 15 min à 12 000/h).
-  const expectedBalance = 1_000_000 + 50_000 - 15_000;
+  // GAP 90 min = 18 000 (plan 9 : forfait 12 000 + (90 − 60) min à 12 000/h).
+  const expectedBalance = 1_000_000 + 50_000 - 18_000;
   assert.equal((await getUser(pilot.uid)).balance, expectedBalance);
 
   const txs = await userTx(pilot.uid);
@@ -122,8 +122,8 @@ test("un crédit et une clôture simultanés sur le même compte : solde final e
   const second = txs.find((t) => t !== first)!;
   assert.ok(first && second);
   assert.equal(second.balanceAfter, expectedBalance);
-  assert.equal(first.balanceAfter + (first.type === "credit" ? -50_000 : 15_000), 1_000_000);
-  assert.equal(second.balanceAfter, first.balanceAfter + (second.type === "credit" ? 50_000 : -15_000));
+  assert.equal(first.balanceAfter + (first.type === "credit" ? -50_000 : 18_000), 1_000_000);
+  assert.equal(second.balanceAfter, first.balanceAfter + (second.type === "credit" ? 50_000 : -18_000));
 });
 
 test("correction : nouveau solde supérieur → écart positif ; égal au solde → refusé", async () => {

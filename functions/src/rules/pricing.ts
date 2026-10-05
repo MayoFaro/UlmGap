@@ -10,7 +10,10 @@ const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
 
 export interface Pricing {
   flatFee: Record<Category, number>;
+  /** Temps couvert par le forfait : le dépassement se compte à partir de là. */
   includedMinutes: number;
+  /** Jusqu'à cette durée (incluse), le forfait seul est facturé. */
+  toleranceMinutes: number;
   minPlannedMinutes: number;
   overtimeHourly: Record<Category, number>;
   fuelHourlyRate: number;
@@ -20,7 +23,8 @@ export interface Pricing {
 
 export const DEFAULT_PRICING: Pricing = {
   flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000, EXT: 70_000 },
-  includedMinutes: 75,
+  includedMinutes: 60,
+  toleranceMinutes: 75,
   minPlannedMinutes: 45,
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
@@ -36,6 +40,7 @@ export function pricingWithDefaults(p: Partial<Pricing> | null | undefined): Pri
   return {
     flatFee: { ...DEFAULT_PRICING.flatFee, ...p?.flatFee },
     includedMinutes: p?.includedMinutes ?? DEFAULT_PRICING.includedMinutes,
+    toleranceMinutes: p?.toleranceMinutes ?? DEFAULT_PRICING.toleranceMinutes,
     minPlannedMinutes: p?.minPlannedMinutes ?? DEFAULT_PRICING.minPlannedMinutes,
     overtimeHourly: { ...DEFAULT_PRICING.overtimeHourly, ...p?.overtimeHourly },
     fuelHourlyRate: p?.fuelHourlyRate ?? DEFAULT_PRICING.fuelHourlyRate,
@@ -55,6 +60,8 @@ export function computedCost(
     return Math.round(p.fuelHourlyRate * minutes / 60);
   }
   if (minutes < p.minPlannedMinutes) return null;
+  if (minutes <= p.toleranceMinutes) return p.flatFee[category];
+  // max(0) : un snapshot incohérent (tolérance < temps couvert) ne donne jamais de dépassement négatif.
   const extra = Math.max(0, minutes - p.includedMinutes);
   return Math.round(p.flatFee[category] + p.overtimeHourly[category] * extra / 60);
 }

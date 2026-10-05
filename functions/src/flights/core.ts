@@ -10,7 +10,7 @@ import {
   isPlanning, payerOf, resolvePricingMode,
 } from "../rules/flights";
 import {
-  availableCredit, estimatedCost, formatFcfa, Pricing, toCategory,
+  availableCredit, estimatedCost, formatFcfa, Pricing, pricingWithDefaults, toCategory,
 } from "../rules/pricing";
 import { checkMinDuration, type FlightInput } from "./validation";
 
@@ -183,7 +183,9 @@ async function checkCredit(
     .map((d) => {
       const start = (d.get("start") as FirebaseFirestore.Timestamp).toMillis();
       const end = (d.get("end") as FirebaseFirestore.Timestamp).toMillis();
-      const otherPricing = (d.get("pricingSnapshot") as Pricing | null | undefined) ?? a.fallbackPricing;
+      // Ancien snapshot sans toleranceMinutes : complété par pricingWithDefaults.
+      const snapshot = d.get("pricingSnapshot") as Partial<Pricing> | null | undefined;
+      const otherPricing = snapshot ? pricingWithDefaults(snapshot) : a.fallbackPricing;
       return estimatedCost(
         d.get("pricingMode") as "standard" | "fuel_only", (end - start) / 60_000, category, otherPricing,
       );
@@ -247,7 +249,7 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   // règle du contrôleur), pour rester cohérent avec ce qui le facturera et
   // avec le calcul du crédit disponible des autres vols.
   const pricingSnapshot: Pricing | null = d.status === "valide"
-    ? (a.existingSnapshot && a.previousStatus === "valide" ? a.existingSnapshot : pricing)
+    ? (a.existingSnapshot && a.previousStatus === "valide" ? pricingWithDefaults(a.existingSnapshot) : pricing)
     : null;
 
   // Décision 1 : crédit contrôlé dès la demande, sauf baptême (spec §10.2).

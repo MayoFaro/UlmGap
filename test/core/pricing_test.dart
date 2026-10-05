@@ -86,6 +86,21 @@ void main() {
     expect(p.flatFee[UserCategory.gap], defaultPricing.flatFee[UserCategory.gap]);
   });
 
+  test('plan 9 : tolérance, défauts et ancien snapshot', () {
+    expect(defaultPricing.includedMinutes, 60);
+    expect(defaultPricing.toleranceMinutes, 75);
+    expect(defaultPricing.toMap()['toleranceMinutes'], 75);
+    // Ancien snapshot : includedMinutes 75, sans toleranceMinutes → ancien calcul.
+    final old = Pricing.fromMap({...defaultPricing.toMap()..remove('toleranceMinutes'), 'includedMinutes': 75});
+    expect(old.toleranceMinutes, 75);
+    expect(computedCost('standard', 60, UserCategory.gap, old), 12000);
+    // 12 000 + 12 000 × 15 / 60
+    expect(computedCost('standard', 90, UserCategory.gap, old), 15000);
+    // Snapshot incohérent (tolérance 75 < couvert 80) : jamais négatif.
+    final odd = Pricing.fromMap({...defaultPricing.toMap()..remove('toleranceMinutes'), 'includedMinutes': 80});
+    expect(computedCost('standard', 78, UserCategory.gap, odd), 12000);
+  });
+
   test('plan 8 : crédit instruction et baptême, défauts et toMap', () {
     final p = Pricing.fromMap({});
     expect(p.instructionCredit, 20000);

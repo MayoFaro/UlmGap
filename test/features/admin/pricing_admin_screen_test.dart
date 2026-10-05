@@ -41,7 +41,8 @@ void main() {
     expect(fieldText(tester, 'flatFee-EXT'), '70\u00a0000');
     expect(fieldText(tester, 'overtime-GAP'), '12\u00a0000');
     expect(fieldText(tester, 'overtime-MIL'), '30\u00a0000');
-    expect(fieldText(tester, 'includedMinutes'), '75');
+    expect(fieldText(tester, 'includedMinutes'), '60');
+    expect(fieldText(tester, 'toleranceMinutes'), '75');
     expect(fieldText(tester, 'minPlannedMinutes'), '45');
     expect(fieldText(tester, 'fuelHourlyRate'), '12\u00a0000');
   });
@@ -128,6 +129,33 @@ void main() {
 
     expect(api.updatedPricing!.instructionCredit, 25000);
     expect(api.updatedPricing!.baptismFee, 80000);
+  });
+
+  testWidgets('Enregistrer envoie la tolérance modifiée', (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()..pricing = defaultPricing;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('toleranceMinutes')), '80');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+
+    expect(api.updatedPricing!.toleranceMinutes, 80);
+  });
+
+  testWidgets('tolérance inférieure au temps couvert refusée', (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()..pricing = defaultPricing;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('toleranceMinutes')), '50');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+
+    expect(find.text('La tolérance doit être au moins égale au temps couvert.'), findsOneWidget);
+    expect(api.updatedPricing, isNull);
   });
 
   testWidgets('valeur personnalisée conservée en modifiant un autre champ', (tester) async {

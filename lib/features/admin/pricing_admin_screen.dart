@@ -24,6 +24,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   final _flatFee = {for (final c in UserCategory.values) c: TextEditingController()};
   final _overtimeHourly = {for (final c in UserCategory.values) c: TextEditingController()};
   final _includedMinutes = TextEditingController();
+  final _toleranceMinutes = TextEditingController();
   final _minPlannedMinutes = TextEditingController();
   final _fuelHourlyRate = TextEditingController();
   final _instructionCredit = TextEditingController();
@@ -43,6 +44,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
       c.dispose();
     }
     _includedMinutes.dispose();
+    _toleranceMinutes.dispose();
     _minPlannedMinutes.dispose();
     _fuelHourlyRate.dispose();
     _instructionCredit.dispose();
@@ -56,6 +58,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
       _overtimeHourly[c]!.text = formatAmountInput(p.overtimeHourly[c]!);
     }
     _includedMinutes.text = p.includedMinutes.toString();
+    _toleranceMinutes.text = p.toleranceMinutes.toString();
     _minPlannedMinutes.text = p.minPlannedMinutes.toString();
     _fuelHourlyRate.text = formatAmountInput(p.fuelHourlyRate);
     _instructionCredit.text = formatAmountInput(p.instructionCredit);
@@ -77,11 +80,22 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     return null;
   }
 
+  String? _validateTolerance(String? v) {
+    final base = _validateMinutes(v);
+    if (base != null) return base;
+    final included = int.tryParse(_includedMinutes.text.trim());
+    if (included != null && int.parse(v!.trim()) < included) {
+      return 'La tolérance doit être au moins égale au temps couvert.';
+    }
+    return null;
+  }
+
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     final pricing = Pricing(
       flatFee: {for (final c in UserCategory.values) c: parseAmount(_flatFee[c]!.text)!},
       includedMinutes: int.parse(_includedMinutes.text.trim()),
+      toleranceMinutes: int.parse(_toleranceMinutes.text.trim()),
       minPlannedMinutes: int.parse(_minPlannedMinutes.text.trim()),
       overtimeHourly: {
         for (final c in UserCategory.values) c: parseAmount(_overtimeHourly[c]!.text)!
@@ -157,8 +171,16 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   key: const Key('includedMinutes'),
                   controller: _includedMinutes,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Minutes incluses'),
+                  decoration: const InputDecoration(labelText: 'Temps couvert par le forfait (min)'),
                   validator: _validateMinutes,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const Key('toleranceMinutes'),
+                  controller: _toleranceMinutes,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Tolérance jusqu\'à (min)'),
+                  validator: _validateTolerance,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(

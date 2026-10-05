@@ -57,17 +57,17 @@ async function correction(id: string, o: Record<string, unknown> = {}) {
   };
 }
 
-test("vol clôturé GAP 90 min corrigé à 120 min : régularisation de −6 000, billedAmount 21 000", async () => {
+test("vol clôturé GAP 90 min corrigé à 120 min : régularisation de −6 000, billedAmount 24 000", async () => {
   const boss = await seedUser({ profile: null, isAdmin: true });
   const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
   const a = await seedAircraft();
   const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
-  assert.equal((await getFlight(id)).billedAmount, 15_000);
+  assert.equal((await getFlight(id)).billedAmount, 18_000); // 12 000 + 12 000 × 30 / 60
 
   await adminUpdateFlight(boss, await correction(id, { actualMinutes: 120 }));
 
   const f = await getFlight(id);
-  assert.equal(f.billedAmount, 21_000);
+  assert.equal(f.billedAmount, 24_000); // 12 000 + 12 000 × 60 / 60
   assert.equal(f.billedTo, "account");
   assert.equal(f.actualFlightMinutes, 120);
   assert.equal(f.isClosed, true);
@@ -78,12 +78,12 @@ test("vol clôturé GAP 90 min corrigé à 120 min : régularisation de −6 000
   assert.equal(adj[0].userUid, pilot.uid);
   assert.equal(adj[0].reason, "Régularisation");
   assert.equal(adj[0].by, boss.uid);
-  assert.equal(adj[0].balanceAfter, 1_000_000 - 21_000);
-  assert.equal(await balance(pilot.uid), 1_000_000 - 21_000);
+  assert.equal(adj[0].balanceAfter, 1_000_000 - 24_000);
+  assert.equal(await balance(pilot.uid), 1_000_000 - 24_000);
   await assertInvariant(id);
 });
 
-test("vol clôturé : changement de compte débité → +15 000 à l'ancien, −débit au nouveau", async () => {
+test("vol clôturé : changement de compte débité → +18 000 à l'ancien, −débit au nouveau", async () => {
   const boss = await seedUser({ profile: null, isAdmin: true });
   const gap = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
   const gr = await seedUser({ profile: "lache_toute_mission", category: "GR", active: false });
@@ -93,16 +93,16 @@ test("vol clôturé : changement de compte débité → +15 000 à l'ancien, −
   // Membre inactif accepté (comptes actifs non contrôlés).
   await adminUpdateFlight(boss, await correction(id, { crew: [gr.uid, gap.uid] }));
 
-  // GR, 90 min : 30 000 + 30 000 × 15 / 60 = 37 500.
+  // GR, 90 min : 30 000 + 30 000 × 30 / 60 = 45 000.
   const f = await getFlight(id);
   assert.equal(f.payerUid, gr.uid);
-  assert.equal(f.billedAmount, 37_500);
+  assert.equal(f.billedAmount, 45_000);
   assert.equal(await balance(gap.uid), 1_000_000);
-  assert.equal(await balance(gr.uid), 1_000_000 - 37_500);
+  assert.equal(await balance(gr.uid), 1_000_000 - 45_000);
   const adj = (await flightTx(id)).filter((t) => t.type === "flight_adjustment");
   assert.deepEqual(
     adj.map((t) => [t.userUid, t.amount]).sort(),
-    [[gap.uid, 15_000], [gr.uid, -37_500]].sort(),
+    [[gap.uid, 18_000], [gr.uid, -45_000]].sort(),
   );
   await assertInvariant(id);
 });
@@ -211,7 +211,7 @@ test("suppression d'un vol clôturé : remboursement et deleted: true ; seconde 
   assert.equal(await balance(pilot.uid), 1_000_000);
   const adj = (await flightTx(id)).filter((t) => t.type === "flight_adjustment");
   assert.equal(adj.length, 1);
-  assert.equal(adj[0].amount, 15_000);
+  assert.equal(adj[0].amount, 18_000);
   assert.equal(adj[0].reason, "Annulation du vol");
   assert.equal(adj[0].by, boss.uid);
   await assertInvariant(id);
@@ -257,13 +257,13 @@ test("vol clôturé GAP + passager (carburant) : pilote remplacé par un EXT san
   // Condition « tous GAP » perdue → standard (spec §4.1), même sans pricingMode.
   await adminUpdateFlight(boss, await correction(id, { crew: [ext.uid] }));
 
-  // EXT, 90 min : 70 000 + 30 000 × 15 / 60 = 77 500.
+  // EXT, 90 min : 70 000 + 30 000 × 30 / 60 = 85 000.
   const f = await getFlight(id);
   assert.equal(f.pricingMode, "standard");
-  assert.equal(f.billedAmount, 77_500);
+  assert.equal(f.billedAmount, 85_000);
   assert.equal(f.payerUid, ext.uid);
   assert.equal(await balance(gap.uid), 1_000_000);
-  assert.equal(await balance(ext.uid), 1_000_000 - 77_500);
+  assert.equal(await balance(ext.uid), 1_000_000 - 85_000);
   await assertInvariant(id);
 });
 
@@ -295,7 +295,7 @@ test("vol clôturé court (montant à facturer) corrigé à 90 min : shortFlight
   await adminUpdateFlight(boss, await correction(id, { actualMinutes: 90 }));
 
   const f = await getFlight(id);
-  assert.equal(f.billedAmount, 15_000);
+  assert.equal(f.billedAmount, 18_000); // GAP 90 min : 12 000 + 12 000 × 30 / 60
   assert.equal(f.shortFlightAmount, null);
   await assertInvariant(id);
 

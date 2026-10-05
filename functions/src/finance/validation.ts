@@ -27,9 +27,15 @@ function byCategory(v: unknown, field: string, max: number): Record<Category, nu
 /** Toutes les clés sont exigées ; valeurs entières dans les plages de la spec §2.4. */
 export function validatePricing(data: unknown): Pricing {
   const d = record(data, "tarifs");
+  const includedMinutes = intInRange(d.includedMinutes, "includedMinutes", 1, 600);
+  const toleranceMinutes = intInRange(d.toleranceMinutes, "toleranceMinutes", 1, 600);
+  if (toleranceMinutes < includedMinutes) {
+    throw new ValidationError("La tolérance doit être au moins égale au temps couvert.");
+  }
   return {
     flatFee: byCategory(d.flatFee, "flatFee", 1_000_000),
-    includedMinutes: intInRange(d.includedMinutes, "includedMinutes", 1, 600),
+    includedMinutes,
+    toleranceMinutes,
     minPlannedMinutes: intInRange(d.minPlannedMinutes, "minPlannedMinutes", 1, 600),
     overtimeHourly: byCategory(d.overtimeHourly, "overtimeHourly", 1_000_000),
     fuelHourlyRate: intInRange(d.fuelHourlyRate, "fuelHourlyRate", 0, 1_000_000),

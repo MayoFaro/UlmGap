@@ -646,7 +646,7 @@ void main() {
   });
 
   testWidgets(
-      'clôture : 90 min GAP → aperçu 15 000 FCFA, closeFlight(actualMinutes: 90) puis retour '
+      'clôture : 90 min GAP → aperçu 18 000 FCFA, closeFlight(actualMinutes: 90) puis retour '
       'au planning', (tester) async {
     _useTallView(tester);
     final start = DateTime(2026, 10, 12, 5);
@@ -663,7 +663,8 @@ void main() {
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('closing-minutes')), findsOneWidget);
-    expect(find.text('Montant : ${formatFcfa(15000)}'), findsOneWidget);
+    // 90 min GAP : 12 000 + 12 000 × (90 - 60) / 60 = 18 000 (plan 9).
+    expect(find.text('Montant : ${formatFcfa(18000)}'), findsOneWidget);
     await fillFuel(tester);
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
@@ -883,7 +884,7 @@ void main() {
     final f = testFlight(
         id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account',
         fuelStartExpected: 30, fuelStart: 40, fuelAdded: 20, fuelEnd: 35);
     await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
     await tester.pumpAndSettle();
@@ -896,10 +897,10 @@ void main() {
     final f = testFlight(
         id: 'z', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
     await tester.pumpAndSettle();
-    expect(find.text('Clôturé : 1 h 30, ${formatFcfa(15000)} débité sur le compte de JDU'),
+    expect(find.text('Clôturé : 1 h 30, ${formatFcfa(18000)} débité sur le compte de JDU'),
         findsOneWidget);
     expect(find.text('Clôturer'), findsNothing);
     expect(find.text('Enregistrer'), findsNothing);
@@ -917,7 +918,7 @@ void main() {
     final f = testFlight(
         id: 'ac1', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -930,9 +931,9 @@ void main() {
     expect(find.byKey(const Key('correct-minutes')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('correct-minutes')), '120');
     await tester.pumpAndSettle();
-    // 120 min GAP standard : 12 000 (forfait) + (120-75) min à 12 000/h = 21 000,
-    // contre 15 000 facturés initialement : le compte (inchangé) est
-    // remboursé des 15 000 déjà débités puis débité des 21 000 dus, soit un
+    // 120 min GAP standard : 12 000 (forfait) + (120-60) min à 12 000/h = 24 000,
+    // contre 18 000 facturés initialement : le compte (inchangé) est
+    // remboursé des 18 000 déjà débités puis débité des 24 000 dus, soit un
     // débit supplémentaire net de 6 000 (régularisation négative).
     expect(find.text('Régularisation : ${formatFcfa(-6000)} sur le compte de JDU'),
         findsOneWidget);
@@ -957,7 +958,7 @@ void main() {
     final f = testFlight(
         id: 'ac1b', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f));
     await tester.pumpAndSettle();
@@ -979,7 +980,7 @@ void main() {
     final f = testFlight(
         id: 'ac2', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1', 'b'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -991,9 +992,9 @@ void main() {
     // Mettre B (deuxième de l'équipage) en premier : nouveau compte débité.
     await tester.tap(find.byTooltip('Mettre en premier'));
     await tester.pumpAndSettle();
-    expect(find.text('Régularisation : +${formatFcfa(15000)} sur le compte de JDU'),
+    expect(find.text('Régularisation : +${formatFcfa(18000)} sur le compte de JDU'),
         findsOneWidget);
-    expect(find.text('Régularisation : ${formatFcfa(-15000)} sur le compte de BBB'),
+    expect(find.text('Régularisation : ${formatFcfa(-18000)} sur le compte de BBB'),
         findsOneWidget);
     await tester.tap(find.text('Enregistrer la correction'));
     await tester.pumpAndSettle();
@@ -1071,7 +1072,7 @@ void main() {
     final f = testFlight(
         id: 'ac5', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account',
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account',
         passengers: const ['Paul']);
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
@@ -1100,7 +1101,7 @@ void main() {
     final f = testFlight(
         id: 'ad1', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         api(), testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -1143,7 +1144,7 @@ void main() {
     final f = testFlight(
         id: 'z2', start: DateTime(2026, 10, 12, 5), end: DateTime(2026, 10, 12, 6, 30),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: f));
     await tester.pumpAndSettle();
     expect(find.text('Corriger'), findsNothing);
@@ -1374,7 +1375,7 @@ void main() {
     final f = testFlight(
         id: 'cc1', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
-        actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await tester.pumpWidget(pushHost(
         a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
@@ -1628,7 +1629,7 @@ void main() {
     final f = testFlight(
         id: 'ci-ins', start: start, end: start.add(const Duration(minutes: 90)),
         crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins', status: 'valide',
-        isClosed: true, actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+        isClosed: true, actualFlightMinutes: 90, billedAmount: 18000, billedTo: 'account');
     final finance = FakeFinanceApi();
     await openCorrection(tester, instructionApi(), f, finance);
     expect(tester.widget<CheckboxListTile>(find.byKey(const Key('f-instruction'))).onChanged,
