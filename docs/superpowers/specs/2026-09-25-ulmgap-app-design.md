@@ -610,7 +610,7 @@ atterrissages :
   l'appareil est **inconnu** (aucun vol précédent avec carburant), la case
   disparaît et le champ « Carburant au départ (L) » est affiché d'emblée,
   obligatoire ;
-- « Carburant ajouté (L) » : obligatoire, vide au départ (0 se saisit) ;
+- « Carburant ajouté (L) » : obligatoire, pré-rempli à 0 (révision du 2026-10-05) ;
   avant ou après le vol, peu importe ;
 - « Carburant à bord, appareil rangé (L) » : obligatoire, vide au départ.
 

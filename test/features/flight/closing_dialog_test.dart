@@ -153,9 +153,14 @@ void main() {
     expect(out.single!.fuelStart, 42);
   });
 
-  testWidgets('ajouté et rangé vides : refusés ; plus de 100 L : refusé', (tester) async {
+  testWidgets('ajouté pré-rempli à 0 ; rangé vide refusé ; plus de 100 L : refusé', (tester) async {
     final out = <ClosingResult?>[];
     await open(tester, out);
+    expect(tester.widget<TextField>(find.byKey(const Key('closing-fuel-added'))).controller!.text, '0');
+    await submit(tester);
+    expect(find.text('Carburant rangé invalide (0 à 100 L).'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('closing-fuel-added')), '');
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '30');
     await submit(tester);
     expect(find.text('Carburant ajouté invalide (0 à 100 L).'), findsOneWidget);
     await fillFuel(tester, end: '101');

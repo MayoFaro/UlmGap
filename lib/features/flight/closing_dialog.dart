@@ -95,7 +95,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
   final _landings = TextEditingController(text: '1');
   final _waterLandings = TextEditingController(text: '0');
   final _fuelStart = TextEditingController();
-  final _fuelAdded = TextEditingController();
+  final _fuelAdded = TextEditingController(text: '0'); // 0 par défaut : rien d'ajouté
   final _fuelEnd = TextEditingController();
   bool _customChecked = false;
   bool _fuelGap = false;
