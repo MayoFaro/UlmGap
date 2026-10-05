@@ -478,8 +478,9 @@ class _FlightScreenState extends State<FlightScreen> {
     if (minutes == null) return null;
     final shortAmount = _correctNeedsShortAmount ? parseAmount(_correctShortAmount.text) : null;
     if (_correctNeedsShortAmount && shortAmount == null) return null;
-    final customAmount = _correctCustomChecked ? parseAmount(_correctCustomAmount.text) : null;
-    if (_correctCustomChecked && customAmount == null) return null;
+    final customChecked = _correctCustomChecked && _pricingMode != 'baptism';
+    final customAmount = customChecked ? parseAmount(_correctCustomAmount.text) : null;
+    if (customChecked && customAmount == null) return null;
     final ClosingBill bill;
     try {
       bill = closingBill(
@@ -877,7 +878,7 @@ class _FlightScreenState extends State<FlightScreen> {
           return 'Montant trop élevé (${formatFcfa(maxManualAmount)} au maximum).';
         }
       }
-      if (_correctCustomChecked) {
+      if (_correctCustomChecked && _pricingMode != 'baptism') {
         final custom = parseAmount(_correctCustomAmount.text);
         if (custom == null) return 'Indiquez le montant.';
         if (custom > maxManualAmount) {
@@ -913,7 +914,10 @@ class _FlightScreenState extends State<FlightScreen> {
     if (_correctNeedsShortAmount) {
       payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
     }
-    if (_correctCustomChecked) {
+    if (_pricingMode == 'baptism') {
+      // Baptême : montant fixe, le serveur déduit le mode des drapeaux.
+      payload.remove('pricingMode');
+    } else if (_correctCustomChecked) {
       payload['customAmount'] = parseAmount(_correctCustomAmount.text);
     } else if (f.billedTo == 'off_app' && !payload.containsKey('pricingMode')) {
       payload['pricingMode'] = _pricingMode;
@@ -1271,7 +1275,7 @@ class _FlightScreenState extends State<FlightScreen> {
                 decoration: const InputDecoration(labelText: 'Montant à facturer'),
                 onChanged: (_) => setState(() {}),
               ),
-            if (_passenger != null) ...[
+            if (_passenger != null && _pricingMode != 'baptism') ...[
               CheckboxListTile(
                 key: const Key('correct-custom-check'),
                 contentPadding: EdgeInsets.zero,

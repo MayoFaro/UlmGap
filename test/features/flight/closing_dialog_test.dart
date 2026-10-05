@@ -6,18 +6,23 @@ import 'package:ulmgap/features/flight/closing_dialog.dart';
 
 /// Ouvre le dialogue depuis un bouton et rend le résultat dans [out].
 Future<void> open(WidgetTester tester, List<ClosingResult?> out,
-    {bool amphibious = false, int? fuelExpected = 40}) async {
+    {bool amphibious = false,
+    int? fuelExpected = 40,
+    String mode = 'standard',
+    int plannedMinutes = 60,
+    UserCategory? category = UserCategory.gap,
+    bool hasPassenger = false}) async {
   await tester.pumpWidget(MaterialApp(
     home: Builder(
       builder: (context) => TextButton(
         onPressed: () async => out.add(await showDialog<ClosingResult>(
           context: context,
           builder: (_) => ClosingDialog(
-            plannedMinutes: 60,
-            mode: 'standard',
-            category: UserCategory.gap,
+            plannedMinutes: plannedMinutes,
+            mode: mode,
+            category: category,
             pricing: defaultPricing,
-            hasPassenger: false,
+            hasPassenger: hasPassenger,
             amphibious: amphibious,
             fuelExpected: fuelExpected,
           ),
@@ -198,5 +203,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(out.single!.fuelEnd, 50);
     expect(find.text('Clôturer le vol'), findsNothing);
+  });
+
+  testWidgets('baptême de 20 min : montant fixe hors app, aucun champ de montant', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out,
+        mode: 'baptism', plannedMinutes: 20, hasPassenger: true, category: null);
+    expect(find.byKey(const Key('closing-short-amount')), findsNothing);
+    expect(find.byKey(const Key('closing-custom-check')), findsNothing);
+    expect(find.text('Montant : 70\u00a0000\u00a0FCFA facturé hors app'), findsOneWidget);
+    await fillFuel(tester);
+    await submit(tester);
+    expect(out.single, isNotNull);
+    expect(out.single!.actualMinutes, 20);
+    expect(out.single!.shortFlightAmount, isNull);
+    expect(out.single!.customAmount, isNull);
+  });
+
+  testWidgets('clôture d\'un vol d\'instruction : aucune mention de l\'instruction', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    expect(find.textContaining('nstruction'), findsNothing);
   });
 }

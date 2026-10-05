@@ -69,7 +69,7 @@ class ClosingDialog extends StatefulWidget {
   });
 
   final int plannedMinutes;
-  final String mode; // 'standard' | 'fuel_only'
+  final String mode; // 'standard' | 'fuel_only' | 'baptism'
   final UserCategory? category;
   final Pricing pricing;
   final bool hasPassenger;
@@ -115,6 +115,8 @@ class _ClosingDialogState extends State<ClosingDialog> {
   /// Mode standard et durée réelle sous le minimum tarifaire (spec §4.3) :
   /// un vol carburant seulement est toujours calculé à la minute. Ne dépend
   /// pas de la catégorie : reste correct même si celle-ci est inconnue.
+  bool get _baptism => widget.mode == 'baptism';
+
   bool get _needsShortAmount {
     final m = _actualMinutes;
     return widget.mode == 'standard' && m != null && m < widget.pricing.minPlannedMinutes;
@@ -125,8 +127,19 @@ class _ClosingDialogState extends State<ClosingDialog> {
   /// n'apparaît qu'à la validation, dans [_submit]).
   int? get _preview {
     final category = widget.category;
-    if (category == null) return null;
     final m = _actualMinutes;
+    // Baptême : montant fixe, indépendant de la catégorie.
+    if (_baptism) {
+      if (m == null) return null;
+      return closingBill(
+        mode: widget.mode,
+        actualMinutes: m,
+        category: category ?? UserCategory.values.first,
+        pricing: widget.pricing,
+        hasPassenger: widget.hasPassenger,
+      ).billedAmount;
+    }
+    if (category == null) return null;
     if (m == null) return null;
     final shortAmount = _needsShortAmount ? parseAmount(_shortAmount.text) : null;
     if (_needsShortAmount && shortAmount == null) return null;
@@ -185,7 +198,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
       }
     }
     int? customAmount;
-    if (_customChecked) {
+    if (_customChecked && !_baptism) {
       customAmount = parseAmount(_customAmount.text);
       if (customAmount == null) {
         setState(() => _error = 'Indiquez le montant.');
@@ -303,7 +316,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
                 onChanged: (_) => setState(() {}),
               ),
             ],
-            if (widget.hasPassenger) ...[
+            if (widget.hasPassenger && !_baptism) ...[
               CheckboxListTile(
                 key: const Key('closing-custom-check'),
                 contentPadding: EdgeInsets.zero,
@@ -322,7 +335,9 @@ class _ClosingDialogState extends State<ClosingDialog> {
                 ),
             ],
             const SizedBox(height: 12),
-            if (widget.category == null)
+            if (_baptism)
+              Text('Montant : ${formatFcfa(preview ?? widget.pricing.baptismFee)} facturé hors app')
+            else if (widget.category == null)
               const Text('Montant calculé par le serveur à la clôture.')
             else if (preview != null)
               Text('Montant : ${formatFcfa(preview)}'),

@@ -26,6 +26,8 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   final _includedMinutes = TextEditingController();
   final _minPlannedMinutes = TextEditingController();
   final _fuelHourlyRate = TextEditingController();
+  final _instructionCredit = TextEditingController();
+  final _baptismFee = TextEditingController();
 
   // Préremplissage une seule fois (au premier tarif reçu), pour ne pas
   // écraser la saisie en cours si le flux réémet (ex. après enregistrement).
@@ -43,6 +45,8 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _includedMinutes.dispose();
     _minPlannedMinutes.dispose();
     _fuelHourlyRate.dispose();
+    _instructionCredit.dispose();
+    _baptismFee.dispose();
     super.dispose();
   }
 
@@ -54,6 +58,8 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _includedMinutes.text = p.includedMinutes.toString();
     _minPlannedMinutes.text = p.minPlannedMinutes.toString();
     _fuelHourlyRate.text = formatAmountInput(p.fuelHourlyRate);
+    _instructionCredit.text = formatAmountInput(p.instructionCredit);
+    _baptismFee.text = formatAmountInput(p.baptismFee);
   }
 
   // Plages identiques au serveur (functions/src/finance/validation.ts).
@@ -81,6 +87,8 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
         for (final c in UserCategory.values) c: parseAmount(_overtimeHourly[c]!.text)!
       },
       fuelHourlyRate: parseAmount(_fuelHourlyRate.text)!,
+      instructionCredit: parseAmount(_instructionCredit.text)!,
+      baptismFee: parseAmount(_baptismFee.text)!,
     );
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _saving = true);
@@ -167,6 +175,24 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   keyboardType: TextInputType.number,
                       inputFormatters: const [AmountInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Carburant (FCFA/h)'),
+                  validator: _validateAmount,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const Key('instructionCredit'),
+                  controller: _instructionCredit,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: const [AmountInputFormatter()],
+                  decoration: const InputDecoration(labelText: 'Crédit instruction (FCFA)'),
+                  validator: _validateAmount,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const Key('baptismFee'),
+                  controller: _baptismFee,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: const [AmountInputFormatter()],
+                  decoration: const InputDecoration(labelText: 'Baptême de l\'air (FCFA)'),
                   validator: _validateAmount,
                 ),
                 const SizedBox(height: 24),

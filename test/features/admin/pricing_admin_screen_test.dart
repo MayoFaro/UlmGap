@@ -110,4 +110,47 @@ void main() {
     expect(api.updatedPricing, isNull);
     expect(find.text('Entre 0 et ${formatFcfa(1000000)}.'), findsNWidgets(2));
   });
+
+  testWidgets('crédit instruction et baptême : préremplis, modifiés et enregistrés', (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()..pricing = defaultPricing;
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+
+    expect(fieldText(tester, 'instructionCredit'), '20\u00a0000');
+    expect(fieldText(tester, 'baptismFee'), '70\u00a0000');
+    expect(find.text('Crédit instruction (FCFA)'), findsOneWidget);
+    expect(find.text('Baptême de l\'air (FCFA)'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('instructionCredit')), '25000');
+    await tester.enterText(find.byKey(const Key('baptismFee')), '80000');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+
+    expect(api.updatedPricing!.instructionCredit, 25000);
+    expect(api.updatedPricing!.baptismFee, 80000);
+  });
+
+  testWidgets('valeur personnalisée conservée en modifiant un autre champ', (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()
+      ..pricing = Pricing(
+        flatFee: defaultPricing.flatFee,
+        includedMinutes: defaultPricing.includedMinutes,
+        minPlannedMinutes: defaultPricing.minPlannedMinutes,
+        overtimeHourly: defaultPricing.overtimeHourly,
+        fuelHourlyRate: defaultPricing.fuelHourlyRate,
+        instructionCredit: 15000,
+        baptismFee: 65000,
+      );
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('fuelHourlyRate')), '15000');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+
+    expect(api.updatedPricing!.fuelHourlyRate, 15000);
+    expect(api.updatedPricing!.instructionCredit, 15000);
+    expect(api.updatedPricing!.baptismFee, 65000);
+  });
 }

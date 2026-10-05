@@ -1596,4 +1596,82 @@ void main() {
     expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).value, true);
     expect(find.text('Passager sans compte · Baptême de l\'air'), findsOneWidget);
   });
+
+  Future<void> openCorrection(WidgetTester tester, FakeFlightApi a, Flight f, FakeFinanceApi finance) async {
+    await tester.pumpWidget(pushHost(
+        a, testUser(uid: 'adm', isAdmin: true, profile: null), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('correction admin : instruction modifiable, instruction et baptism envoyés',
+      (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-ins', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins', status: 'valide',
+        isClosed: true, actualFlightMinutes: 90, billedAmount: 15000, billedTo: 'account');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, instructionApi(), f, finance);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('f-instruction'))).onChanged,
+        isNotNull);
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ci-ins']!;
+    expect(payload['instruction'], true);
+    expect(payload.containsKey('baptism'), isTrue);
+    expect(payload['baptism'], false);
+  });
+
+  testWidgets('correction admin d\'un baptême : pas de montant différent ni de montant à facturer, '
+      'pas de pricingMode', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-bap', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 20, billedAmount: 70000, billedTo: 'off_app',
+        passengers: const ['Paul'], pricingMode: 'baptism');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, api(), f, finance);
+    expect(find.byKey(const Key('correct-custom-check')), findsNothing);
+    expect(find.byKey(const Key('correct-short-amount')), findsNothing);
+    expect(find.text('Montant différent (facturé hors app)'), findsNothing);
+    expect(tester.widget<Checkbox>(find.byKey(const Key('passenger-baptism-toggle'))).onChanged,
+        isNotNull);
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    final payload = finance.adminUpdated['ci-bap']!;
+    expect(payload['baptism'], true);
+    expect(payload.containsKey('instruction'), isTrue);
+    expect(payload.containsKey('pricingMode'), isFalse);
+    expect(payload.containsKey('customAmount'), isFalse);
+    expect(payload.containsKey('shortFlightAmount'), isFalse);
+  });
+
+  testWidgets('correction admin : décocher le baptême renvoie baptism false', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'ci-bap2', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['u1'], createdBy: 'u1', status: 'valide', isClosed: true,
+        actualFlightMinutes: 90, billedAmount: 70000, billedTo: 'off_app',
+        passengers: const ['Paul'], pricingMode: 'baptism');
+    final finance = FakeFinanceApi();
+    await openCorrection(tester, api(), f, finance);
+    await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
+    await tester.pumpAndSettle();
+    // Hors baptême, « Montant différent » réapparaît (coché : le vol était hors app).
+    await tester.tap(find.byKey(const Key('correct-custom-check')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer la correction'));
+    await tester.pumpAndSettle();
+    expect(finance.adminUpdated['ci-bap2']!['baptism'], false);
+  });
 }
