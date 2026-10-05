@@ -44,7 +44,7 @@ List<List<String>> billingCsvRows(List<Flight> flights, Map<String, CrewMember> 
           f.aircraft,
           f.crew.map((u) => dir[u]?.shortName ?? '?').join('/'),
           f.passengers.join('/'),
-          pricingModeLabel(f.pricingMode),
+          flightPricingLabel(f.pricingMode, f.baptismTier),
           f.actualFlightMinutes?.toString() ?? '',
           (f.billedAmount ?? 0).toString(),
           f.billedTo == 'off_app' ? 'Hors app' : 'Compte',
@@ -177,7 +177,7 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
                     DataCell(Text(f.actualFlightMinutes == null
                         ? '—'
                         : formatDurationHm(f.actualFlightMinutes!))),
-                    DataCell(Text(pricingModeLabel(f.pricingMode))),
+                    DataCell(Text(flightPricingLabel(f.pricingMode, f.baptismTier))),
                     DataCell(Text(formatFcfa(f.billedAmount ?? 0))),
                     DataCell(Text(f.billedTo == 'off_app'
                         ? 'Hors app'

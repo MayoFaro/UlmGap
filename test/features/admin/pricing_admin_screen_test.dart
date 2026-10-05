@@ -119,16 +119,23 @@ void main() {
     await tester.pump();
 
     expect(fieldText(tester, 'instructionCredit'), '20\u00a0000');
-    expect(fieldText(tester, 'baptismFee'), '70\u00a0000');
+    expect(fieldText(tester, 'baptismFee-local'), '70\u00a0000');
+    expect(fieldText(tester, 'baptismFee-nyonye'), '90\u00a0000');
+    expect(fieldText(tester, 'baptismFee-awagne'), '110\u00a0000');
     expect(find.text('Crédit instruction (FCFA)'), findsOneWidget);
-    expect(find.text('Baptême de l\'air (FCFA)'), findsOneWidget);
+    expect(find.text('Baptême Local (FCFA)'), findsOneWidget);
+    expect(find.text('Baptême Nyonye (FCFA)'), findsOneWidget);
+    expect(find.text('Baptême Awagne (FCFA)'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('instructionCredit')), '25000');
-    await tester.enterText(find.byKey(const Key('baptismFee')), '80000');
+    await tester.enterText(find.byKey(const Key('baptismFee-local')), '80000');
+    await tester.enterText(find.byKey(const Key('baptismFee-nyonye')), '95000');
+    await tester.enterText(find.byKey(const Key('baptismFee-awagne')), '120000');
     await tester.tap(find.text('Enregistrer'));
     await tester.pump();
 
     expect(api.updatedPricing!.instructionCredit, 25000);
-    expect(api.updatedPricing!.baptismFees['local'], 80000);
+    expect(api.updatedPricing!.baptismFees,
+        {'local': 80000, 'nyonye': 95000, 'awagne': 120000});
   });
 
   testWidgets('Enregistrer envoie la tolérance modifiée', (tester) async {
@@ -168,7 +175,7 @@ void main() {
         overtimeHourly: defaultPricing.overtimeHourly,
         fuelHourlyRate: defaultPricing.fuelHourlyRate,
         instructionCredit: 15000,
-        baptismFees: const {'local': 65000, 'nyonye': 90000, 'awagne': 110000},
+        baptismFees: const {'local': 65000, 'nyonye': 91000, 'awagne': 112000},
       );
     await tester.pumpWidget(host(api));
     await tester.pump();
@@ -179,6 +186,7 @@ void main() {
 
     expect(api.updatedPricing!.fuelHourlyRate, 15000);
     expect(api.updatedPricing!.instructionCredit, 15000);
-    expect(api.updatedPricing!.baptismFees['local'], 65000);
+    expect(api.updatedPricing!.baptismFees,
+        {'local': 65000, 'nyonye': 91000, 'awagne': 112000});
   });
 }

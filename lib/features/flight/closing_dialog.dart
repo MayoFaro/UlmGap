@@ -66,6 +66,7 @@ class ClosingDialog extends StatefulWidget {
     required this.hasPassenger,
     this.amphibious = false,
     this.fuelExpected,
+    this.baptismTier,
   });
 
   final int plannedMinutes;
@@ -73,6 +74,9 @@ class ClosingDialog extends StatefulWidget {
   final UserCategory? category;
   final Pricing pricing;
   final bool hasPassenger;
+
+  /// Plan 9 : forfait du baptême (null : facturé au forfait Local).
+  final String? baptismTier;
 
   /// Appareil amphibie : champ « Amerrissages » (plan 4b).
   final bool amphibious;
@@ -137,6 +141,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
         category: category ?? UserCategory.values.first,
         pricing: widget.pricing,
         hasPassenger: widget.hasPassenger,
+        baptismTier: widget.baptismTier,
       ).billedAmount;
     }
     if (category == null) return null;
@@ -336,7 +341,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
             ],
             const SizedBox(height: 12),
             if (_baptism)
-              Text('Montant : ${formatFcfa(preview ?? widget.pricing.baptismFees['local']!)} facturé hors app')
+              Text('Montant : ${formatFcfa(preview ?? widget.pricing.baptismFees[widget.baptismTier ?? 'local']!)} facturé hors app')
             else if (widget.category == null)
               const Text('Montant calculé par le serveur à la clôture.')
             else if (preview != null)

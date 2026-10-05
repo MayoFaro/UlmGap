@@ -7,6 +7,7 @@ import '../../core/pricing.dart';
 import '../../core/profiles.dart';
 import '../../data/services.dart';
 import '../../data/app_user.dart';
+import '../flight/flight_texts.dart';
 import '../home/app_nav.dart';
 
 class PricingAdminScreen extends StatefulWidget {
@@ -28,13 +29,12 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   final _minPlannedMinutes = TextEditingController();
   final _fuelHourlyRate = TextEditingController();
   final _instructionCredit = TextEditingController();
-  final _baptismFee = TextEditingController();
+  final _baptismFee = {for (final t in baptismTiers) t: TextEditingController()};
 
   // Préremplissage une seule fois (au premier tarif reçu), pour ne pas
   // écraser la saisie en cours si le flux réémet (ex. après enregistrement).
   bool _prefilled = false;
   bool _saving = false;
-  Map<String, int> _baptismFees = defaultPricing.baptismFees;
 
   @override
   void dispose() {
@@ -49,12 +49,13 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _minPlannedMinutes.dispose();
     _fuelHourlyRate.dispose();
     _instructionCredit.dispose();
-    _baptismFee.dispose();
+    for (final c in _baptismFee.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   void _prefill(Pricing p) {
-    _baptismFees = p.baptismFees;
     for (final c in UserCategory.values) {
       _flatFee[c]!.text = formatAmountInput(p.flatFee[c]!);
       _overtimeHourly[c]!.text = formatAmountInput(p.overtimeHourly[c]!);
@@ -64,7 +65,9 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _minPlannedMinutes.text = p.minPlannedMinutes.toString();
     _fuelHourlyRate.text = formatAmountInput(p.fuelHourlyRate);
     _instructionCredit.text = formatAmountInput(p.instructionCredit);
-    _baptismFee.text = formatAmountInput(p.baptismFees['local']!);
+    for (final t in baptismTiers) {
+      _baptismFee[t]!.text = formatAmountInput(p.baptismFees[t]!);
+    }
   }
 
   // Plages identiques au serveur (functions/src/finance/validation.ts).
@@ -104,8 +107,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
       },
       fuelHourlyRate: parseAmount(_fuelHourlyRate.text)!,
       instructionCredit: parseAmount(_instructionCredit.text)!,
-      // Provisoire (Task 3) : seul le forfait Local est modifiable ici.
-      baptismFees: {..._baptismFees, 'local': parseAmount(_baptismFee.text)!},
+      baptismFees: {for (final t in baptismTiers) t: parseAmount(_baptismFee[t]!.text)!},
     );
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _saving = true);
@@ -211,15 +213,17 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   decoration: const InputDecoration(labelText: 'Crédit instruction (FCFA)'),
                   validator: _validateAmount,
                 ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  key: const Key('baptismFee'),
-                  controller: _baptismFee,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: const [AmountInputFormatter()],
-                  decoration: const InputDecoration(labelText: 'Baptême de l\'air (FCFA)'),
-                  validator: _validateAmount,
-                ),
+                for (final t in baptismTiers) ...[
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    key: Key('baptismFee-$t'),
+                    controller: _baptismFee[t],
+                    keyboardType: TextInputType.number,
+                    inputFormatters: const [AmountInputFormatter()],
+                    decoration: InputDecoration(labelText: 'Baptême ${baptismTierLabel(t)} (FCFA)'),
+                    validator: _validateAmount,
+                  ),
+                ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: _saving ? null : _save,

@@ -11,6 +11,7 @@ Future<void> open(WidgetTester tester, List<ClosingResult?> out,
     String mode = 'standard',
     int plannedMinutes = 60,
     UserCategory? category = UserCategory.gap,
+    String? baptismTier,
     bool hasPassenger = false}) async {
   await tester.pumpWidget(MaterialApp(
     home: Builder(
@@ -20,6 +21,7 @@ Future<void> open(WidgetTester tester, List<ClosingResult?> out,
           builder: (_) => ClosingDialog(
             plannedMinutes: plannedMinutes,
             mode: mode,
+            baptismTier: baptismTier,
             category: category,
             pricing: defaultPricing,
             hasPassenger: hasPassenger,
@@ -208,7 +210,11 @@ void main() {
   testWidgets('baptême de 20 min : montant fixe hors app, aucun champ de montant', (tester) async {
     final out = <ClosingResult?>[];
     await open(tester, out,
-        mode: 'baptism', plannedMinutes: 20, hasPassenger: true, category: null);
+        mode: 'baptism',
+        baptismTier: 'local',
+        plannedMinutes: 20,
+        hasPassenger: true,
+        category: null);
     expect(find.byKey(const Key('closing-short-amount')), findsNothing);
     expect(find.byKey(const Key('closing-custom-check')), findsNothing);
     expect(find.text('Montant : 70\u00a0000\u00a0FCFA facturé hors app'), findsOneWidget);
@@ -218,6 +224,17 @@ void main() {
     expect(out.single!.actualMinutes, 20);
     expect(out.single!.shortFlightAmount, isNull);
     expect(out.single!.customAmount, isNull);
+  });
+
+  testWidgets('baptême Nyonye : montant du forfait facturé hors app', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out,
+        mode: 'baptism',
+        baptismTier: 'nyonye',
+        plannedMinutes: 20,
+        hasPassenger: true,
+        category: null);
+    expect(find.text('Montant : 90\u00a0000\u00a0FCFA facturé hors app'), findsOneWidget);
   });
 
   testWidgets('clôture d\'un vol d\'instruction : aucune mention de l\'instruction', (tester) async {

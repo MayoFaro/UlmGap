@@ -34,6 +34,9 @@ String baptismTierLabel(String? tier) => switch (tier) {
       _ => 'Local',
     };
 
+/// Message de refus d'un baptême sans forfait (identique au serveur).
+const baptismTierMissingMessage = 'Choisissez le forfait du baptême (Local, Nyonye ou Awagne).';
+
 /// Mode de tarification d'un vol, avec le forfait en cas de baptême.
 String flightPricingLabel(String mode, String? baptismTier) =>
     mode == 'baptism' ? 'Baptême ${baptismTierLabel(baptismTier)}' : pricingModeLabel(mode);
