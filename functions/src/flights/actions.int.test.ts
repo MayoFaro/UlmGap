@@ -149,3 +149,30 @@ test("validation : l'instructeur choisit le forfait du baptême", async () => {
   await validateFlight(instr, { flightId: id, changes: { baptismTier: "nyonye" } });
   assert.equal((await get(id)).baptismTier, "nyonye");
 });
+
+test("validation : charge utile exacte de l'app (baptismTier null), demande ordinaire", async () => {
+  const { instr, id } = await request();
+  await validateFlight(instr, {
+    flightId: id,
+    changes: {
+      start: at(10), end: at(11), destination: "Kara", aircraftId: (await get(id)).aircraftId,
+      instruction: false, baptism: false, baptismTier: null,
+    },
+  });
+  assert.equal((await get(id)).status, "valide");
+});
+
+test("validation : baptême avec baptismTier null garde le forfait enregistré", async () => {
+  const eleve = await seedUser({ profile: "eleve" });
+  const instr = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(10), end: at(11), aircraftId: a, crew: [eleve.uid, instr.uid], createdBy: eleve.uid,
+    instructorUid: instr.uid, status: "demande", passengers: ["Paul"], pricingMode: "baptism",
+    baptismTier: "awagne",
+  });
+  await validateFlight(instr, { flightId: id, changes: { baptism: true, baptismTier: null } });
+  const f = await get(id);
+  assert.equal(f.status, "valide");
+  assert.equal(f.baptismTier, "awagne");
+});

@@ -331,6 +331,14 @@ test("validateFlightInput : forfait de baptême obligatoire et valide, ignoré h
   }
   assert.equal(validateFlightInput({ ...ok, baptismTier: "awagne" }).baptismTier, null);
   assert.equal(validateFlightInput({ ...ok, baptismTier: "autre" }).baptismTier, null);
+  // L'app envoie toujours baptismTier (null hors baptême) : accepté.
+  assert.equal(validateFlightInput({ ...ok, baptism: false, baptismTier: null }).baptismTier, null);
+});
+
+test("validateReviewChanges : un forfait null (envoyé par l'app hors baptême) vaut absent", () => {
+  const r = validateReviewChanges({ flightId: "f1", changes: { baptism: false, baptismTier: null } });
+  assert.equal(r.changes.baptism, false);
+  assert.equal(r.changes.baptismTier, undefined);
 });
 
 test("validateReviewChanges : forfait de baptême facultatif mais valide", () => {

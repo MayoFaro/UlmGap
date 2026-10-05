@@ -120,6 +120,11 @@ d'où le JDK d'Android Studio.
     (e-mail et mot de passe, création de compte par l'utilisateur
     désactivée) ;
   - marquer l'ULM amphibie dans Administration → Appareils ;
+  - vérifier Administration → Tarifs : « Temps couvert par le forfait » 60,
+    « Tolérance jusqu'à » 75 et les trois forfaits baptême (Local 70 000,
+    Nyonye 90 000, Awagne 110 000) : si le document des tarifs de prod a
+    déjà été enregistré, il peut garder 75 pour « Temps couvert » et donc
+    l'ancienne règle de dépassement ;
   - clé VAPID web du projet prod (voir plus bas), à reporter dans
     `lib/core/env.dart` avant le build web de prod.
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :

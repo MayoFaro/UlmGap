@@ -152,7 +152,8 @@ export function validateReviewChanges(data: unknown): { flightId: string; change
   if (c.pricingMode !== undefined) changes.pricingMode = mode(c.pricingMode);
   if (c.instruction !== undefined) changes.instruction = bool(c.instruction, "Vol d'instruction", false);
   if (c.baptism !== undefined) changes.baptism = bool(c.baptism, "Baptême de l'air", false);
-  if (c.baptismTier !== undefined) changes.baptismTier = baptismTier(c.baptismTier);
+  // null = absent (l'app l'envoie toujours) : validateFlight reprend alors le forfait enregistré.
+  if (c.baptismTier != null) changes.baptismTier = baptismTier(c.baptismTier);
   return { flightId, changes };
 }
 

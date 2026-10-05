@@ -506,6 +506,7 @@ class _FlightScreenState extends State<FlightScreen> {
         shortFlightAmount: shortAmount,
         customAmount: customAmount,
         hasPassenger: _passenger != null,
+        baptismTier: _baptismTier,
       );
     } on ArgumentError {
       return null;
