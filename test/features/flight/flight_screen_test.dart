@@ -266,7 +266,27 @@ void main() {
     expect(
         preview(tester),
         contains(
-            'Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:30–10:30 (LAC).'));
+            'Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:30–10:30 (LAC) (30 min d\'écart minimum).'));
+  });
+
+  testWidgets('conflit signalé dans l\'aperçu à 20 min d\'écart (battement de 30 min)', (tester) async {
+    _useTallView(tester);
+    final a = api()
+      ..flights = [
+        testFlight(
+            id: 'o',
+            start: DateTime(2026, 10, 12, 8, 10),
+            end: DateTime(2026, 10, 12, 9, 10),
+            crew: ['lac'],
+            aircraft: 'F-JABC'),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'lache_toute_mission')));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    expect(
+        preview(tester),
+        contains(
+            'Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 08:10–09:10 (LAC) (30 min d\'écart minimum).'));
   });
 
   testWidgets('carburant seulement : proposé à un instructeur GAP pour un vol entre GAP',
@@ -309,7 +329,7 @@ void main() {
     await pickAircraft(tester);
     await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
     await save(tester);
-    expect(find.text('Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:00–10:00 (INS).'),
+    expect(find.text('Conflit : F-JABC est déjà réservé sur le vol du lundi 12 octobre, 09:00–10:00 (INS) (30 min d\'écart minimum).'),
         findsOneWidget);
   });
 

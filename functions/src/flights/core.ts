@@ -6,7 +6,7 @@ import type { Profile } from "../admin/validation";
 import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
-  Decision, ExistingFlight, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
+  Decision, ExistingFlight, FLIGHT_BUFFER_MINUTES, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
   isPlanning, payerOf, resolvePricingMode,
 } from "../rules/flights";
 import {
@@ -114,7 +114,7 @@ async function assertNoConflict(
   tx: Tx, db: Db, slot: { id: string; start: number; end: number; aircraftId: string; crew: string[] },
 ): Promise<void> {
   // Un seul filtre d'inégalité (index simple automatique) ; le reste en mémoire.
-  const snap = await tx.get(db.collection("flights").where("end", ">", Timestamp.fromMillis(slot.start)));
+  const snap = await tx.get(db.collection("flights").where("end", ">", Timestamp.fromMillis(slot.start - FLIGHT_BUFFER_MINUTES * 60_000)));
   const others: ExistingFlight[] = snap.docs.map((d) => ({
     id: d.id,
     start: (d.get("start") as FirebaseFirestore.Timestamp).toMillis(),
@@ -128,7 +128,7 @@ async function assertNoConflict(
   const c = findConflict(slot, others);
   if (!c) return;
   const doc = snap.docs.find((d) => d.id === c.id)!;
-  throw new HttpsError("failed-precondition", "Conflit avec un autre vol validé.", {
+  throw new HttpsError("failed-precondition", "Conflit avec un autre vol validé (30 min d'écart minimum).", {
     conflict: {
       start: c.start, end: c.end,
       aircraft: (doc.get("aircraft") as string | undefined) ?? "",

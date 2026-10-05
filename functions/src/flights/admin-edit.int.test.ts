@@ -168,7 +168,7 @@ test("vol non clôturé : créneau en conflit refusé ; champs de clôture refus
 
   await assert.rejects(
     adminUpdateFlight(boss, await correction(id, { start: at(10.5), end: at(11.5) })),
-    (e) => code(e) === "failed-precondition" && (e as Error).message === "Conflit avec un autre vol validé.",
+    (e) => code(e) === "failed-precondition" && (e as Error).message === "Conflit avec un autre vol validé (30 min d'écart minimum).",
   );
   await assert.rejects(
     adminUpdateFlight(boss, await correction(id, { actualMinutes: 60 })),

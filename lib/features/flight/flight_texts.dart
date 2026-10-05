@@ -111,9 +111,9 @@ String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {
   final crew = crewText(c.crew, c.passengers, dir);
   if (c.kind == 'crew') {
     final members = c.members.map((u) => dir[u]?.shortName ?? '?').join('/');
-    return 'Conflit : $members est déjà sur le vol du $when (${c.aircraft}, $crew).';
+    return 'Conflit : $members est déjà sur le vol du $when (${c.aircraft}, $crew) (30 min d\'écart minimum).';
   }
-  return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew).';
+  return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew) (30 min d\'écart minimum).';
 }
 
 /// Plan 7 (spec §9.4) : carburant déclaré à la clôture.

@@ -27,9 +27,12 @@ for (const c of fx.pricing) {
   });
 }
 
+// Les heures des cas `conflicts` sont en minutes ; findConflict travaille en ms.
+const toMs = <T extends { start: number; end: number }>(f: T): T => ({ ...f, start: f.start * 60_000, end: f.end * 60_000 });
+
 for (const c of fx.conflicts) {
   test(`conflit : ${c.name}`, () => {
-    assert.equal(findConflict(c.candidate, c.others)?.id ?? null, c.expected);
+    assert.equal(findConflict(toMs(c.candidate), c.others.map(toMs))?.id ?? null, c.expected);
   });
 }
 
@@ -55,8 +58,8 @@ for (const c of fx.payer) {
 
 for (const c of fx.conflicts.filter((x: { expectedCause?: unknown }) => x.expectedCause)) {
   test(`cause du conflit : ${c.name}`, () => {
-    const other = findConflict(c.candidate, c.others)!;
-    assert.deepEqual(conflictCause(c.candidate, other), c.expectedCause);
+    const other = findConflict(toMs(c.candidate), c.others.map(toMs))!;
+    assert.deepEqual(conflictCause(toMs(c.candidate), other), c.expectedCause);
   });
 }
 

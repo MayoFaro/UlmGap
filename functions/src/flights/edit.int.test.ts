@@ -99,12 +99,32 @@ test("conflits : même appareil bloquant avec détails ; bornes ouvertes ; deman
   await createFlight(p1, draft(a, [p1.uid]));
   await assert.rejects(createFlight(p2, draft(a, [p2.uid], { start: at(10.5), end: at(11.5) })),
     (e) => code(e) === "failed-precondition" && details(e)?.conflict?.start === at(10));
-  // Fin = début de l'autre : pas de conflit.
-  await createFlight(p2, draft(a, [p2.uid], { start: at(11), end: at(12) }));
+  // Écart de 30 min exactement : pas de conflit (plan 9).
+  await createFlight(p2, draft(a, [p2.uid], { start: at(11.5), end: at(12.5) }));
   // Une demande peut chevaucher un vol validé.
   const eleve = await seedUser({ profile: "eleve" });
   const { status } = await createFlight(eleve, draft(a, [eleve.uid, p1.uid]));
   assert.equal(status, "demande");
+});
+
+test("battement de 30 min : refus à 20 min d'écart avec le message exact, accepté à 30 min", async () => {
+  const p1 = await seedUser({ profile: "instructeur" });
+  const p2 = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  await createFlight(p1, draft(a, [p1.uid]));
+  await assert.rejects(createFlight(p2, draft(a, [p2.uid], { start: at(11 + 1 / 3), end: at(12 + 1 / 3) })),
+    (e) => code(e) === "failed-precondition" &&
+      (e as Error).message === "Conflit avec un autre vol validé (30 min d'écart minimum).");
+  await createFlight(p2, draft(a, [p2.uid], { start: at(11.5), end: at(12.5) }));
+});
+
+test("battement de 30 min : la requête trouve un vol terminé 10 min avant le début", async () => {
+  const p1 = await seedUser({ profile: "instructeur" });
+  const p2 = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  await seedFlight({ start: at(9.5), end: at(10 + 5 / 6), crew: [p1.uid], aircraftId: a }); // fin 10 h 50
+  await assert.rejects(createFlight(p2, draft(a, [p2.uid], { start: at(11), end: at(12) })),
+    (e) => code(e) === "failed-precondition" && details(e)?.conflict?.end === at(10 + 5 / 6));
 });
 
 test("conflits : même personne sur un autre appareil", async () => {

@@ -15,11 +15,11 @@ void main() {
 
   test('conflit d\'appareil', () {
     expect(describeConflict(info('aircraft', const []), dir),
-        'Conflit : TR-KJP est déjà réservé sur le vol du mercredi 30 septembre, 15:00–16:00 (HIL/RAL).');
+        'Conflit : TR-KJP est déjà réservé sur le vol du mercredi 30 septembre, 15:00–16:00 (HIL/RAL) (30 min d\'écart minimum).');
   });
   test('conflit de personne', () {
     expect(describeConflict(info('crew', const ['ral']), dir),
-        'Conflit : RAL est déjà sur le vol du mercredi 30 septembre, 15:00–16:00 (TR-KJP, HIL/RAL).');
+        'Conflit : RAL est déjà sur le vol du mercredi 30 septembre, 15:00–16:00 (TR-KJP, HIL/RAL) (30 min d\'écart minimum).');
   });
 
   test('plan 8 : pricingModeLabel baptême', () {

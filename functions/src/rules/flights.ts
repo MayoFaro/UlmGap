@@ -78,9 +78,13 @@ export interface ExistingFlight extends Slot {
   id: string; status: FlightStatus; deleted: boolean; closed?: boolean;
 }
 
+/** Plan 9 : battement fixe entre deux vols (même appareil ou même personne). */
+export const FLIGHT_BUFFER_MINUTES = 30;
+const BUFFER_MS = FLIGHT_BUFFER_MINUTES * 60_000;
+
 /**
- * Spec §3.5 : vols valide non supprimés, bornes ouvertes, même appareil ou
- * même personne. Un vol clôturé n'est jamais en conflit : ses horaires sont
+ * Spec §3.5 : vols valide non supprimés, bornes ouvertes (un écart d'exactement
+ * 30 min est accepté), même appareil ou même personne. Un vol clôturé n'est jamais en conflit : ses horaires sont
  * ceux de la conduite, pas de la planification (révision du 2026-10-01).
  */
 export function findConflict(candidate: Slot, others: ExistingFlight[]): ExistingFlight | null {
@@ -89,7 +93,7 @@ export function findConflict(candidate: Slot, others: ExistingFlight[]): Existin
     o.status === "valide" &&
     !o.deleted &&
     o.closed !== true &&
-    candidate.start < o.end && o.start < candidate.end &&
+    candidate.start < o.end + BUFFER_MS && o.start < candidate.end + BUFFER_MS &&
     (o.aircraftId === candidate.aircraftId || o.crew.some((u) => candidate.crew.includes(u))),
   ) ?? null;
 }
