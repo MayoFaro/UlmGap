@@ -17,6 +17,10 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-01-ulmgap-05-notifications.md`
 - Plan 7, suivi carburant (terminé) :
   `docs/superpowers/plans/2026-10-02-ulmgap-07-carburant.md` (spec §9)
+- Plan 8, crédit instruction et vols de baptême (terminé, **branche
+  `feature/instruction-bapteme`, pas encore fusionnée**) :
+  `docs/superpowers/plans/2026-10-05-ulmgap-08-instruction-bapteme.md`
+  (spec §10)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -120,6 +124,15 @@ d'où le JDK d'Android Studio.
   discordance bloque l'app au démarrage.
 - Tests d'intégration : exécutés fichier par fichier (`--test-concurrency=1`),
   car ils modifient le document global `settings/pricing`.
+
+- Plan 8 (branche `feature/instruction-bapteme`, non fusionnée) : en dev,
+  `createFlight`, `updateFlight`, `validateFlight`, `closeFlight`,
+  `adminUpdateFlight`, `adminDeleteFlight` et `adminUpdatePricing`
+  redéployées. L'app installée en dev doit être reconstruite :
+  `adminUpdatePricing` exige maintenant les deux nouveaux tarifs et le
+  formulaire envoie les nouveaux indicateurs. En prod : déployer **toutes les
+  Functions dans leur version du plan 8**, en même temps que l'app web ;
+  `adminUpdatePricing` exige `instructionCredit` et `baptismFee`.
 
 ### À reprendre aux plans suivants
 
