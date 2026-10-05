@@ -47,6 +47,8 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       crew: f.get("crew") as string[],
       passengers: (f.get("passengers") as string[] | undefined) ?? [],
       pricingMode: changes.pricingMode,
+      instruction: changes.instruction ?? (f.get("instruction") === true),
+      baptism: changes.baptism ?? (f.get("baptism") === true),
     };
     asInvalid(() => checkDuration(input.start, input.end));
     asInvalid(() => checkHorizon(input.start, now));

@@ -33,6 +33,8 @@ export function validatePricing(data: unknown): Pricing {
     minPlannedMinutes: intInRange(d.minPlannedMinutes, "minPlannedMinutes", 1, 600),
     overtimeHourly: byCategory(d.overtimeHourly, "overtimeHourly", 1_000_000),
     fuelHourlyRate: intInRange(d.fuelHourlyRate, "fuelHourlyRate", 0, 1_000_000),
+    instructionCredit: intInRange(d.instructionCredit, "instructionCredit", 0, 1_000_000),
+    baptismFee: intInRange(d.baptismFee, "baptismFee", 0, 1_000_000),
   };
 }
 

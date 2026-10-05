@@ -1,5 +1,5 @@
 // Validation (pure) des entrées des fonctions de vol.
-import { ValidationError, obj, text } from "../admin/validation";
+import { ValidationError, bool, obj, text } from "../admin/validation";
 import { MAX_MANUAL_AMOUNT, formatFcfa } from "../rules/pricing";
 
 /** Durée prévue maximale. */
@@ -18,6 +18,8 @@ export interface FlightInput {
   crew: string[];
   passengers: string[];
   pricingMode?: ChosenMode;
+  instruction: boolean;
+  baptism: boolean;
 }
 
 export interface ReviewChanges {
@@ -26,6 +28,8 @@ export interface ReviewChanges {
   destination?: string;
   aircraftId?: string;
   pricingMode?: ChosenMode;
+  instruction?: boolean;
+  baptism?: boolean;
 }
 
 function time(v: unknown, field: string): number {
@@ -105,7 +109,12 @@ export function validateFlightInput(data: unknown): FlightInput {
     destination: text(d.destination, "Destination", 80),
     aircraftId: checkNoSlash(text(d.aircraftId, "Appareil", 128), "Appareil"),
     crew, passengers,
+    instruction: bool(d.instruction, "Vol d'instruction", false),
+    baptism: bool(d.baptism, "Baptême de l'air", false),
   };
+  if (out.baptism && passengers.length === 0) {
+    throw new ValidationError("Baptême de l'air réservé à un vol avec un passager sans compte.");
+  }
   if (d.pricingMode !== undefined) out.pricingMode = mode(d.pricingMode);
   return out;
 }
@@ -129,6 +138,8 @@ export function validateReviewChanges(data: unknown): { flightId: string; change
     changes.aircraftId = checkNoSlash(text(c.aircraftId, "Appareil", 128), "Appareil");
   }
   if (c.pricingMode !== undefined) changes.pricingMode = mode(c.pricingMode);
+  if (c.instruction !== undefined) changes.instruction = bool(c.instruction, "Vol d'instruction", false);
+  if (c.baptism !== undefined) changes.baptism = bool(c.baptism, "Baptême de l'air", false);
   return { flightId, changes };
 }
 

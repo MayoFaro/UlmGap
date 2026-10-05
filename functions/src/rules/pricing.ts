@@ -2,6 +2,9 @@
 // clôture et régularisation. Miroir Dart à venir : lib/core/pricing.dart.
 // Cas partagés : test/fixtures/pricing_cases.json.
 
+import { isInstructionEligible } from "./flights";
+import type { Person } from "./flights";
+
 export type Category = "GAP" | "GR" | "MIL" | "EXT";
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
 
@@ -11,6 +14,8 @@ export interface Pricing {
   minPlannedMinutes: number;
   overtimeHourly: Record<Category, number>;
   fuelHourlyRate: number;
+  instructionCredit: number;
+  baptismFee: number;
 }
 
 export const DEFAULT_PRICING: Pricing = {
@@ -19,7 +24,25 @@ export const DEFAULT_PRICING: Pricing = {
   minPlannedMinutes: 45,
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
+  instructionCredit: 20_000,
+  baptismFee: 70_000,
 };
+
+/** Spec §10.1 : durée réelle minimale pour que l'instructeur soit crédité. */
+export const INSTRUCTION_MIN_MINUTES = 45;
+
+/** Fusion champ par champ sur DEFAULT_PRICING (cartes par catégorie comprises). */
+export function pricingWithDefaults(p: Partial<Pricing> | null | undefined): Pricing {
+  return {
+    flatFee: { ...DEFAULT_PRICING.flatFee, ...p?.flatFee },
+    includedMinutes: p?.includedMinutes ?? DEFAULT_PRICING.includedMinutes,
+    minPlannedMinutes: p?.minPlannedMinutes ?? DEFAULT_PRICING.minPlannedMinutes,
+    overtimeHourly: { ...DEFAULT_PRICING.overtimeHourly, ...p?.overtimeHourly },
+    fuelHourlyRate: p?.fuelHourlyRate ?? DEFAULT_PRICING.fuelHourlyRate,
+    instructionCredit: p?.instructionCredit ?? DEFAULT_PRICING.instructionCredit,
+    baptismFee: p?.baptismFee ?? DEFAULT_PRICING.baptismFee,
+  };
+}
 
 /** Plafond des montants saisis à la clôture (shortFlightAmount, customAmount). */
 export const MAX_MANUAL_AMOUNT = 200_000;
@@ -54,9 +77,12 @@ export function availableCredit(balance: number, otherEstimatedCosts: number[]):
 
 /** Montant facturé à la clôture. Lève Error("…") si un montant requis manque. */
 export function closingBill(a: {
-  mode: "standard" | "fuel_only"; actualMinutes: number; category: Category; pricing: Pricing;
+  mode: "standard" | "fuel_only" | "baptism"; actualMinutes: number; category: Category; pricing: Pricing;
   shortFlightAmount?: number | null; customAmount?: number | null; hasPassenger: boolean;
-}): { billedAmount: number; billedTo: "account" | "off_app"; pricingMode: "standard" | "fuel_only" | "custom" } {
+}): { billedAmount: number; billedTo: "account" | "off_app"; pricingMode: "standard" | "fuel_only" | "custom" | "baptism" } {
+  if (a.mode === "baptism") {
+    return { billedAmount: a.pricing.baptismFee, billedTo: "off_app", pricingMode: "baptism" };
+  }
   if (a.customAmount != null) {
     if (!a.hasPassenger) {
       throw new Error("Montant différent réservé aux vols avec un passager sans compte.");
@@ -97,6 +123,43 @@ export function adjustments(
   };
   if (before.billedTo === "account") add(before.payerUid, before.amount);
   if (after.billedTo === "account") add(after.payerUid, -after.amount);
+  return order
+    .map((uid) => ({ uid, amount: totals.get(uid) as number }))
+    .filter((r) => r.amount !== 0);
+}
+
+/** Spec §10.1 : crédit dû à l'instructeur à la clôture, ou null. */
+export function instructionCreditDue(a: {
+  instruction: boolean; actualMinutes: number; crew: Person[]; pricing: Pricing;
+}): { uid: string; amount: number } | null {
+  if (!a.instruction || a.actualMinutes < INSTRUCTION_MIN_MINUTES || !isInstructionEligible(a.crew)) {
+    return null;
+  }
+  const instructor = a.crew.find((p) => p.profile === "instructeur")!;
+  return { uid: instructor.uid, amount: a.pricing.instructionCredit };
+}
+
+/**
+ * Régularisation du crédit d'instruction : retire l'ancien crédit
+ * (−amount) et ajoute le nouveau (+amount), regroupés par uid selon l'ordre
+ * de première apparition, totaux nuls omis.
+ */
+export function instructionAdjustments(
+  before: { uid: string | null; amount: number },
+  after: { uid: string | null; amount: number },
+): { uid: string; amount: number }[] {
+  const totals = new Map<string, number>();
+  const order: string[] = [];
+  const add = (uid: string | null, amount: number) => {
+    if (!uid) return;
+    if (!totals.has(uid)) {
+      totals.set(uid, 0);
+      order.push(uid);
+    }
+    totals.set(uid, totals.get(uid)! + amount);
+  };
+  add(before.uid, -before.amount);
+  add(after.uid, after.amount);
   return order
     .map((uid) => ({ uid, amount: totals.get(uid) as number }))
     .filter((r) => r.amount !== 0);

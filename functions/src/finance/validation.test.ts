@@ -9,6 +9,8 @@ const ok = {
   minPlannedMinutes: 45,
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
+  instructionCredit: 20_000,
+  baptismFee: 70_000,
 };
 
 test("validatePricing : cas nominal", () => {
@@ -22,6 +24,11 @@ test("validatePricing : champ manquant", () => {
     { ...ok, minPlannedMinutes: undefined },
     { ...ok, overtimeHourly: undefined },
     { ...ok, fuelHourlyRate: undefined },
+    { ...ok, instructionCredit: undefined },
+    { ...ok, baptismFee: undefined },
+    { ...ok, instructionCredit: -1 },
+    { ...ok, baptismFee: -1 },
+    { ...ok, baptismFee: 1_000_001 },
     { ...ok, flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000 } }, // EXT manquant
     null,
     {},

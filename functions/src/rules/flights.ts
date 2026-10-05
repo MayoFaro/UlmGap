@@ -4,9 +4,14 @@
 import type { Profile } from "../admin/validation";
 
 export type FlightStatus = "demande" | "valide" | "refuse";
-export type PricingMode = "standard" | "fuel_only" | "custom";
+export type PricingMode = "standard" | "fuel_only" | "custom" | "baptism";
 
 export interface Person { uid: string; profile: Profile | null }
+/** Spec §10.1 : exactement un instructeur et un autre membre avec compte. */
+export function isInstructionEligible(crew: Person[]): boolean {
+  return crew.length === 2 && crew.filter((p) => p.profile === "instructeur").length === 1;
+}
+
 export interface Creator extends Person { isAdmin: boolean }
 
 export type Decision =

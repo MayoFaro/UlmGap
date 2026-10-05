@@ -23,6 +23,8 @@ const CUSTOM = {
   minPlannedMinutes: 50,
   overtimeHourly: { GAP: 13_000, GR: 31_000, MIL: 31_000, EXT: 31_000 },
   fuelHourlyRate: 13_000,
+  instructionCredit: 21_000,
+  baptismFee: 72_000,
 };
 
 test("readPricing : sans document → DEFAULT_PRICING", async () => {

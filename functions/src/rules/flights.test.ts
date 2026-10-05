@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   checkPayer, conflictCause, decideStatus, designatedInstructor, findConflict, payerOf,
-  resolvePricingMode, isPlanning } from "./flights";
+  resolvePricingMode, isPlanning, isInstructionEligible } from "./flights";
 
 const fx = JSON.parse(fs.readFileSync(
   path.resolve(__dirname, "../../../test/fixtures/flight_rules.json"), "utf8"));
@@ -72,4 +72,12 @@ test("isPlanning : contrôle des conflits pour un vol à venir non clôturé seu
   assert.equal(isPlanning(1000, 1000, false), false);
   assert.equal(isPlanning(1000, 2000, false), false);
   assert.equal(isPlanning(1000, 999, true), false);
+});
+
+test("isInstructionEligible : exactement un instructeur et un autre membre avec compte", () => {
+  assert.equal(isInstructionEligible([{ uid: "s", profile: "eleve" }, { uid: "i", profile: "instructeur" }]), true);
+  assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }, { uid: "l", profile: "lache_toute_mission" }]), true);
+  assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }]), false);
+  assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }, { uid: "j", profile: "instructeur" }]), false);
+  assert.equal(isInstructionEligible([{ uid: "s", profile: "eleve" }, { uid: "l", profile: "lache_solo" }]), false);
 });
