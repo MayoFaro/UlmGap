@@ -52,6 +52,7 @@ async function correction(id: string, o: Record<string, unknown> = {}) {
     start: (f.start as admin.firestore.Timestamp).toMillis(),
     end: (f.end as admin.firestore.Timestamp).toMillis(),
     destination: f.destination, aircraftId: f.aircraftId, crew: f.crew, passengers: f.passengers,
+    instruction: f.instruction === true, baptism: f.pricingMode === "baptism",
     ...o,
   };
 }
@@ -451,4 +452,88 @@ test("carburant sur un vol non clôturé : refusé", async () => {
   const id = await seedFlight({ start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: pilot.uid });
   await assert.rejects(adminUpdateFlight(boss, await correction(id, { fuelEnd: 10 })),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "Réservé aux vols clôturés.");
+});
+
+// Plan 8 (spec §10) : crédit d'instruction régularisé, baptême.
+
+test("correction : vol d'instruction décoché → crédit repris", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  assert.equal(await balance(ins.uid), 20_000);
+  await adminUpdateFlight(boss, await correction(id, { instruction: false }));
+  assert.equal(await balance(ins.uid), 0);
+  const t = (await flightTx(id)).filter((x) => x.type === "instruction");
+  assert.deepEqual(t.map((x) => x.amount).sort((p, q) => p - q), [-20_000, 20_000]);
+  assert.equal(t.find((x) => x.amount < 0)!.reason, "Régularisation crédit instruction");
+  assert.equal((await getFlight(id)).instructionCreditUid, null);
+});
+
+test("correction : durée passée à 44 min → crédit repris ; repassée à 60 → recrédité", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 44, shortFlightAmount: 8_000 }));
+  assert.equal(await balance(ins.uid), 0);
+  await adminUpdateFlight(boss, await correction(id, { actualMinutes: 60 }));
+  assert.equal(await balance(ins.uid), 20_000);
+});
+
+test("correction : changement d'instructeur → retrait chez l'ancien, crédit chez le nouveau", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const ins2 = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { crew: [stu.uid, ins2.uid] }));
+  assert.equal(await balance(ins.uid), 0);
+  assert.equal(await balance(ins2.uid), 20_000);
+  assert.equal((await getFlight(id)).instructionCreditUid, ins2.uid);
+});
+
+test("correction sans changement : aucune nouvelle ligne instruction", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminUpdateFlight(boss, await correction(id, { destination: "Kara" }));
+  assert.equal((await flightTx(id)).filter((x) => x.type === "instruction").length, 1);
+});
+
+test("suppression d'un vol d'instruction clôturé : crédit repris", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const stu = await seedUser({ profile: "eleve", category: "GAP" });
+  const ins = await seedUser({ profile: "instructeur", balance: 0 });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [stu.uid, ins.uid], aircraftId: a, instruction: true },
+    { actualMinutes: 90 });
+  await adminDeleteFlight(boss, { flightId: id });
+  assert.equal(await balance(ins.uid), 0);
+  await assertInvariant(id);
+});
+
+test("correction : vol standard passé en baptême → débit remboursé, 70 000 hors app", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a },
+    { actualMinutes: 90 });
+  const before = await balance(pilot.uid);
+  await adminUpdateFlight(boss, await correction(id, { baptism: true }));
+  const f = await getFlight(id);
+  assert.equal(f.pricingMode, "baptism");
+  assert.equal(f.billedTo, "off_app");
+  assert.equal(f.billedAmount, 70_000);
+  assert.ok(await balance(pilot.uid) > before);
+  await assertInvariant(id);
 });
