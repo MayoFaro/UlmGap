@@ -90,15 +90,22 @@ d'où le JDK d'Android Studio.
   `closeFlight` exige désormais les champs carburant : **en dev, l'app
   installée doit être reconstruite**, un ancien build ne peut plus clôturer
   un vol.
+- Plan 8 en dev (branche `feature/instruction-bapteme`, non fusionnée) :
+  `createFlight`, `updateFlight`, `validateFlight`, `closeFlight`,
+  `adminUpdateFlight`, `adminDeleteFlight` et `adminUpdatePricing`
+  redéployées. **L'app installée en dev doit être reconstruite** : le
+  formulaire envoie les nouveaux indicateurs et `adminUpdatePricing` exige
+  les deux nouveaux tarifs.
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
-  **toutes les Functions dans leur version du plan 7** (Node 22, dont la
+  **toutes les Functions dans leur version du plan 8** (Node 22, dont la
   tâche planifiée `closingReminders` : le déploiement active Cloud
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
   d'atterrissages et les champs carburant, `correctAccount` le nouveau
-  solde). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
-  iOS installé antérieur au plan 7 doit être mis à jour : il ne peut plus
-  clôturer un vol. Ensuite :
+  solde, `adminUpdatePricing` les tarifs `instructionCredit` et
+  `baptismFee`). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
+  iOS installé antérieur au plan 8 doit être mis à jour : il ne peut plus
+  clôturer un vol ni enregistrer les tarifs. Ensuite :
   - premier admin (`cd functions && npm run build && node
     scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
     (e-mail et mot de passe, création de compte par l'utilisateur
@@ -124,15 +131,6 @@ d'où le JDK d'Android Studio.
   discordance bloque l'app au démarrage.
 - Tests d'intégration : exécutés fichier par fichier (`--test-concurrency=1`),
   car ils modifient le document global `settings/pricing`.
-
-- Plan 8 (branche `feature/instruction-bapteme`, non fusionnée) : en dev,
-  `createFlight`, `updateFlight`, `validateFlight`, `closeFlight`,
-  `adminUpdateFlight`, `adminDeleteFlight` et `adminUpdatePricing`
-  redéployées. L'app installée en dev doit être reconstruite :
-  `adminUpdatePricing` exige maintenant les deux nouveaux tarifs et le
-  formulaire envoie les nouveaux indicateurs. En prod : déployer **toutes les
-  Functions dans leur version du plan 8**, en même temps que l'app web ;
-  `adminUpdatePricing` exige `instructionCredit` et `baptismFee`.
 
 ### À reprendre aux plans suivants
 
