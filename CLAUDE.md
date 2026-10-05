@@ -17,12 +17,11 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-01-ulmgap-05-notifications.md`
 - Plan 7, suivi carburant (terminé) :
   `docs/superpowers/plans/2026-10-02-ulmgap-07-carburant.md` (spec §9)
-- Plan 8, crédit instruction et vols de baptême (terminé, **branche
-  `feature/instruction-bapteme`, pas encore fusionnée**) :
+- Plan 8, crédit instruction et vols de baptême (terminé) :
   `docs/superpowers/plans/2026-10-05-ulmgap-08-instruction-bapteme.md`
   (spec §10)
 - Plan 9, dépassement dès 60 min, trois forfaits de baptême, battement de
-  30 min (terminé, même branche) :
+  30 min (terminé) :
   `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
@@ -33,7 +32,9 @@ doivent jamais accéder à AppGAP.
   4. carnet de vol (vols effectués, temps de vol total, clôture) ;
   5. notifications et rappels de clôture ;
   6. adaptation du pont AppGAP (dans le repo `~/StudioProjects/app_gap`) ;
-  7. suivi carburant par appareil.
+  7. suivi carburant par appareil ;
+  8. crédit instruction et baptême de l'air ;
+  9. dépassement dès 60 min, forfaits de baptême, battement de 30 min.
 
 ## Règles de travail
 
@@ -66,9 +67,9 @@ d'où le JDK d'Android Studio.
 **Disque presque plein** (environ 6 Go libres) : éviter les builds inutiles.
 `build/` peut être supprimé, il est régénérable.
 
-## État au 2026-10-02
+## État au 2026-10-05
 
-- Plans 1 à 5 et 7 terminés et **tous fusionnés dans `main`** (2026-10-02).
+- Plans 1 à 5 et 7 à 9 terminés et **tous fusionnés dans `main`** (2026-10-05).
   Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
   la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
   lancement de l'app (spec §5, §9).
@@ -93,13 +94,13 @@ d'où le JDK d'Android Studio.
   `closeFlight` exige désormais les champs carburant : **en dev, l'app
   installée doit être reconstruite**, un ancien build ne peut plus clôturer
   un vol.
-- Plan 8 en dev (branche `feature/instruction-bapteme`, non fusionnée) :
+- Plan 8 en dev :
   `createFlight`, `updateFlight`, `validateFlight`, `closeFlight`,
   `adminUpdateFlight`, `adminDeleteFlight` et `adminUpdatePricing`
   redéployées. **L'app installée en dev doit être reconstruite** : le
   formulaire envoie les nouveaux indicateurs et `adminUpdatePricing` exige
   les deux nouveaux tarifs.
-- Plan 9 en dev (même branche, non fusionnée) : `createFlight`,
+- Plan 9 en dev : `createFlight`,
   `updateFlight`, `validateFlight`, `closeFlight`, `adminUpdateFlight`,
   `adminDeleteFlight` et `adminUpdatePricing` redéployées. **L'app installée
   en dev doit être reconstruite.** **Régler « Temps couvert par le forfait »
