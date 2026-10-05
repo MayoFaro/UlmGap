@@ -44,6 +44,9 @@ class LogbookScreen extends StatefulWidget {
   State<LogbookScreen> createState() => _LogbookScreenState();
 }
 
+/// Filtre de clôture de la liste de la période (le total n'en dépend pas).
+enum _ClosedFilter { all, closed, open }
+
 class _LogbookScreenState extends State<LogbookScreen> {
   late int _year;
   late int _month; // 1 à 12, ou 0 pour l'année entière
@@ -51,6 +54,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
   String? _pilotUid; // null : tous les pilotes (instructeurs et admins)
   String? _aircraftId; // null : tous les appareils
   bool _onlyToClose = false;
+  _ClosedFilter _closedFilter = _ClosedFilter.all;
 
   FinanceApi? _finance;
   Stream<List<Flight>>? _periodFlights;
@@ -245,11 +249,25 @@ class _LogbookScreenState extends State<LogbookScreen> {
             me: me, now: now, pilotUid: pilotUid, aircraftId: aircraftId)
         .where((f) => needsClosing(f, now))
         .toList();
-    final shown = _onlyToClose ? toClose : periodList;
+    // Plus aucun vol à clôturer (le dernier vient de l'être) : l'affichage
+    // « à clôturer » s'arrête et la liste revient à la période.
+    final onlyToClose = _onlyToClose && toClose.isNotEmpty;
+    final filtered = switch (_closedFilter) {
+      _ClosedFilter.all => periodList,
+      _ClosedFilter.closed => periodList.where((f) => f.isClosed).toList(),
+      _ClosedFilter.open => periodList.where((f) => !f.isClosed).toList(),
+    };
+    final shown = onlyToClose ? toClose : filtered;
     final state = asyncState(
-      _onlyToClose ? unclosedSnap : periodSnap,
+      onlyToClose ? unclosedSnap : periodSnap,
       isEmpty: shown.isEmpty,
-      empty: _onlyToClose ? 'Aucun vol à clôturer.' : 'Aucun vol sur cette période.',
+      empty: onlyToClose
+          ? 'Aucun vol à clôturer.'
+          : switch (_closedFilter) {
+              _ClosedFilter.all => 'Aucun vol sur cette période.',
+              _ClosedFilter.closed => 'Aucun vol clôturé sur cette période.',
+              _ClosedFilter.open => 'Aucun vol non clôturé sur cette période.',
+            },
     );
     final dirMap = {for (final m in dir) m.uid: m};
 
@@ -266,6 +284,25 @@ class _LogbookScreenState extends State<LogbookScreen> {
             if (_canChoosePilot) _pilotFilter(dir),
             _aircraftFilter(aircraft),
           ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: SegmentedButton<_ClosedFilter>(
+            key: const Key('closed-filter'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: _ClosedFilter.all, label: Text('Tous')),
+              ButtonSegment(value: _ClosedFilter.closed, label: Text('Clôturés')),
+              ButtonSegment(value: _ClosedFilter.open, label: Text('Non clôturés')),
+            ],
+            // Pendant l'affichage « à clôturer », aucun segment n'est actif.
+            selected: onlyToClose ? const {} : {_closedFilter},
+            emptySelectionAllowed: true,
+            onSelectionChanged: (sel) => setState(() {
+              if (sel.isNotEmpty) _closedFilter = sel.first;
+              _onlyToClose = false;
+            }),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -289,7 +326,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
                 label: Text(toCloseCountText(toClose.length),
                     style: TextStyle(color: toCloseColor, fontWeight: FontWeight.bold)),
                 side: BorderSide(color: toCloseColor),
-                selected: _onlyToClose,
+                selected: onlyToClose,
                 onSelected: (v) => setState(() => _onlyToClose = v),
               ),
             ),

@@ -93,6 +93,9 @@ void main() {
     expect(total(tester), 'Temps de vol : 0 h 30');
 
     await choose(tester, 'month-select', 'Année');
+    // Liste de l'année plus longue que l'écran de test : défiler jusqu'au vol.
+    await tester.scrollUntilVisible(tileOf('sep-closed'), 100,
+        scrollable: find.byType(Scrollable).last);
     expect(tileOf('sep-closed'), findsOneWidget);
     expect(tileOf('oct-closed'), findsOneWidget);
     expect(total(tester), 'Temps de vol : 2 h 45'); // 75 + 60 + 30
@@ -222,5 +225,82 @@ void main() {
     await choose(tester, 'aircraft-filter', 'ULM 1 (F-JABC)');
     expect(tileOf('oct-other-ac'), findsNothing);
     expect(total(tester), 'Temps de vol : 2 h 05'); // oct-closed 75 + oct-dps 50
+  });
+
+  testWidgets('bug : dernier vol à clôturer clôturé → retour automatique aux vols de la période',
+      (tester) async {
+    await tester.pumpWidget(host(eleve, flights));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('to-close-count')));
+    await tester.pumpAndSettle();
+    expect(tileOf('oct-closed'), findsNothing);
+    // Les deux vols à clôturer viennent d'être clôturés (nouvelles données).
+    final allClosed = [
+      for (final f in flights)
+        if (f.id == 'oct-open' || f.id == 'sep-open')
+          testFlight(id: f.id, start: f.start, crew: f.crew, isClosed: true, actualFlightMinutes: 60)
+        else
+          f,
+    ];
+    await tester.pumpWidget(host(eleve, allClosed));
+    await tester.pumpAndSettle();
+    expect(find.text('Aucun vol à clôturer.'), findsNothing);
+    expect(find.byKey(const Key('to-close-count')), findsNothing);
+    expect(tileOf('oct-closed'), findsOneWidget);
+    expect(tileOf('oct-open'), findsOneWidget);
+  });
+
+  testWidgets('sélecteur Tous / Clôturés / Non clôturés : filtre la période, total inchangé',
+      (tester) async {
+    await tester.pumpWidget(host(eleve, flights));
+    await tester.pumpAndSettle();
+    final before = total(tester);
+    await tester.tap(find.text('Clôturés'));
+    await tester.pumpAndSettle();
+    expect(tileOf('oct-closed'), findsOneWidget);
+    expect(tileOf('oct-other-ac'), findsOneWidget);
+    expect(tileOf('oct-open'), findsNothing);
+    expect(total(tester), before);
+
+    await tester.tap(find.text('Non clôturés'));
+    await tester.pumpAndSettle();
+    expect(tileOf('oct-open'), findsOneWidget);
+    expect(tileOf('oct-closed'), findsNothing);
+    expect(tileOf('sep-open'), findsNothing); // période : octobre seulement
+    expect(total(tester), before);
+
+    await tester.tap(find.text('Tous'));
+    await tester.pumpAndSettle();
+    expect(tileOf('oct-closed'), findsOneWidget);
+    expect(tileOf('oct-open'), findsOneWidget);
+  });
+
+  testWidgets('sélecteur : messages vides adaptés', (tester) async {
+    final onlyClosed = flights.where((f) => f.isClosed).toList();
+    await tester.pumpWidget(host(eleve, onlyClosed));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Non clôturés'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aucun vol non clôturé sur cette période.'), findsOneWidget);
+
+    final onlyOpen = flights.where((f) => !f.isClosed).toList();
+    await tester.pumpWidget(host(eleve, onlyOpen));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturés'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aucun vol clôturé sur cette période.'), findsOneWidget);
+  });
+
+  testWidgets('sélecteur choisi pendant l\'affichage « à clôturer » : quitte ce mode',
+      (tester) async {
+    await tester.pumpWidget(host(eleve, flights));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('to-close-count')));
+    await tester.pumpAndSettle();
+    expect(tileOf('sep-open'), findsOneWidget);
+    await tester.tap(find.text('Clôturés'));
+    await tester.pumpAndSettle();
+    expect(tileOf('sep-open'), findsNothing);
+    expect(tileOf('oct-closed'), findsOneWidget);
   });
 }

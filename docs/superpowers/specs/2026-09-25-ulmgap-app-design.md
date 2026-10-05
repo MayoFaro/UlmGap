@@ -425,6 +425,11 @@ effectués » et « Compteurs »)
   admins, §3.3). Les vols à clôturer (date du jour ou avant, sans condition
   d'heure) sont surlignés en orange. Un compteur « N vols à clôturer » les
   compte sur toutes les périodes ; un appui dessus les affiche.
+- Sélecteur **« Tous | Clôturés | Non clôturés »** (révision du 2026-10-05),
+  « Tous » par défaut : il filtre la liste de la période ; le temps de vol et
+  les atterrissages n'en dépendent pas. Choisir un segment ou une période
+  quitte l'affichage « à clôturer », qui s'arrête aussi de lui-même quand il
+  ne reste plus aucun vol à clôturer.
 - Le planning (accueil) reste limité aux vols à venir.
 - **Rappel au lancement** (révision du 2026-10-02) : au démarrage de l'app,
   si un vol validé, non clôturé, dont l'utilisateur est membre de `crew` a
