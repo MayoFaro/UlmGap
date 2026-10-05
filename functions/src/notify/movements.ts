@@ -10,7 +10,7 @@ type Db = FirebaseFirestore.Firestore;
 
 export interface WrittenMovement {
   uid: string; amount: number; balanceAfter: number;
-  type: "credit" | "correction" | "flight_adjustment";
+  type: "credit" | "correction" | "flight_adjustment" | "instruction";
 }
 
 export async function notifyMovements(db: Db, actor: string, moves: WrittenMovement[]): Promise<void> {
