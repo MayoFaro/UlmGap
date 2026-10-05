@@ -421,7 +421,7 @@ class _FlightScreenState extends State<FlightScreen> {
   /// (saisie) ou en tête de fiche (consultation d'un vol non clôturé).
   List<Widget> _financeLines(BuildContext context) {
     if (_passenger != null && _baptism) {
-      return [Text('Baptême de l\'air : ${formatFcfa(_pricingForCost.baptismFee)}, facturé hors app')];
+      return [Text('Baptême de l\'air : ${formatFcfa(_pricingForCost.baptismFees['local']!)}, facturé hors app')];
     }
     final cost = _estimatedCost;
     if (cost == null) return const [];

@@ -33,6 +33,7 @@ class Flight {
     required this.refusalReason,
     required this.createdBy,
     required this.pricingMode,
+    this.baptismTier,
     required this.isClosed,
     required this.deleted,
     this.payerUidField,
@@ -68,6 +69,9 @@ class Flight {
   final String? refusalReason;
   final String createdBy;
   final String pricingMode;
+
+  /// Plan 9 : forfait du baptême (`local`, `nyonye`, `awagne`) ; null hors baptême.
+  final String? baptismTier;
   final bool isClosed;
   final bool deleted;
 
@@ -123,6 +127,7 @@ class Flight {
         refusalReason: m['refusalReason'] as String?,
         createdBy: (m['createdBy'] as String?) ?? '',
         pricingMode: (m['pricingMode'] as String?) ?? 'standard',
+        baptismTier: m['baptismTier'] as String?,
         isClosed: m['isClosed'] == true,
         deleted: m['deleted'] == true,
         payerUidField: m['payerUid'] as String?,
@@ -178,6 +183,7 @@ class FlightDraft {
     this.pricingMode,
     this.instruction = false,
     this.baptism = false,
+    this.baptismTier,
   });
 
   final DateTime start;
@@ -192,6 +198,9 @@ class FlightDraft {
   final bool instruction;
   final bool baptism;
 
+  /// Plan 9 : obligatoire avec [baptism] ; toujours envoyé (`null` sinon).
+  final String? baptismTier;
+
   Map<String, dynamic> toPayload() => {
         'start': start.millisecondsSinceEpoch,
         'end': end.millisecondsSinceEpoch,
@@ -202,5 +211,6 @@ class FlightDraft {
         if (pricingMode != null) 'pricingMode': pricingMode,
         'instruction': instruction,
         'baptism': baptism,
+        'baptismTier': baptism ? baptismTier : null,
       };
 }

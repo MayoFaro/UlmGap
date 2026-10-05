@@ -3,6 +3,9 @@
 // test/fixtures/pricing_cases.json.
 import 'profiles.dart';
 
+/// Plan 9 : forfaits de baptême (clés de [Pricing.baptismFees]).
+const baptismTiers = ['local', 'nyonye', 'awagne'];
+
 class Pricing {
   const Pricing({
     required this.flatFee,
@@ -12,7 +15,7 @@ class Pricing {
     required this.overtimeHourly,
     required this.fuelHourlyRate,
     this.instructionCredit = 20000,
-    this.baptismFee = 70000,
+    this.baptismFees = const {'local': 70000, 'nyonye': 90000, 'awagne': 110000},
   });
 
   final Map<UserCategory, int> flatFee;
@@ -29,8 +32,8 @@ class Pricing {
   /// Plan 8 : crédit versé à l'instructeur par vol d'instruction clôturé.
   final int instructionCredit;
 
-  /// Plan 8 : prix d'un baptême de l'air (facturé hors app).
-  final int baptismFee;
+  /// Plan 9 : prix d'un baptême de l'air par forfait (facturé hors app).
+  final Map<String, int> baptismFees;
 
   /// Fusionné sur [defaultPricing] : un champ absent (document manquant, ou
   /// champ manquant dedans) prend la valeur par défaut (spec §2.4).
@@ -56,7 +59,10 @@ class Pricing {
       overtimeHourly: categoryMap(m['overtimeHourly'], defaultPricing.overtimeHourly),
       fuelHourlyRate: (m['fuelHourlyRate'] as num?)?.toInt() ?? defaultPricing.fuelHourlyRate,
       instructionCredit: (m['instructionCredit'] as num?)?.toInt() ?? defaultPricing.instructionCredit,
-      baptismFee: (m['baptismFee'] as num?)?.toInt() ?? defaultPricing.baptismFee,
+      baptismFees: {
+        for (final t in baptismTiers)
+          t: (((m['baptismFees'] as Map?)?[t]) as num?)?.toInt() ?? defaultPricing.baptismFees[t]!,
+      },
     );
   }
 
@@ -68,7 +74,7 @@ class Pricing {
         'overtimeHourly': {for (final e in overtimeHourly.entries) e.key.code: e.value},
         'fuelHourlyRate': fuelHourlyRate,
         'instructionCredit': instructionCredit,
-        'baptismFee': baptismFee,
+        'baptismFees': {for (final t in baptismTiers) t: baptismFees[t]!},
       };
 }
 
@@ -91,7 +97,7 @@ final Pricing defaultPricing = Pricing(
   },
   fuelHourlyRate: 12000,
   instructionCredit: 20000,
-  baptismFee: 70000,
+  baptismFees: {'local': 70000, 'nyonye': 90000, 'awagne': 110000},
 );
 
 /// Plafond des montants saisis à la clôture (shortFlightAmount, customAmount).
@@ -132,10 +138,11 @@ ClosingBill closingBill({
   int? shortFlightAmount,
   int? customAmount,
   required bool hasPassenger,
+  String? baptismTier,
 }) {
-  // Baptême de l'air : prix fixe hors app, montants saisis ignorés.
+  // Baptême de l'air : forfait du tier (local par défaut) hors app, montants saisis ignorés.
   if (mode == 'baptism') {
-    return (billedAmount: pricing.baptismFee, billedTo: 'off_app', pricingMode: 'baptism');
+    return (billedAmount: pricing.baptismFees[baptismTier ?? 'local']!, billedTo: 'off_app', pricingMode: 'baptism');
   }
   if (customAmount != null) {
     if (!hasPassenger) {

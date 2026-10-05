@@ -9,7 +9,7 @@ import { Caller, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
-import { closingBill, instructionCreditDue, Pricing, pricingWithDefaults, toCategory } from "../rules/pricing";
+import { BaptismTier, closingBill, instructionCreditDue, Pricing, pricingWithDefaults, toCategory } from "../rules/pricing";
 import { notifyMovements, WrittenMovement } from "../notify/movements";
 import { isOnOrBeforeClubToday } from "../rules/club-day";
 import { closingEnd } from "../rules/closing";
@@ -103,6 +103,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
         shortFlightAmount,
         customAmount,
         hasPassenger: passengers.length > 0,
+        baptismTier: (f.get("baptismTier") as BaptismTier | null | undefined) ?? null,
       });
     } catch (e) {
       throw new HttpsError("invalid-argument", (e as Error).message);

@@ -6,7 +6,7 @@ import type { PricingMode } from "../rules/flights";
 import type { Pricing } from "../rules/pricing";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import {
-  FlightInput, checkDuration, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
+  FlightInput, baptismTier, checkDuration, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
 } from "./validation";
 import { notifyFlight } from "../notify/flight-info";
 import { cancelledPush, refusedPush, validatedPush } from "../rules/notifications";
@@ -49,10 +49,16 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       pricingMode: changes.pricingMode,
       instruction: changes.instruction ?? (f.get("instruction") === true),
       baptism: false,
+      baptismTier: null,
     };
     // Le baptême se lit dans le mode du vol ; sans passager il n'existe pas.
     input.baptism = input.passengers.length > 0 &&
       (changes.baptism ?? (f.get("pricingMode") === "baptism"));
+    if (input.baptism) {
+      // Un baptême d'avant le plan 9 n'a pas de forfait : il faut le choisir.
+      const tier = changes.baptismTier ?? f.get("baptismTier");
+      input.baptismTier = asInvalid(() => baptismTier(tier));
+    }
     if (changes.baptism && input.passengers.length === 0) {
       throw new HttpsError("invalid-argument",
         "Baptême de l'air réservé à un vol avec un passager sans compte.");

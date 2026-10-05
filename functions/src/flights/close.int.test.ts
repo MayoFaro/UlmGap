@@ -323,14 +323,25 @@ test("vol d'instruction figé avant le plan 8 : crédit par défaut (20 000)", a
   const stu = await seedUser({ profile: "eleve", category: "GAP" });
   const ins = await seedUser({ profile: "instructeur", balance: 0 });
   const a = await seedAircraft();
-  const { instructionCredit: _i, baptismFee: _b, ...oldSnapshot } = DEFAULT_PRICING;
+  const { instructionCredit: _i, baptismFees: _b, ...oldSnapshot } = DEFAULT_PRICING;
   const id = await seedPastFlight({ crew: [stu.uid, ins.uid], aircraftId: a, instruction: true,
     pricingSnapshot: oldSnapshot });
   await closeFlight(stu, { ...FUEL, flightId: id, actualMinutes: 60, landings: 1, fuelEnd: 25 });
   assert.equal((await getUser(ins.uid)).balance, 20_000);
 });
 
-test("baptême : 70 000 hors app quelle que soit la durée, aucun débit", async () => {
+test("baptême Awagne : 110 000 hors app, aucun débit", async () => {
+  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
+  const a = await seedAircraft();
+  const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, passengers: ["Paul"],
+    pricingMode: "baptism", baptismTier: "awagne" });
+  const r = await closeFlight(pilot, { ...FUEL, flightId: id, actualMinutes: 20, landings: 1, fuelEnd: 35 });
+  assert.deepEqual(r, { billedAmount: 110_000, billedTo: "off_app" });
+  assert.equal((await getUser(pilot.uid)).balance, 0);
+  assert.equal((await flightTx(id)).length, 0);
+});
+
+test("baptême sans forfait (plan 8) : facturé au forfait local, 70 000 hors app quelle que soit la durée", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, passengers: ["Paul"], pricingMode: "baptism" });

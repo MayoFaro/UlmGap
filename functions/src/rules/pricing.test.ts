@@ -19,7 +19,7 @@ test("DEFAULT_PRICING reproduit la spec §2.4", () => {
     overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
     fuelHourlyRate: 12_000,
     instructionCredit: 20_000,
-    baptismFee: 70_000,
+    baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
   });
 });
 
@@ -48,7 +48,7 @@ for (const c of fx.closing) {
     const args = {
       mode: c.mode, actualMinutes: c.actualMinutes, category: c.category, pricing: DEFAULT_PRICING,
       shortFlightAmount: c.shortFlightAmount ?? null, customAmount: c.customAmount ?? null,
-      hasPassenger: c.hasPassenger,
+      hasPassenger: c.hasPassenger, baptismTier: c.baptismTier ?? null,
     };
     if (c.expectedError) {
       assert.throws(() => closingBill(args), new Error(c.expectedError));
@@ -64,23 +64,28 @@ for (const c of fx.adjustments) {
   });
 }
 
-test("closingBill baptism : baptismFee hors app, quelle que soit la durée", () => {
-  const p = { ...DEFAULT_PRICING, baptismFee: 70_000 };
+test("closingBill baptism : forfait du tier hors app, quelle que soit la durée", () => {
   for (const actualMinutes of [20, 60, 200]) {
-    assert.deepEqual(
-      closingBill({ mode: "baptism", actualMinutes, category: "EXT", pricing: p, hasPassenger: true,
-        shortFlightAmount: 5_000, customAmount: 9_000 }),
-      { billedAmount: 70_000, billedTo: "off_app", pricingMode: "baptism" });
+    for (const [tier, fee] of [["local", 70_000], ["nyonye", 90_000], ["awagne", 110_000]] as const) {
+      assert.deepEqual(
+        closingBill({ mode: "baptism", actualMinutes, category: "EXT", pricing: DEFAULT_PRICING, hasPassenger: true,
+          shortFlightAmount: 5_000, customAmount: 9_000, baptismTier: tier }),
+        { billedAmount: fee, billedTo: "off_app", pricingMode: "baptism" });
+    }
   }
+  // Sans tier (données du plan 8) : forfait local.
+  assert.equal(closingBill({ mode: "baptism", actualMinutes: 20, category: "EXT", pricing: DEFAULT_PRICING,
+    hasPassenger: true }).billedAmount, 70_000);
 });
 
 test("pricingWithDefaults : snapshot ancien sans les nouveaux champs", () => {
   const old = { ...DEFAULT_PRICING } as Partial<Pricing>;
   delete old.instructionCredit;
-  delete old.baptismFee;
+  delete old.baptismFees;
   const p = pricingWithDefaults(old);
   assert.equal(p.instructionCredit, 20_000);
-  assert.equal(p.baptismFee, 70_000);
+  assert.deepEqual(p.baptismFees, DEFAULT_PRICING.baptismFees);
+  assert.equal(pricingWithDefaults({ baptismFees: { nyonye: 95_000 } as Pricing["baptismFees"] }).baptismFees.nyonye, 95_000);
   assert.deepEqual(pricingWithDefaults(null), DEFAULT_PRICING);
   assert.equal(pricingWithDefaults({ ...DEFAULT_PRICING, instructionCredit: 15_000 }).instructionCredit, 15_000);
 });

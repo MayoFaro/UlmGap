@@ -34,6 +34,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   // écraser la saisie en cours si le flux réémet (ex. après enregistrement).
   bool _prefilled = false;
   bool _saving = false;
+  Map<String, int> _baptismFees = defaultPricing.baptismFees;
 
   @override
   void dispose() {
@@ -53,6 +54,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   }
 
   void _prefill(Pricing p) {
+    _baptismFees = p.baptismFees;
     for (final c in UserCategory.values) {
       _flatFee[c]!.text = formatAmountInput(p.flatFee[c]!);
       _overtimeHourly[c]!.text = formatAmountInput(p.overtimeHourly[c]!);
@@ -62,7 +64,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _minPlannedMinutes.text = p.minPlannedMinutes.toString();
     _fuelHourlyRate.text = formatAmountInput(p.fuelHourlyRate);
     _instructionCredit.text = formatAmountInput(p.instructionCredit);
-    _baptismFee.text = formatAmountInput(p.baptismFee);
+    _baptismFee.text = formatAmountInput(p.baptismFees['local']!);
   }
 
   // Plages identiques au serveur (functions/src/finance/validation.ts).
@@ -102,7 +104,8 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
       },
       fuelHourlyRate: parseAmount(_fuelHourlyRate.text)!,
       instructionCredit: parseAmount(_instructionCredit.text)!,
-      baptismFee: parseAmount(_baptismFee.text)!,
+      // Provisoire (Task 3) : seul le forfait Local est modifiable ici.
+      baptismFees: {..._baptismFees, 'local': parseAmount(_baptismFee.text)!},
     );
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _saving = true);

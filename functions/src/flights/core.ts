@@ -279,6 +279,7 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       instructorUid: d.instructorUid,
       status: d.status,
       pricingMode,
+      baptismTier: a.input.baptism ? a.input.baptismTier : null,
       instruction: a.input.instruction,
       payerUid,
       pricingSnapshot,

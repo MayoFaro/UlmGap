@@ -188,6 +188,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
         shortFlightAmount,
         customAmount,
         hasPassenger: input.passengers.length > 0,
+        baptismTier: input.baptism ? input.baptismTier : null,
       });
     } catch (e) {
       throw new HttpsError("invalid-argument", (e as Error).message);

@@ -31,6 +31,7 @@ void main() {
             shortFlightAmount: c['shortFlightAmount'] as int?,
             customAmount: c['customAmount'] as int?,
             hasPassenger: c['hasPassenger'] as bool,
+            baptismTier: c['baptismTier'] as String?,
           );
       final expectedError = c['expectedError'] as String?;
       if (expectedError != null) {
@@ -104,12 +105,16 @@ void main() {
   test('plan 8 : crédit instruction et baptême, défauts et toMap', () {
     final p = Pricing.fromMap({});
     expect(p.instructionCredit, 20000);
-    expect(p.baptismFee, 70000);
+    expect(p.baptismFees, {'local': 70000, 'nyonye': 90000, 'awagne': 110000});
     expect(p.toMap()['instructionCredit'], 20000);
-    expect(p.toMap()['baptismFee'], 70000);
-    final q = Pricing.fromMap({'instructionCredit': 15000, 'baptismFee': 80000});
+    expect(p.toMap()['baptismFees'], {'local': 70000, 'nyonye': 90000, 'awagne': 110000});
+    expect(p.toMap().containsKey('baptismFee'), isFalse);
+    final q = Pricing.fromMap({
+      'instructionCredit': 15000,
+      'baptismFees': {'nyonye': 95000},
+    });
     expect(q.instructionCredit, 15000);
-    expect(q.baptismFee, 80000);
+    expect(q.baptismFees, {'local': 70000, 'nyonye': 95000, 'awagne': 110000});
   });
 
   test('Pricing.fromMap : cartes imbriquées typées Map<Object?, Object?> (Task 9)', () {

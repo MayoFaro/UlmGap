@@ -130,7 +130,22 @@ test("validation : le baptême du vol est conservé", async () => {
   const id = await seedFlight({
     start: at(10), end: at(11), aircraftId: a, crew: [eleve.uid, instr.uid], createdBy: eleve.uid,
     instructorUid: instr.uid, status: "demande", passengers: ["Paul"], pricingMode: "baptism",
+    baptismTier: "local",
   });
   await validateFlight(instr, { flightId: id });
   assert.equal((await get(id)).pricingMode, "baptism");
+  assert.equal((await get(id)).baptismTier, "local"); // conservé tel que stocké
+});
+
+test("validation : l'instructeur choisit le forfait du baptême", async () => {
+  const eleve = await seedUser({ profile: "eleve" });
+  const instr = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: at(10), end: at(11), aircraftId: a, crew: [eleve.uid, instr.uid], createdBy: eleve.uid,
+    instructorUid: instr.uid, status: "demande", passengers: ["Paul"], pricingMode: "baptism",
+    baptismTier: "local",
+  });
+  await validateFlight(instr, { flightId: id, changes: { baptismTier: "nyonye" } });
+  assert.equal((await get(id)).baptismTier, "nyonye");
 });

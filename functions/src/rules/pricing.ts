@@ -8,6 +8,9 @@ import type { Person } from "./flights";
 export type Category = "GAP" | "GR" | "MIL" | "EXT";
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
 
+export type BaptismTier = "local" | "nyonye" | "awagne";
+export const BAPTISM_TIERS: readonly BaptismTier[] = ["local", "nyonye", "awagne"];
+
 export interface Pricing {
   flatFee: Record<Category, number>;
   /** Temps couvert par le forfait : le dépassement se compte à partir de là. */
@@ -18,7 +21,8 @@ export interface Pricing {
   overtimeHourly: Record<Category, number>;
   fuelHourlyRate: number;
   instructionCredit: number;
-  baptismFee: number;
+  /** Forfait du baptême de l'air selon le tier choisi. */
+  baptismFees: Record<BaptismTier, number>;
 }
 
 export const DEFAULT_PRICING: Pricing = {
@@ -29,7 +33,7 @@ export const DEFAULT_PRICING: Pricing = {
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
   instructionCredit: 20_000,
-  baptismFee: 70_000,
+  baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
 };
 
 /** Spec §10.1 : durée réelle minimale pour que l'instructeur soit crédité. */
@@ -45,7 +49,7 @@ export function pricingWithDefaults(p: Partial<Pricing> | null | undefined): Pri
     overtimeHourly: { ...DEFAULT_PRICING.overtimeHourly, ...p?.overtimeHourly },
     fuelHourlyRate: p?.fuelHourlyRate ?? DEFAULT_PRICING.fuelHourlyRate,
     instructionCredit: p?.instructionCredit ?? DEFAULT_PRICING.instructionCredit,
-    baptismFee: p?.baptismFee ?? DEFAULT_PRICING.baptismFee,
+    baptismFees: { ...DEFAULT_PRICING.baptismFees, ...p?.baptismFees },
   };
 }
 
@@ -86,9 +90,10 @@ export function availableCredit(balance: number, otherEstimatedCosts: number[]):
 export function closingBill(a: {
   mode: "standard" | "fuel_only" | "baptism"; actualMinutes: number; category: Category; pricing: Pricing;
   shortFlightAmount?: number | null; customAmount?: number | null; hasPassenger: boolean;
+  baptismTier?: BaptismTier | null;
 }): { billedAmount: number; billedTo: "account" | "off_app"; pricingMode: "standard" | "fuel_only" | "custom" | "baptism" } {
   if (a.mode === "baptism") {
-    return { billedAmount: a.pricing.baptismFee, billedTo: "off_app", pricingMode: "baptism" };
+    return { billedAmount: a.pricing.baptismFees[a.baptismTier ?? "local"], billedTo: "off_app", pricingMode: "baptism" };
   }
   if (a.customAmount != null) {
     if (!a.hasPassenger) {

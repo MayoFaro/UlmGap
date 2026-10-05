@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/features/flight/flight_texts.dart';
@@ -23,6 +24,17 @@ void main() {
 
   test('plan 8 : pricingModeLabel baptême', () {
     expect(pricingModeLabel('baptism'), 'Baptême de l\'air');
+  });
+
+  test('plan 9 : libellés des forfaits de baptême', () {
+    expect(baptismTiers, ['local', 'nyonye', 'awagne']);
+    expect(baptismTierLabel('local'), 'Local');
+    expect(baptismTierLabel('nyonye'), 'Nyonye');
+    expect(baptismTierLabel('awagne'), 'Awagne');
+    expect(baptismTierLabel(null), 'Local');
+    expect(flightPricingLabel('baptism', 'nyonye'), 'Baptême Nyonye');
+    expect(flightPricingLabel('standard', null), 'Standard');
+    expect(flightPricingLabel('fuel_only', 'nyonye'), 'Carburant seulement');
   });
 
   test('plan 4b : landingsText', () {

@@ -128,7 +128,7 @@ void main() {
     await tester.pump();
 
     expect(api.updatedPricing!.instructionCredit, 25000);
-    expect(api.updatedPricing!.baptismFee, 80000);
+    expect(api.updatedPricing!.baptismFees['local'], 80000);
   });
 
   testWidgets('Enregistrer envoie la tolérance modifiée', (tester) async {
@@ -168,7 +168,7 @@ void main() {
         overtimeHourly: defaultPricing.overtimeHourly,
         fuelHourlyRate: defaultPricing.fuelHourlyRate,
         instructionCredit: 15000,
-        baptismFee: 65000,
+        baptismFees: const {'local': 65000, 'nyonye': 90000, 'awagne': 110000},
       );
     await tester.pumpWidget(host(api));
     await tester.pump();
@@ -179,6 +179,6 @@ void main() {
 
     expect(api.updatedPricing!.fuelHourlyRate, 15000);
     expect(api.updatedPricing!.instructionCredit, 15000);
-    expect(api.updatedPricing!.baptismFee, 65000);
+    expect(api.updatedPricing!.baptismFees['local'], 65000);
   });
 }

@@ -52,7 +52,7 @@ async function correction(id: string, o: Record<string, unknown> = {}) {
     start: (f.start as admin.firestore.Timestamp).toMillis(),
     end: (f.end as admin.firestore.Timestamp).toMillis(),
     destination: f.destination, aircraftId: f.aircraftId, crew: f.crew, passengers: f.passengers,
-    instruction: f.instruction === true, baptism: f.pricingMode === "baptism",
+    instruction: f.instruction === true, baptism: f.pricingMode === "baptism", baptismTier: f.baptismTier ?? null,
     ...o,
   };
 }
@@ -529,12 +529,45 @@ test("correction : vol standard passé en baptême → débit remboursé, 70 000
   const { id } = await closedFlight(boss, { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a },
     { actualMinutes: 90 });
   const before = await balance(pilot.uid);
-  await adminUpdateFlight(boss, await correction(id, { baptism: true }));
+  await adminUpdateFlight(boss, await correction(id, { baptism: true, baptismTier: "local" }));
   const f = await getFlight(id);
   assert.equal(f.pricingMode, "baptism");
+  assert.equal(f.baptismTier, "local");
   assert.equal(f.billedTo, "off_app");
   assert.equal(f.billedAmount, 70_000);
   assert.ok(await balance(pilot.uid) > before);
+  await assertInvariant(id);
+});
+
+test("correction : baptême Local → Awagne, 110 000 hors app, aucun mouvement de solde", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss,
+    { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a, pricingMode: "baptism", baptismTier: "local" },
+    { actualMinutes: 30 });
+  assert.equal((await getFlight(id)).billedAmount, 70_000);
+  const before = await balance(pilot.uid);
+  await adminUpdateFlight(boss, await correction(id, { baptismTier: "awagne" }));
+  const f = await getFlight(id);
+  assert.equal(f.billedAmount, 110_000);
+  assert.equal(f.billedTo, "off_app");
+  assert.equal(f.baptismTier, "awagne");
+  assert.equal(await balance(pilot.uid), before);
+  await assertInvariant(id);
+});
+
+test("correction : retirer le baptême efface le forfait", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss,
+    { crew: [pilot.uid], passengers: ["Paul"], aircraftId: a, pricingMode: "baptism", baptismTier: "nyonye" },
+    { actualMinutes: 30 });
+  await adminUpdateFlight(boss, await correction(id, { baptism: false, baptismTier: null }));
+  const f = await getFlight(id);
+  assert.equal(f.baptismTier, null);
+  assert.notEqual(f.pricingMode, "baptism");
   await assertInvariant(id);
 });
 

@@ -27,6 +27,17 @@ String pricingModeLabel(String mode) => switch (mode) {
       _ => 'Standard',
     };
 
+/// Plan 9 : forfait de baptême (local par défaut, comme la facturation).
+String baptismTierLabel(String? tier) => switch (tier) {
+      'nyonye' => 'Nyonye',
+      'awagne' => 'Awagne',
+      _ => 'Local',
+    };
+
+/// Mode de tarification d'un vol, avec le forfait en cas de baptême.
+String flightPricingLabel(String mode, String? baptismTier) =>
+    mode == 'baptism' ? 'Baptême ${baptismTierLabel(baptismTier)}' : pricingModeLabel(mode);
+
 /// « DPS/LDX », passagers sans compte compris.
 String crewText(List<String> crew, List<String> passengers, Map<String, CrewMember> dir) =>
     [...crew.map((u) => dir[u]?.shortName ?? '?'), ...passengers].join('/');

@@ -42,6 +42,7 @@ void main() {
       'passengers': <String>[],
       'instruction': false,
       'baptism': false,
+      'baptismTier': null,
     });
   });
 
@@ -70,6 +71,22 @@ void main() {
     );
     expect(d.toPayload()['instruction'], false);
     expect(d.toPayload()['baptism'], false);
+  });
+
+  test('plan 9 : forfait de baptême lu et envoyé', () {
+    expect(testFlight().baptismTier, isNull);
+    expect(testFlight(pricingMode: 'baptism', baptismTier: 'awagne').baptismTier, 'awagne');
+    final d = FlightDraft(
+      start: DateTime.utc(2026, 10, 13, 9),
+      end: DateTime.utc(2026, 10, 13, 10),
+      destination: 'x',
+      aircraftId: 'a1',
+      crew: const ['u1'],
+      passengers: const ['Paul'],
+      baptism: true,
+      baptismTier: 'nyonye',
+    );
+    expect(d.toPayload()['baptismTier'], 'nyonye');
   });
 
   test('plan 4b : landings et waterLandings lus, null si absents', () {

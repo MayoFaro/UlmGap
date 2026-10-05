@@ -336,7 +336,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
             ],
             const SizedBox(height: 12),
             if (_baptism)
-              Text('Montant : ${formatFcfa(preview ?? widget.pricing.baptismFee)} facturé hors app')
+              Text('Montant : ${formatFcfa(preview ?? widget.pricing.baptismFees['local']!)} facturé hors app')
             else if (widget.category == null)
               const Text('Montant calculé par le serveur à la clôture.')
             else if (preview != null)

@@ -285,9 +285,10 @@ test("vol d'instruction hors condition : refusé", async () => {
 test("baptême : mode baptism, pas de contrôle de crédit (solde nul)", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
   const a = await seedAircraft();
-  const { id } = await createFlight(pilot, { ...draft(a, [pilot.uid], { passengers: ["Paul"] }), baptism: true });
+  const { id } = await createFlight(pilot, { ...draft(a, [pilot.uid], { passengers: ["Paul"] }), baptism: true, baptismTier: "awagne" });
   const f = await get(id);
   assert.equal(f.pricingMode, "baptism");
+  assert.equal(f.baptismTier, "awagne");
   assert.equal(f.instruction, false);
 });
 
@@ -295,7 +296,8 @@ test("baptême retiré avec le passager : mode recalculé", async () => {
   const pilot = await seedUser({ profile: "lache_toute_mission" });
   const a = await seedAircraft();
   const d = draft(a, [pilot.uid], { passengers: ["Paul"] });
-  const { id } = await createFlight(pilot, { ...d, baptism: true });
+  const { id } = await createFlight(pilot, { ...d, baptism: true, baptismTier: "local" });
   await updateFlight(pilot, { flightId: id, ...d, passengers: [] });
   assert.equal((await get(id)).pricingMode, "standard");
+  assert.equal((await get(id)).baptismTier, null);
 });
