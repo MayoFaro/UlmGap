@@ -200,6 +200,8 @@ Flight testFlight({
   int? fuelStart,
   int? fuelAdded,
   int? fuelEnd,
+  int? landings,
+  int? waterLandings,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -226,6 +228,8 @@ Flight testFlight({
     'fuelStartLiters': fuelStart,
     'fuelAddedLiters': fuelAdded,
     'fuelEndLiters': fuelEnd,
+    'landings': landings,
+    'waterLandings': waterLandings,
   });
 }
 

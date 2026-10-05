@@ -639,17 +639,27 @@ n'est modifié.
 
 ### 9.5 Écran « Suivi carburant »
 
-Ouvert par tout utilisateur, titre « Suivi carburant · F-XXXX » :
-- en haut, le carburant actuel ;
-- **consommation estimée** : Σ (départ + ajouté − rangé) / Σ
-  `actualFlightMinutes`, en L/h, sur les vols clôturés non supprimés de
-  l'appareil qui ont les trois valeurs ; « Consommation estimée : 14,2 L/h
-  (12 vols, 18 h 30) ». Calculée dans l'app, indicative ; elle s'affine au fil
-  des vols. Masquée tant qu'aucun vol ne compte ;
-- liste de ces vols, du plus récent au plus ancien (départ) : date, équipage,
-  « Départ 40 L · +20 L · Rangé 35 L ». Un **écart** (départ ≠ prévu, ou
-  prévu inconnu) est surligné en orange : « Écart au départ : prévu 30 L,
-  réel 40 L ». Un appui ouvre la fiche du vol.
+Ouvert par tout utilisateur (« Carburant : 40 L », icône de Administration →
+Appareils), titre « Suivi carburant · F-XXXX » (révision du 2026-10-05 :
+tableau) :
+- en haut, le carburant actuel et la **consommation estimée** sur tous les
+  vols : Σ (départ + ajouté − rangé) / Σ `actualFlightMinutes`, en L/h, sur
+  les vols clôturés non supprimés qui ont les trois valeurs ; « Consommation
+  estimée : 14,2 L/h (12 vols, 18 h 30) ». Indicative, masquée tant qu'aucun
+  vol ne compte ;
+- le **sélecteur de période du carnet** (mois, année, période précise ; mois
+  en cours par défaut) ;
+- un **tableau** des vols clôturés non supprimés de la période, du plus
+  récent au plus ancien : Date, Équipage, Temps de vol, Départ (L), Ajouté
+  (L), Rangé (L), Conso (L) = départ + ajouté − rangé, Conso (L/h), Att., et
+  Am. pour un appareil amphibie ou si un vol en a. « Ajouté » est vide sans
+  ajout, en gras sur fond coloré sinon. Un écart au départ colore la case
+  « Départ » en orange (valeur prévue en bulle d'aide) ; une conso hors de 8
+  à 30 L/h est en orange. Les vols d'avant le suivi carburant affichent « — »
+  dans les colonnes carburant. Un appui sur une ligne ouvre la fiche du vol ;
+- une **ligne de totaux** : temps de vol et atterrissages de tous les vols de
+  la période ; ajouts, conso totale et moyenne en L/h sur ceux qui ont du
+  carburant. Sans vol : « Aucun vol clôturé sur cette période. »
 
 Requête : `flights` filtrés sur `aircraftId`, tri et filtres dans l'app ; ni
 index ni règle nouvelle. Aucun champ du contrat du pont ne change.
