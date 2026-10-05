@@ -141,5 +141,11 @@
     { "name": "instructeur en second : libre", "creator": { "uid": "c", "profile": "instructeur", "isAdmin": false }, "crew": ["x", "c"], "ok": true },
     { "name": "admin hors équipage : libre", "creator": { "uid": "a", "profile": null, "isAdmin": true }, "crew": ["x", "y"], "ok": true },
     { "name": "lâché hors équipage : laissé à la matrice", "creator": { "uid": "c", "profile": "lache_toute_mission", "isAdmin": false }, "crew": ["x", "y"], "ok": true }
+  ],
+  "instruction": [
+    { "name": "instructeur + élève", "crew": [{ "uid": "s", "profile": "eleve" }, { "uid": "i", "profile": "instructeur" }], "expected": true },
+    { "name": "instructeur seul", "crew": [{ "uid": "i", "profile": "instructeur" }], "expected": false },
+    { "name": "deux instructeurs", "crew": [{ "uid": "i", "profile": "instructeur" }, { "uid": "j", "profile": "instructeur" }], "expected": false },
+    { "name": "sans instructeur", "crew": [{ "uid": "s", "profile": "eleve" }, { "uid": "l", "profile": "lache_solo" }], "expected": false }
   ]
 }

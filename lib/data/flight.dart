@@ -46,6 +46,9 @@ class Flight {
     this.closedAt,
     this.landings,
     this.waterLandings,
+    this.instruction = false,
+    this.instructionCreditUid,
+    this.instructionCreditAmount,
     this.fuelStartExpectedLiters,
     this.fuelStartLiters,
     this.fuelAddedLiters,
@@ -87,6 +90,14 @@ class Flight {
   final int? landings;
   final int? waterLandings;
 
+  /// Plan 8 : vol d'instruction, instructeur crédité et montant du crédit
+  /// (renseignés à la clôture) ; baptême = mode de tarification `baptism`.
+  final bool instruction;
+  final String? instructionCreditUid;
+  final int? instructionCreditAmount;
+
+  bool get isBaptism => pricingMode == 'baptism';
+
   /// Plan 7 : carburant (spec §9), saisi à la clôture ; null avant.
   final int? fuelStartExpectedLiters;
   final int? fuelStartLiters;
@@ -127,6 +138,9 @@ class Flight {
         closedAt: _dateOrNull(m['closedAt']),
         landings: (m['landings'] as num?)?.toInt(),
         waterLandings: (m['waterLandings'] as num?)?.toInt(),
+        instruction: m['instruction'] == true,
+        instructionCreditUid: m['instructionCreditUid'] as String?,
+        instructionCreditAmount: (m['instructionCreditAmount'] as num?)?.toInt(),
         fuelStartExpectedLiters: (m['fuelStartExpectedLiters'] as num?)?.toInt(),
         fuelStartLiters: (m['fuelStartLiters'] as num?)?.toInt(),
         fuelAddedLiters: (m['fuelAddedLiters'] as num?)?.toInt(),
@@ -162,6 +176,8 @@ class FlightDraft {
     required this.crew,
     required this.passengers,
     this.pricingMode,
+    this.instruction = false,
+    this.baptism = false,
   });
 
   final DateTime start;
@@ -172,6 +188,10 @@ class FlightDraft {
   final List<String> passengers;
   final String? pricingMode; // 'standard' | 'fuel_only', seulement si choisi
 
+  /// Plan 8 : toujours envoyés (le serveur lit une absence comme `false`).
+  final bool instruction;
+  final bool baptism;
+
   Map<String, dynamic> toPayload() => {
         'start': start.millisecondsSinceEpoch,
         'end': end.millisecondsSinceEpoch,
@@ -180,5 +200,7 @@ class FlightDraft {
         'crew': crew,
         'passengers': passengers,
         if (pricingMode != null) 'pricingMode': pricingMode,
+        'instruction': instruction,
+        'baptism': baptism,
       };
 }

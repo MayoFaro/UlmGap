@@ -202,6 +202,9 @@ Flight testFlight({
   int? fuelEnd,
   int? landings,
   int? waterLandings,
+  bool instruction = false,
+  String? instructionCreditUid,
+  int? instructionCreditAmount,
 }) {
   final s = start ?? DateTime(2026, 10, 13, 9);
   return Flight.fromMap(id, {
@@ -230,6 +233,9 @@ Flight testFlight({
     'fuelEndLiters': fuelEnd,
     'landings': landings,
     'waterLandings': waterLandings,
+    'instruction': instruction,
+    'instructionCreditUid': instructionCreditUid,
+    'instructionCreditAmount': instructionCreditAmount,
   });
 }
 

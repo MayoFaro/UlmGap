@@ -25,6 +25,11 @@ class Decision {
   bool get ok => status != null;
 }
 
+/// Vol d'instruction possible : exactement deux membres d'équipage dont un
+/// seul instructeur (miroir de functions/src/rules/flights.ts).
+bool isInstructionEligible(List<RulePerson> crew) =>
+    crew.length == 2 && crew.where((p) => p.profile == 'instructeur').length == 1;
+
 String? designatedInstructor(String creatorUid, List<RulePerson> crew) {
   for (final p in crew) {
     if (p.uid != creatorUid && p.profile == 'instructeur') return p.uid;

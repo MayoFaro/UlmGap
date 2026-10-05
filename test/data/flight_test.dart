@@ -40,7 +40,36 @@ void main() {
       'aircraftId': 'a1',
       'crew': ['u1'],
       'passengers': <String>[],
+      'instruction': false,
+      'baptism': false,
     });
+  });
+
+  test('plan 8 : instruction, crédit instruction et baptême', () {
+    final f = testFlight();
+    expect(f.instruction, isFalse);
+    expect(f.instructionCreditUid, isNull);
+    expect(f.instructionCreditAmount, isNull);
+    expect(f.isBaptism, isFalse);
+    final g = testFlight(
+        instruction: true,
+        instructionCreditUid: 'i1',
+        instructionCreditAmount: 20000,
+        pricingMode: 'baptism');
+    expect(g.instruction, isTrue);
+    expect(g.instructionCreditUid, 'i1');
+    expect(g.instructionCreditAmount, 20000);
+    expect(g.isBaptism, isTrue);
+    final d = FlightDraft(
+      start: DateTime.utc(2026, 10, 13, 9),
+      end: DateTime.utc(2026, 10, 13, 10),
+      destination: 'x',
+      aircraftId: 'a1',
+      crew: const ['u1'],
+      passengers: const [],
+    );
+    expect(d.toPayload()['instruction'], false);
+    expect(d.toPayload()['baptism'], false);
   });
 
   test('plan 4b : landings et waterLandings lus, null si absents', () {

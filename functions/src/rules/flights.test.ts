@@ -74,6 +74,12 @@ test("isPlanning : contrôle des conflits pour un vol à venir non clôturé seu
   assert.equal(isPlanning(1000, 999, true), false);
 });
 
+for (const c of fx.instruction) {
+  test(`instruction : ${c.name}`, () => {
+    assert.equal(isInstructionEligible(c.crew), c.expected);
+  });
+}
+
 test("isInstructionEligible : exactement un instructeur et un autre membre avec compte", () => {
   assert.equal(isInstructionEligible([{ uid: "s", profile: "eleve" }, { uid: "i", profile: "instructeur" }]), true);
   assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }, { uid: "l", profile: "lache_toute_mission" }]), true);

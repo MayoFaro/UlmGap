@@ -21,6 +21,10 @@ void main() {
         'Conflit : RAL est déjà sur le vol du mercredi 30 septembre, 15:00–16:00 (TR-KJP, HIL/RAL).');
   });
 
+  test('plan 8 : pricingModeLabel baptême', () {
+    expect(pricingModeLabel('baptism'), 'Baptême de l\'air');
+  });
+
   test('plan 4b : landingsText', () {
     expect(landingsText(null, null), '');
     expect(landingsText(2, 0), '2 att.');

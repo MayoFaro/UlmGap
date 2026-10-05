@@ -17,6 +17,9 @@
     { "name": "fuel_only 1 min (arrondi au franc)", "mode": "fuel_only", "minutes": 1, "category": "GAP", "expected": 200 }
   ],
   "closing": [
+    { "name": "baptême 20 min, montants saisis ignorés", "mode": "baptism", "actualMinutes": 20, "category": "EXT",
+      "hasPassenger": true, "shortFlightAmount": 5000, "customAmount": 9000,
+      "expected": { "billedAmount": 70000, "billedTo": "off_app", "pricingMode": "baptism" } },
     { "name": "standard 90 min GAP", "mode": "standard", "actualMinutes": 90, "category": "GAP",
       "hasPassenger": false, "expected": { "billedAmount": 15000, "billedTo": "account", "pricingMode": "standard" } },
     { "name": "standard 30 min avec shortFlightAmount", "mode": "standard", "actualMinutes": 30, "category": "GAP",

@@ -48,6 +48,12 @@ void main() {
     });
   }
 
+  for (final c in (fx['instruction'] as List).cast<Map<String, dynamic>>()) {
+    test('instruction : ${c['name']}', () {
+      expect(isInstructionEligible(crew(c['crew'] as List)), c['expected']);
+    });
+  }
+
   RuleFlight rf(Map<String, dynamic> m) => RuleFlight(
         id: m['id'] as String?,
         start: m['start'] as int,

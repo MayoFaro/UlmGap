@@ -24,7 +24,7 @@ class AccountMovement {
   final String id;
   final String userUid;
   final int amount; // positif pour un crédit
-  final String type; // 'credit' | 'correction' | 'flight' | 'flight_adjustment'
+  final String type; // 'credit' | 'correction' | 'flight' | 'flight_adjustment' | 'instruction'
   final String? reason;
   final String? flightId;
   final String by; // uid ou 'system'

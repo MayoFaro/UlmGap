@@ -10,6 +10,8 @@ class Pricing {
     required this.minPlannedMinutes,
     required this.overtimeHourly,
     required this.fuelHourlyRate,
+    this.instructionCredit = 20000,
+    this.baptismFee = 70000,
   });
 
   final Map<UserCategory, int> flatFee;
@@ -17,6 +19,12 @@ class Pricing {
   final int minPlannedMinutes;
   final Map<UserCategory, int> overtimeHourly;
   final int fuelHourlyRate;
+
+  /// Plan 8 : crédit versé à l'instructeur par vol d'instruction clôturé.
+  final int instructionCredit;
+
+  /// Plan 8 : prix d'un baptême de l'air (facturé hors app).
+  final int baptismFee;
 
   /// Fusionné sur [defaultPricing] : un champ absent (document manquant, ou
   /// champ manquant dedans) prend la valeur par défaut (spec §2.4).
@@ -40,6 +48,8 @@ class Pricing {
       minPlannedMinutes: (m['minPlannedMinutes'] as num?)?.toInt() ?? defaultPricing.minPlannedMinutes,
       overtimeHourly: categoryMap(m['overtimeHourly'], defaultPricing.overtimeHourly),
       fuelHourlyRate: (m['fuelHourlyRate'] as num?)?.toInt() ?? defaultPricing.fuelHourlyRate,
+      instructionCredit: (m['instructionCredit'] as num?)?.toInt() ?? defaultPricing.instructionCredit,
+      baptismFee: (m['baptismFee'] as num?)?.toInt() ?? defaultPricing.baptismFee,
     );
   }
 
@@ -49,6 +59,8 @@ class Pricing {
         'minPlannedMinutes': minPlannedMinutes,
         'overtimeHourly': {for (final e in overtimeHourly.entries) e.key.code: e.value},
         'fuelHourlyRate': fuelHourlyRate,
+        'instructionCredit': instructionCredit,
+        'baptismFee': baptismFee,
       };
 }
 
@@ -69,6 +81,8 @@ final Pricing defaultPricing = Pricing(
     UserCategory.ext: 30000,
   },
   fuelHourlyRate: 12000,
+  instructionCredit: 20000,
+  baptismFee: 70000,
 );
 
 /// Plafond des montants saisis à la clôture (shortFlightAmount, customAmount).
@@ -108,6 +122,10 @@ ClosingBill closingBill({
   int? customAmount,
   required bool hasPassenger,
 }) {
+  // Baptême de l'air : prix fixe hors app, montants saisis ignorés.
+  if (mode == 'baptism') {
+    return (billedAmount: pricing.baptismFee, billedTo: 'off_app', pricingMode: 'baptism');
+  }
   if (customAmount != null) {
     if (!hasPassenger) {
       throw ArgumentError('Montant différent réservé aux vols avec un passager sans compte.');

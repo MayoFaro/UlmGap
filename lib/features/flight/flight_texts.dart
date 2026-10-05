@@ -23,6 +23,7 @@ Color statusColor(FlightStatus s) => switch (s) {
 String pricingModeLabel(String mode) => switch (mode) {
       'fuel_only' => 'Carburant seulement',
       'custom' => 'Facturé hors app',
+      'baptism' => 'Baptême de l\'air',
       _ => 'Standard',
     };
 

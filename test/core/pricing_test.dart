@@ -86,6 +86,17 @@ void main() {
     expect(p.flatFee[UserCategory.gap], defaultPricing.flatFee[UserCategory.gap]);
   });
 
+  test('plan 8 : crédit instruction et baptême, défauts et toMap', () {
+    final p = Pricing.fromMap({});
+    expect(p.instructionCredit, 20000);
+    expect(p.baptismFee, 70000);
+    expect(p.toMap()['instructionCredit'], 20000);
+    expect(p.toMap()['baptismFee'], 70000);
+    final q = Pricing.fromMap({'instructionCredit': 15000, 'baptismFee': 80000});
+    expect(q.instructionCredit, 15000);
+    expect(q.baptismFee, 80000);
+  });
+
   test('Pricing.fromMap : cartes imbriquées typées Map<Object?, Object?> (Task 9)', () {
     // Reproduit une carte Firestore imbriquée non typée Map<String, dynamic>
     // (observé selon la plateforme) : le décodage ne doit pas planter.
