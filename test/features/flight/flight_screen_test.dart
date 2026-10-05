@@ -1667,11 +1667,12 @@ void main() {
     await openCorrection(tester, api(), f, finance);
     await tester.tap(find.byKey(const Key('passenger-baptism-toggle')));
     await tester.pumpAndSettle();
-    // Hors baptême, « Montant différent » réapparaît (coché : le vol était hors app).
-    await tester.tap(find.byKey(const Key('correct-custom-check')));
-    await tester.pumpAndSettle();
+    // Hors baptême, « Montant différent » réapparaît, décoché.
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('correct-custom-check'))).value,
+        false);
     await tester.tap(find.text('Enregistrer la correction'));
     await tester.pumpAndSettle();
     expect(finance.adminUpdated['ci-bap2']!['baptism'], false);
+    expect(finance.adminUpdated['ci-bap2']!.containsKey('customAmount'), isFalse);
   });
 }

@@ -148,7 +148,7 @@ class _FlightScreenState extends State<FlightScreen> {
           f.shortFlightAmount == null ? '' : formatAmountInput(f.shortFlightAmount!);
       _correctCustomAmount.text =
           f.customAmount == null ? '' : formatAmountInput(f.customAmount!);
-      _correctCustomChecked = f.billedTo == 'off_app';
+      _correctCustomChecked = f.billedTo == 'off_app' && !f.isBaptism;
       // Vol clôturé avant le plan 4b (sans nombres) : 1 et 0.
       _correctLandings.text = '${f.landings ?? 1}';
       _correctWaterLandings.text = '${f.waterLandings ?? 0}';

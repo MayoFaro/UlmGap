@@ -112,11 +112,11 @@ class _ClosingDialogState extends State<ClosingDialog> {
 
   int? get _actualMinutes => int.tryParse(_minutes.text.trim());
 
+  bool get _baptism => widget.mode == 'baptism';
+
   /// Mode standard et durée réelle sous le minimum tarifaire (spec §4.3) :
   /// un vol carburant seulement est toujours calculé à la minute. Ne dépend
   /// pas de la catégorie : reste correct même si celle-ci est inconnue.
-  bool get _baptism => widget.mode == 'baptism';
-
   bool get _needsShortAmount {
     final m = _actualMinutes;
     return widget.mode == 'standard' && m != null && m < widget.pricing.minPlannedMinutes;
