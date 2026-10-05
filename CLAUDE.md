@@ -21,6 +21,9 @@ doivent jamais accéder à AppGAP.
   `feature/instruction-bapteme`, pas encore fusionnée**) :
   `docs/superpowers/plans/2026-10-05-ulmgap-08-instruction-bapteme.md`
   (spec §10)
+- Plan 9, dépassement dès 60 min, trois forfaits de baptême, battement de
+  30 min (terminé, même branche) :
+  `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -96,15 +99,21 @@ d'où le JDK d'Android Studio.
   redéployées. **L'app installée en dev doit être reconstruite** : le
   formulaire envoie les nouveaux indicateurs et `adminUpdatePricing` exige
   les deux nouveaux tarifs.
+- Plan 9 en dev (même branche, non fusionnée) : `createFlight`,
+  `updateFlight`, `validateFlight`, `closeFlight`, `adminUpdateFlight`,
+  `adminDeleteFlight` et `adminUpdatePricing` redéployées. **L'app installée
+  en dev doit être reconstruite.** **Régler « Temps couvert par le forfait »
+  à 60 dans Administration → Tarifs** : le document `settings/pricing` de dev
+  contient encore 75 et garderait l'ancienne règle de dépassement.
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
-  **toutes les Functions dans leur version du plan 8** (Node 22, dont la
+  **toutes les Functions dans leur version du plan 9** (Node 22, dont la
   tâche planifiée `closingReminders` : le déploiement active Cloud
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
   d'atterrissages et les champs carburant, `correctAccount` le nouveau
-  solde, `adminUpdatePricing` les tarifs `instructionCredit` et
-  `baptismFee`). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
-  iOS installé antérieur au plan 8 doit être mis à jour : il ne peut plus
+  solde, `adminUpdatePricing` les tarifs `instructionCredit`,
+  `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
+  iOS installé antérieur au plan 9 doit être mis à jour : il ne peut plus
   clôturer un vol ni enregistrer les tarifs. Ensuite :
   - premier admin (`cd functions && npm run build && node
     scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
