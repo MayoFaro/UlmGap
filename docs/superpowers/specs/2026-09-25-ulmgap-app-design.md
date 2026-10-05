@@ -113,13 +113,14 @@ Carburant actuel (révision du 2026-10-02, §9), écrit seulement par
 
 | Champ | Défaut | Rôle |
 |---|---|---|
-| `flatFee` | `{GAP: 12000, GR: 30000, MIL: 50000, EXT: 70000}` | Forfait par appartenance, couvrant jusqu'à `includedMinutes` |
-| `includedMinutes` | 75 | Durée couverte par le forfait |
+| `flatFee` | `{GAP: 12000, GR: 30000, MIL: 50000, EXT: 70000}` | Forfait par appartenance, seul facturé jusqu'à `toleranceMinutes` |
+| `includedMinutes` | 60 | « Temps couvert par le forfait » : au-delà de la tolérance, le dépassement se compte à partir de cette durée (révision du 2026-10-05) |
+| `toleranceMinutes` | 75 | « Tolérance jusqu'à » : jusqu'à cette durée, le forfait seul (révision du 2026-10-05) |
 | `minPlannedMinutes` | 45 | Durée minimale d'un vol **prévu** |
 | `overtimeHourly` | `{GAP: 12000, GR: 30000, MIL: 30000, EXT: 30000}` | Taux horaire du dépassement, par appartenance |
 | `fuelHourlyRate` | 12 000 FCFA/h | Mode « carburant seulement » |
 | `instructionCredit` | 20 000 FCFA | Crédit de l'instructeur par vol d'instruction (§10) |
-| `baptismFee` | 70 000 FCFA | Baptême de l'air, facturé hors app (§10) |
+| `baptismFees` | `{local: 70000, nyonye: 90000, awagne: 110000}` | Forfaits de baptême de l'air, facturés hors app (§10.2) |
 
 ### 2.5 `flights/{id}`, écrit uniquement par les Functions
 
@@ -233,14 +234,18 @@ Pour toute action qui crée ou modifie un vol :
 
 Quand un vol **devient ou reste `valide`** (création directe, validation,
 modification, correction admin), la Function vérifie **dans une transaction**
-qu'aucun autre vol `valide`, non supprimé, ne chevauche `[start, end[` :
+qu'aucun autre vol `valide`, non supprimé, n'est à **moins de 30 min** de
+`[start, end[` (battement fixe, révision du 2026-10-05) : il y a conflit si
+`start` < `fin de l'autre` + 30 min et `début de l'autre` < `end` + 30 min.
 - sur le **même appareil** ;
 - ou avec **une même personne** de `crew`.
 
 S'il y a conflit, l'action est refusée, avec un message qui cite le vol en
 conflit (date, horaire, appareil, équipage). Les **demandes** ne bloquent rien
 et peuvent se chevaucher : l'instructeur arbitre à la validation. Les bornes
-sont ouvertes : une fin égale à un début n'est pas un conflit.
+sont ouvertes : un écart d'exactement 30 min n'est pas un conflit (vol de 9 h
+à 10 h : le suivant peut partir à 10 h 30, pas à 10 h 29). Le message ajoute
+« (30 min d'écart minimum) ».
 
 **Planification seulement, jamais la conduite** (révision du 2026-10-01) :
 - le contrôle ne s'applique qu'à un vol **à venir** (départ pas encore
@@ -285,11 +290,12 @@ tarifs de `pricingSnapshot`.
 
 | Mode | Coût | Imputation |
 |---|---|---|
-| `standard`, `d` ≥ 45 | `flatFee[A]` + `overtimeHourly[A]` × max(0, `d` − 75) / 60 | Solde du payeur (`billedTo: account`) |
+| `standard`, 45 ≤ `d` ≤ `toleranceMinutes` (75) | `flatFee[A]` | Solde du payeur (`billedTo: account`) |
+| `standard`, `d` > `toleranceMinutes` (75) | `flatFee[A]` + `overtimeHourly[A]` × (`d` − `includedMinutes` (60)) / 60 | Solde du payeur |
 | `standard`, vol **réel** de moins de 45 min | `shortFlightAmount`, **saisi à la clôture** | Solde du payeur |
 | `fuel_only` | `fuelHourlyRate` × `d` / 60 | Solde du payeur |
 | `custom` | `customAmount` | Hors app (`billedTo: off_app`) |
-| `baptism` | `baptismFee`, quelle que soit la durée (§10) | Hors app (`billedTo: off_app`) |
+| `baptism` | `baptismFees[baptismTier]`, quelle que soit la durée (§10.2) | Hors app (`billedTo: off_app`) |
 
 - Le résultat est arrondi au franc le plus proche.
 - Un vol ne peut pas être **prévu** sous 45 min (§3.4). Le cas « moins de
@@ -297,16 +303,22 @@ tarifs de `pricingSnapshot`.
   l'écran de clôture affiche alors un champ obligatoire **« Montant à
   facturer »**.
 - Les tarifs utilisés sont ceux de `pricingSnapshot`, figés au passage en
-  `valide`.
+  `valide`. Un snapshot antérieur à la révision du 2026-10-05 (sans
+  `toleranceMinutes`, avec `includedMinutes` à 75) garde l'ancien calcul :
+  la tolérance par défaut (75) égale alors le temps couvert.
+- Révision du 2026-10-05 : au-delà de 75 min, tout le temps après 60 min est
+  facturé, d'où un saut au passage de 75 à 76 min (EXT : 70 000 → 78 000).
 
 Exemples (`standard`) :
 
 | Payeur | Durée | Coût |
 |---|---|---|
 | GAP | 60 min | 12 000 |
-| GAP | 90 min | 12 000 + 15 min à 12 000/h = **15 000** |
+| GAP | 75 min | **12 000** (tolérance) |
+| GAP | 90 min | 12 000 + 30 min à 12 000/h = **18 000** |
 | MIL | 75 min | **50 000** |
-| EXT | 90 min | 70 000 + 15 min à 30 000/h = **77 500** |
+| EXT | 76 min | 70 000 + 16 min à 30 000/h = **78 000** |
+| EXT | 90 min | 70 000 + 30 min à 30 000/h = **85 000** |
 | EXT, avec ou sans instructeur | 60 min | **70 000** (plus de forfait instruction) |
 
 ### 4.4 Crédit disponible et blocage
@@ -705,26 +717,31 @@ Functions se déploient ensemble.
 ### 10.2 Baptême de l'air
 
 - La fenêtre « Ajouter un passager sans compte » a, en plus du nom, une case
-  **« Baptême de l'air »**. La ligne du passager affiche « Passager sans
-  compte · Baptême de l'air » et permet de cocher ou décocher le baptême tant
-  que le vol est modifiable (jusqu'au départ). Retirer le passager retire le
-  baptême.
+  **« Baptême de l'air »** qui ouvre un **choix obligatoire du forfait**
+  (révision du 2026-10-05) : **Local** (70 000), **Nyonye** (90 000),
+  **Awagne** (110 000), montants de `baptismFees`. Le vol stocke
+  `baptismTier` (`local` / `nyonye` / `awagne`). La ligne du passager affiche
+  « Passager sans compte · Baptême Nyonye » et permet de changer la case et
+  le forfait tant que le vol est modifiable (jusqu'au départ). Retirer le
+  passager retire le baptême.
 - Le vol passe en mode **`baptism`**, prioritaire sur `standard` et
   `fuel_only` (la case « Carburant seulement » est masquée) : facturé **hors
-  app** (`billedTo: off_app`), **`baptismFee` quelle que soit la durée**.
-  Aucun solde débité, aucun contrôle de crédit disponible. L'aperçu affiche
-  « Baptême de l'air : 70 000 FCFA, facturé hors app ».
+  app** (`billedTo: off_app`), **`baptismFees[baptismTier]` quelle que soit
+  la durée**. Aucun solde débité, aucun contrôle de crédit disponible.
+  L'aperçu affiche « Baptême Nyonye : 90 000 FCFA, facturé hors app ». Le
+  serveur refuse un baptême sans forfait valide.
 - À la clôture : ni « Montant à facturer » ni « Montant différent » ; montant
-  affiché « 70 000 FCFA facturé hors app ».
-- Après la clôture, seul l'admin le change (correction admin), avec la
-  régularisation habituelle (§4.5).
-- Fiche du vol : tarification « Baptême de l'air ». Relevé des vols facturés
-  et export CSV : mode « Baptême de l'air », compté dans « facturé hors app ».
+  affiché « 90 000 FCFA facturé hors app ».
+- Après la clôture, seul l'admin change le baptême ou son forfait (correction
+  admin), avec la régularisation habituelle (§4.5).
+- Fiche du vol : tarification « Baptême Nyonye ». Relevé des vols facturés et
+  export CSV : mode « Baptême Nyonye », compté dans « facturé hors app ».
 
 ### 10.3 Tarifs et déploiement
 
-- Administration → Tarifs : « Crédit instruction » et « Baptême de
-  l'air » (`instructionCredit`, `baptismFee`), figés dans `pricingSnapshot`
+- Administration → Tarifs : « Crédit instruction » et les trois forfaits
+  « Baptême Local / Nyonye / Awagne » (`instructionCredit`, `baptismFees`),
+  ainsi que « Tolérance jusqu'à » (`toleranceMinutes`), figés dans `pricingSnapshot`
   à la validation comme les autres tarifs ; un vol figé avant cette révision
   utilise les valeurs par défaut.
 - Ni règle Firestore, ni index, ni champ du contrat du pont ne changent.
