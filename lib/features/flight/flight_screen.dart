@@ -237,6 +237,15 @@ class _FlightScreenState extends State<FlightScreen> {
   bool get _instructionEligible =>
       isInstructionEligible([for (final u in _crew) RulePerson(u, _profile(u)?.code)]);
 
+  /// Modifie l'équipage ; la case d'instruction se décoche quand il ne
+  /// qualifie plus (spec §10.1).
+  void _editCrew(void Function() change) {
+    setState(() {
+      change();
+      if (!_instructionEligible) _instruction = false;
+    });
+  }
+
   bool get _allGap => _crew.every((u) => _category(u) == UserCategory.gap);
   bool get _showFuelChoice => _mayChoose && _allGap && _passenger == null;
 
@@ -592,7 +601,7 @@ class _FlightScreenState extends State<FlightScreen> {
         ],
       ),
     );
-    if (uid != null) setState(() => _crew.add(uid));
+    if (uid != null) _editCrew(() => _crew.add(uid));
   }
 
   Future<void> _addPassenger() async {
@@ -1122,13 +1131,13 @@ class _FlightScreenState extends State<FlightScreen> {
                         IconButton(
                           tooltip: 'Mettre en premier',
                           icon: const Icon(Icons.arrow_upward),
-                          onPressed: () => setState(() => _crew.insert(0, _crew.removeAt(i))),
+                          onPressed: () => _editCrew(() => _crew.insert(0, _crew.removeAt(i))),
                         ),
                       if (_crew.length > 1 && (_crew[i] != _me.uid || canReorder))
                         IconButton(
                           tooltip: 'Retirer',
                           icon: const Icon(Icons.close),
-                          onPressed: () => setState(() => _crew.removeAt(i)),
+                          onPressed: () => _editCrew(() => _crew.removeAt(i)),
                         ),
                     ]),
             ),

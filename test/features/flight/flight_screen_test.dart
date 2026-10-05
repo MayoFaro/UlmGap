@@ -1503,6 +1503,20 @@ void main() {
     expect(b.created.single['instruction'], false);
   });
 
+  testWidgets('instruction : élève retiré puis remis → case réapparue décochée', (tester) async {
+    _useTallView(tester);
+    final a = instructionApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'stu');
+    await tester.tap(find.byKey(const Key('f-instruction')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Retirer').last);
+    await tester.pumpAndSettle();
+    await addMember(tester, 'stu');
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('f-instruction'))).value, false);
+  });
+
   testWidgets('baptême : fenêtre passager, ligne, aperçu hors app, payload même sans crédit',
       (tester) async {
     _useTallView(tester);
