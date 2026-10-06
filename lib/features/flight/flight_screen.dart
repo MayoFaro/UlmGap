@@ -232,6 +232,19 @@ class _FlightScreenState extends State<FlightScreen> {
 
   String _short(String uid) => uid == _me.uid ? _me.shortName : (_dir[uid]?.shortName ?? '…');
   PilotProfile? _profile(String uid) => uid == _me.uid ? _me.profile : _dir[uid]?.profile;
+  bool _amphibiousCleared(String uid) =>
+      uid == _me.uid ? _me.amphibiousCleared : (_dir[uid]?.amphibiousCleared ?? false);
+
+  /// Plan 10 (spec §3.6) : appareil amphibie, il faut un pilote lâché amphibie
+  /// à bord (ou l'instructeur lâché s'il y en a un). Null pour un admin
+  /// (créateur, validation ou correction), un appareil non amphibie ou tant
+  /// que la liste des appareils n'est pas chargée.
+  String? get _amphibiousError {
+    if (_me.isAdmin || !_isAmphibious(_aircraftId)) return null;
+    return amphibiousError([
+      for (final u in _crew) AmphibiousPerson(_profile(u)?.code, _amphibiousCleared(u)),
+    ]);
+  }
   UserCategory? _category(String uid) => uid == _me.uid ? _me.category : _categories[uid];
 
   /// Case « Vol d'instruction » : exactement un instructeur et un autre
@@ -679,6 +692,8 @@ class _FlightScreenState extends State<FlightScreen> {
     if (!pastAllowed && !_start.isAfter(widget.now())) return 'L\'heure de départ est passée.';
     final d = _decision;
     if (!d.ok) return d.reason;
+    final amphibious = _amphibiousError;
+    if (amphibious != null) return amphibious;
     // Décision utilisateur : hors validation (équipage figé), le créateur
     // doit rester le compte débité s'il n'est ni instructeur ni admin.
     if (!_validating) {
@@ -1347,6 +1362,9 @@ class _FlightScreenState extends State<FlightScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(_statusText(decision)),
                   Text('Mode : ${flightPricingLabel(_pricingMode, _baptismTier)}'),
+                  if (_amphibiousError != null)
+                    Text(_amphibiousError!,
+                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ..._previewFinanceLines(context),
                   if (conflict != null)
                     Text(

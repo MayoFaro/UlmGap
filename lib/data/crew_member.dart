@@ -8,6 +8,7 @@ class CrewMember {
     required this.shortName,
     required this.profile,
     required this.active,
+    this.amphibiousCleared = false,
   });
 
   final String uid;
@@ -15,6 +16,7 @@ class CrewMember {
   final String shortName;
   final PilotProfile? profile;
   final bool active;
+  final bool amphibiousCleared;
 
   factory CrewMember.fromMap(String uid, Map<String, dynamic> m) => CrewMember(
         uid: uid,
@@ -22,5 +24,6 @@ class CrewMember {
         shortName: (m['shortName'] as String?) ?? '',
         profile: PilotProfile.fromCode(m['profile'] as String?),
         active: m['active'] == true,
+        amphibiousCleared: m['amphibiousCleared'] == true,
       );
 }

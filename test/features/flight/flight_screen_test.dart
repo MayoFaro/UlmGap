@@ -1815,4 +1815,70 @@ void main() {
     expect(finance.adminUpdated['ci-bap3']!['baptism'], true);
     expect(finance.adminUpdated['ci-bap3']!['baptismTier'], 'awagne');
   });
+
+  // --- plan 10 : lâché amphibie ---
+  FakeFlightApi amphibiousApi() => api()
+    ..aircraft = [
+      Aircraft.fromMap('a1',
+          {'registration': 'F-JABC', 'label': 'ULM 1', 'active': true, 'amphibious': true}),
+    ];
+  const noPilot = 'Appareil amphibie : il faut un pilote lâché amphibie à bord.';
+  const noInstructor = "Appareil amphibie : l'instructeur doit être lâché amphibie.";
+
+  testWidgets('amphibie : créateur non lâché amphibie, aperçu et enregistrement bloqué',
+      (tester) async {
+    _useTallView(tester);
+    final a = amphibiousApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'lache_solo')));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await tester.pumpAndSettle();
+    expect(preview(tester), contains(noPilot));
+    await save(tester);
+    expect(a.created, isEmpty);
+  });
+
+  testWidgets('amphibie : créateur lâché amphibie, vol enregistré', (tester) async {
+    _useTallView(tester);
+    final a = amphibiousApi();
+    await tester.pumpWidget(
+        host(a, testUser(uid: 'u1', profile: 'lache_solo', amphibiousCleared: true)));
+    await tester.pumpAndSettle();
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await tester.pumpAndSettle();
+    expect(preview(tester), isNot(contains('Appareil amphibie')));
+    await save(tester);
+    expect(a.created, hasLength(1));
+  });
+
+  testWidgets('amphibie : élève avec un instructeur non lâché amphibie, message instructeur',
+      (tester) async {
+    _useTallView(tester);
+    final a = amphibiousApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', amphibiousCleared: true)));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'ins');
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await tester.pumpAndSettle();
+    expect(preview(tester), contains(noInstructor));
+    await save(tester);
+    expect(a.created, isEmpty);
+  });
+
+  testWidgets('amphibie : un admin créateur n\'est pas bloqué', (tester) async {
+    _useTallView(tester);
+    final a = amphibiousApi();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', isAdmin: true, profile: null)));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'lac');
+    await pickAircraft(tester);
+    await tester.enterText(find.byKey(const Key('f-destination')), 'Lomé');
+    await tester.pumpAndSettle();
+    expect(preview(tester), isNot(contains('Appareil amphibie')));
+    await save(tester);
+    expect(a.created, hasLength(1));
+  });
 }

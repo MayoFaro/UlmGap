@@ -182,4 +182,15 @@ void main() {
     expect(auth.calls, contains('signOut'));
     expect(find.byType(AccountScreen), findsNothing);
   });
+
+  testWidgets('plan 10 : « Lâché amphibie » affiché seulement pour un compte lâché amphibie',
+      (tester) async {
+    await tester.pumpWidget(host(FakeFinanceApi(), testUser(amphibiousCleared: true)));
+    await tester.pump();
+    expect(find.text('Lâché amphibie'), findsOneWidget);
+
+    await tester.pumpWidget(host(FakeFinanceApi(), testUser()));
+    await tester.pump();
+    expect(find.text('Lâché amphibie'), findsNothing);
+  });
 }
