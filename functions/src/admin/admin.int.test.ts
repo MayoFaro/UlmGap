@@ -6,7 +6,7 @@ import * as admin from "firebase-admin";
 if (admin.apps.length === 0) {
   admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT ?? "demo-ulmgap" });
 }
-import { createUser, updateUser } from "./users";
+import { createUser, deleteUser, updateUser } from "./users";
 import { upsertAircraft } from "./aircraft";
 import { bootstrapAdmin } from "./bootstrap";
 import { seedTestUsers, TEST_ACCOUNTS } from "./seed";
@@ -331,3 +331,38 @@ test("appareils : la modification de la fiche conserve le carburant", async () =
   assert.equal(a.fuelLiters, 33);
   assert.equal(a.fuelFlightId, "f-x");
 });
+
+// Suppression d'un compte vierge (révision du 2026-10-06).
+const HISTORY_MSG = "Ce compte a un historique (vols ou mouvements de solde) : désactivez-le plutôt.";
+
+test("suppression : compte vierge supprimé (Auth, users, profiles)", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const { uid } = await createUser(me, newUser());
+  await deleteUser(me, { uid });
+  assert.equal((await db.collection("users").doc(uid).get()).exists, false);
+  assert.equal((await db.collection("profiles").doc(uid).get()).exists, false);
+  await assert.rejects(admin.auth().getUser(uid), (e) => code(e) === "auth/user-not-found");
+});
+
+test("suppression : refusée avec un vol (même annulé) ou un mouvement de solde", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const withFlight = (await createUser(me, newUser())).uid;
+  await db.collection("flights").doc().set({ crew: ["x", withFlight], deleted: true });
+  await assert.rejects(deleteUser(me, { uid: withFlight }),
+    (e) => code(e) === "failed-precondition" && (e as Error).message === HISTORY_MSG);
+  const withMove = (await createUser(me, newUser())).uid;
+  await db.collection("transactions").doc().set({ userUid: withMove, amount: 1000 });
+  await assert.rejects(deleteUser(me, { uid: withMove }),
+    (e) => code(e) === "failed-precondition" && (e as Error).message === HISTORY_MSG);
+  assert.equal((await db.collection("users").doc(withMove).get()).exists, true);
+});
+
+test("suppression : son propre compte refusé ; non-admin refusé ; compte inconnu", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  await assert.rejects(deleteUser(me, { uid: me.uid }), (e) => code(e) === "failed-precondition");
+  const other = await seedUser(`u-${uniq()}`, {});
+  const { uid } = await createUser(me, newUser());
+  await assert.rejects(deleteUser(other, { uid }), (e) => code(e) === "permission-denied");
+  await assert.rejects(deleteUser(me, { uid: "inconnu" }), (e) => code(e) === "not-found");
+});
+
