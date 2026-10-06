@@ -23,8 +23,7 @@ doivent jamais accéder à AppGAP.
 - Plan 9, dépassement dès 60 min, trois forfaits de baptême, battement de
   30 min (terminé) :
   `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
-- Plan 10, lâché amphibie et icônes de profil (terminé, branche
-  `feature/lache-amphibie` non fusionnée) :
+- Plan 10, lâché amphibie et icônes de profil (terminé) :
   `docs/superpowers/plans/2026-10-06-ulmgap-10-lache-amphibie.md` (spec §3.6)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
@@ -37,7 +36,8 @@ doivent jamais accéder à AppGAP.
   6. adaptation du pont AppGAP (dans le repo `~/StudioProjects/app_gap`) ;
   7. suivi carburant par appareil ;
   8. crédit instruction et baptême de l'air ;
-  9. dépassement dès 60 min, forfaits de baptême, battement de 30 min.
+  9. dépassement dès 60 min, forfaits de baptême, battement de 30 min ;
+  10. lâché amphibie, icônes dans le menu des profils.
 
 ## Règles de travail
 
@@ -70,9 +70,9 @@ d'où le JDK d'Android Studio.
 **Disque presque plein** (environ 6 Go libres) : éviter les builds inutiles.
 `build/` peut être supprimé, il est régénérable.
 
-## État au 2026-10-05
+## État au 2026-10-06
 
-- Plans 1 à 5 et 7 à 9 terminés et **tous fusionnés dans `main`** (2026-10-05).
+- Plans 1 à 5 et 7 à 10 terminés et **tous fusionnés dans `main`** (2026-10-06).
   Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
   la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
   lancement de l'app (spec §5, §9).
@@ -113,8 +113,7 @@ d'où le JDK d'Android Studio.
   `updateFlight`, `validateFlight` et `adminUpdateFlight` redéployées.
   **L'app installée en dev doit être reconstruite.** **Cocher « Lâché
   amphibie » sur les comptes concernés** dans Administration → Utilisateurs :
-  sinon seuls les admins peuvent réserver l'appareil amphibie. Branche
-  `feature/lache-amphibie` non fusionnée.
+  sinon seuls les admins peuvent réserver l'appareil amphibie.
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
   **toutes les Functions dans leur version du plan 10** (Node 22, dont la
