@@ -22,7 +22,7 @@ export const details = (e: unknown) =>
 
 export async function seedUser(fields: {
   profile: string | null; category?: string; isAdmin?: boolean; active?: boolean; shortName?: string;
-  balance?: number;
+  balance?: number; amphibiousCleared?: boolean;
 }): Promise<Caller> {
   const uid = `u-${uniq()}`;
   // Firestore refuse les valeurs `undefined` : on les retire avant de fusionner

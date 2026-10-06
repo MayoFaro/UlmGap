@@ -6,7 +6,7 @@ import type { Profile } from "../admin/validation";
 import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
-  Decision, ExistingFlight, FLIGHT_BUFFER_MINUTES, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
+  Decision, ExistingFlight, amphibiousError, FLIGHT_BUFFER_MINUTES, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
   isPlanning, payerOf, resolvePricingMode,
 } from "../rules/flights";
 import {
@@ -27,6 +27,7 @@ export interface CrewInfo {
   category: string;
   active: boolean;
   balance: number;
+  amphibiousCleared: boolean;
 }
 
 export interface PlanArgs {
@@ -46,6 +47,8 @@ export interface PlanArgs {
   closed?: boolean;
   /** Correction admin : mode imposé explicitement par l'admin (resolvePricingMode non appliqué). */
   forcedMode?: "standard" | "fuel_only";
+  /** Admin (création, modification, validation) et correction admin : lâché amphibie non exigé. */
+  skipAmphibious?: boolean;
 }
 
 export interface Planned {
@@ -78,20 +81,21 @@ async function loadCrew(tx: Tx, db: Db, uids: string[]): Promise<CrewInfo[]> {
       category: (s.get("category") as string | undefined) ?? "EXT",
       active: s.get("active") === true,
       balance: (s.get("balance") as number | undefined) ?? 0,
+      amphibiousCleared: s.get("amphibiousCleared") === true,
     };
   });
 }
 
 async function loadAircraft(
   tx: Tx, db: Db, id: string, checkActive: boolean,
-): Promise<{ id: string; registration: string }> {
+): Promise<{ id: string; registration: string; amphibious: boolean }> {
   const s = await tx.get(db.collection("aircraft").doc(id));
   if (!s.exists) throw new HttpsError("not-found", "Appareil introuvable.");
   const registration = (s.get("registration") as string | undefined) ?? "";
   if (checkActive && s.get("active") !== true) {
     throw new HttpsError("failed-precondition", `L'appareil ${registration} n'est plus actif.`);
   }
-  return { id, registration };
+  return { id, registration, amphibious: s.get("amphibious") === true };
 }
 
 /**
@@ -215,6 +219,12 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
 
   const d = a.decide(crew);
   if (!d.ok) throw new HttpsError("permission-denied", d.reason);
+
+  // Spec §3.6 : appareil amphibie, un lâché amphibie aux commandes.
+  if (aircraft.amphibious && !a.skipAmphibious) {
+    const err = amphibiousError(crew);
+    if (err) throw new HttpsError("permission-denied", err);
+  }
 
   // Spec §10.1 : vol d'instruction réservé à un instructeur + un autre membre.
   if (a.input.instruction && !isInstructionEligible(crew)) {

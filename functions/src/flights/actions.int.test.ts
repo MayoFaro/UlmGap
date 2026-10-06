@@ -176,3 +176,29 @@ test("validation : baptême avec baptismTier null garde le forfait enregistré",
   assert.equal(f.status, "valide");
   assert.equal(f.baptismTier, "awagne");
 });
+
+// --- Plan 10 : lâché amphibie (spec §3.6) ---
+
+test("amphibie : un instructeur non lâché ne valide pas une demande passée sur amphibie", async () => {
+  const { instr, id } = await request();
+  const amphib = await seedAircraft(true, true);
+  await assert.rejects(validateFlight(instr, { flightId: id, changes: { aircraftId: amphib } }),
+    (e) => code(e) === "permission-denied" &&
+      (e as Error).message === "Appareil amphibie : l'instructeur doit être lâché amphibie.");
+  assert.equal((await get(id)).status, "demande");
+});
+
+test("amphibie : un instructeur lâché valide ; un admin non lâché valide aussi", async () => {
+  const amphib = await seedAircraft(true, true);
+  const eleve = await seedUser({ profile: "eleve" });
+  const instr = await seedUser({ profile: "instructeur", amphibiousCleared: true });
+  const plain = await seedAircraft();
+  const { id } = await createFlight(eleve, draft(plain, [eleve.uid, instr.uid]));
+  await validateFlight(instr, { flightId: id, changes: { aircraftId: amphib } });
+  assert.equal((await get(id)).status, "valide");
+
+  const r = await request();
+  const adm = await seedUser({ profile: null, isAdmin: true });
+  await validateFlight(adm, { flightId: r.id, changes: { aircraftId: amphib, start: at(14), end: at(15) } });
+  assert.equal((await get(r.id)).status, "valide");
+});
