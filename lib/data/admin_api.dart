@@ -19,6 +19,9 @@ abstract class AdminApi {
   Future<String> createUser(Map<String, dynamic> input);
   Future<void> sendPasswordLink(String email);
   Future<void> updateUser(String uid, Map<String, dynamic> patch);
+
+  /// Compte vierge seulement (sans vol ni mouvement de solde), sinon refus serveur.
+  Future<void> deleteUser(String uid);
   Stream<List<Aircraft>> watchAircraft();
   Future<String> upsertAircraft(Map<String, dynamic> input);
 }
@@ -60,6 +63,10 @@ class FirebaseAdminApi implements AdminApi {
   @override
   Future<void> updateUser(String uid, Map<String, dynamic> patch) =>
       _fn.httpsCallable('adminUpdateUser').call({'uid': uid, ...patch});
+
+  @override
+  Future<void> deleteUser(String uid) =>
+      _fn.httpsCallable('adminDeleteUser').call({'uid': uid});
 
   @override
   Stream<List<Aircraft>> watchAircraft() => _db

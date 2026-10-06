@@ -601,8 +601,10 @@ class _FlightScreenState extends State<FlightScreen> {
   }
 
   Future<void> _addMember() async {
-    final candidates = _dir.values.where((m) => m.active && !_crew.contains(m.uid)).toList()
-      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    final candidates = sortedByProfile(
+        _dir.values.where((m) => m.active && !_crew.contains(m.uid)),
+        (m) => m.profile,
+        (m) => m.displayName);
     final uid = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(

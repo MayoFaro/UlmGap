@@ -6,6 +6,9 @@ import '../../data/app_user.dart';
 import 'validators.dart';
 
 /// Renvoie le payload à envoyer (création : avec email ; modification : sans).
+/// Rendu par la fenêtre quand l'admin demande la suppression du compte.
+const userDeleteRequest = <String, dynamic>{'delete': true};
+
 Future<Map<String, dynamic>?> showUserFormDialog(BuildContext context, {AppUser? user}) =>
     showDialog<Map<String, dynamic>>(
       context: context,
@@ -130,6 +133,12 @@ class _UserFormDialogState extends State<_UserFormDialog> {
         ),
       ),
       actions: [
+        if (!_isNew)
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.of(context).pop(userDeleteRequest),
+            child: const Text('Supprimer le compte'),
+          ),
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
         FilledButton(onPressed: _submit, child: const Text('Enregistrer')),
       ],

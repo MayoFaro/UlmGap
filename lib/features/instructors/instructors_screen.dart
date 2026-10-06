@@ -2,6 +2,7 @@
 // leur solde ; un appui ouvre l'historique du compte et « Créditer / corriger ».
 import 'package:flutter/material.dart';
 
+import '../../core/profiles.dart';
 import '../../core/async_state.dart';
 import '../../core/money.dart';
 import '../../core/profile_badge.dart';
@@ -28,7 +29,8 @@ class InstructorsScreen extends StatelessWidget {
       body: StreamBuilder<List<AppUser>>(
         stream: finance.watchAccounts(),
         builder: (context, snap) {
-          final accounts = snap.data ?? const <AppUser>[];
+          final accounts = sortedByProfile(
+              snap.data ?? const <AppUser>[], (a) => a.profile, (a) => a.displayName);
           final state = asyncState(snap, isEmpty: accounts.isEmpty, empty: 'Aucun compte.');
           if (state != null) return state;
           return ListView(

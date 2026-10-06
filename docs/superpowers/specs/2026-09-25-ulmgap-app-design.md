@@ -495,7 +495,20 @@ et admins seulement)
   (« 350 000 »).
 
 **Administration**
-- Utilisateurs : création, profil, catégorie, admin, activation.
+- Utilisateurs : création, profil, catégorie, admin, activation. Révision du
+  2026-10-06 : **suppression** d'un compte **vierge** seulement (aucun vol,
+  même annulé, ni aucun mouvement de solde ; jamais son propre compte), par le
+  bouton « Supprimer le compte » de la fenêtre de compte, avec confirmation
+  (`adminDeleteUser` : compte Auth, `users`, `profiles`) ; sinon refus « Ce
+  compte a un historique (vols ou mouvements de solde) : désactivez-le
+  plutôt. ». Sur chaque ligne, les puces (appartenance, amphibie, admin,
+  désactivé) sont sous le nom ; seule l'icône du lien de mot de passe est à
+  droite.
+- **Tri des comptes** (révision du 2026-10-06), partout où des comptes sont
+  listés (Utilisateurs, Pilotes, choix d'un équipier, menu « Pilote » du
+  carnet) : instructeurs, lâchés toutes missions, lâchés solo, élèves, puis
+  non-pilotes ; dans chaque groupe, ordre alphabétique du nom (sans casse ni
+  accents).
 - Appareils, tarifs.
 - **Relevé des vols facturés** : sur une période, chaque vol clôturé avec son
   mode, son **temps de vol réel**, son montant facturé, son payeur ou « hors

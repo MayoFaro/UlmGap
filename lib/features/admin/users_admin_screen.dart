@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/async_state.dart';
 import '../../core/profile_badge.dart';
+import '../../core/profiles.dart';
 import '../../data/admin_api.dart';
 import '../../data/app_user.dart';
 import '../../data/services.dart';
@@ -15,6 +16,38 @@ class UsersAdminScreen extends StatelessWidget {
 
   /// Compte connecté : icônes de navigation (absentes si null).
   final AppUser? me;
+
+  static Widget _chip(String label) => Chip(
+        label: Text(label),
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        labelStyle: const TextStyle(fontSize: 12),
+        padding: EdgeInsets.zero,
+      );
+
+  /// Suppression d'un compte vierge (révision du 2026-10-06), après
+  /// confirmation ; le serveur refuse un compte qui a un historique.
+  Future<void> _delete(BuildContext context, AdminApi api, AppUser u) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Supprimer définitivement le compte de ${u.displayName} ?'),
+        content: const Text('Possible seulement pour un compte sans vol ni mouvement de solde.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Non')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Oui, supprimer')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await _guard(context, () async {
+      await api.deleteUser(u.uid);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Compte supprimé.')));
+      }
+    });
+  }
 
   Future<void> _guard(BuildContext context, Future<void> Function() action) async {
     void show(String m) {
@@ -56,7 +89,8 @@ class UsersAdminScreen extends StatelessWidget {
       body: StreamBuilder<List<AppUser>>(
         stream: api.watchAllUsers(),
         builder: (context, snap) {
-          final users = snap.data ?? const <AppUser>[];
+          final users = sortedByProfile(
+              snap.data ?? const <AppUser>[], (u) => u.profile, (u) => u.displayName);
           final state = asyncState(snap, isEmpty: users.isEmpty, empty: 'Aucun compte.');
           if (state != null) return state;
           return ListView(
@@ -68,9 +102,20 @@ class UsersAdminScreen extends StatelessWidget {
                   textColor: u.active ? null : Theme.of(context).disabledColor,
                   leading: ProfileBadge(profile: u.profile, compact: true),
                   title: Text(u.displayName),
-                  subtitle: Text('${u.shortName} · ${u.email}'),
-                  trailing: Wrap(spacing: 6, children: [
-                    IconButton(
+                  // Révision du 2026-10-06 : puces sous le nom, seule l'icône
+                  // du lien à droite (lisible sur un écran étroit).
+                  subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${u.shortName} · ${u.email}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Wrap(spacing: 6, runSpacing: 4, children: [
+                      _chip(u.category.code),
+                      if (u.amphibiousCleared) _chip('amphibie'),
+                      if (u.isAdmin) _chip('admin'),
+                      if (!u.active) _chip('Désactivé'),
+                    ]),
+                  ]),
+                  trailing: IconButton(
                       tooltip: 'Envoyer le lien de mot de passe',
                       icon: const Icon(Icons.forward_to_inbox),
                       onPressed: () => _guard(context, () async {
@@ -80,15 +125,12 @@ class UsersAdminScreen extends StatelessWidget {
                               SnackBar(content: Text('Lien envoyé à ${u.email}.')));
                         }
                       }),
-                    ),
-                    Chip(label: Text(u.category.code)),
-                    if (u.amphibiousCleared) const Chip(label: Text('amphibie')),
-                    if (u.isAdmin) const Icon(Icons.admin_panel_settings),
-                    if (!u.active) const Chip(label: Text('Désactivé')),
-                  ]),
+                  ),
                   onTap: () async {
                     final patch = await showUserFormDialog(context, user: u);
-                    if (patch != null && context.mounted) {
+                    if (identical(patch, userDeleteRequest) && context.mounted) {
+                      await _delete(context, api, u);
+                    } else if (patch != null && context.mounted) {
                       await _guard(context, () => api.updateUser(u.uid, patch));
                     }
                   },

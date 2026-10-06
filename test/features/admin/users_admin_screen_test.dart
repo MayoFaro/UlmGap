@@ -184,4 +184,76 @@ void main() {
     await tester.pump();
     expect(find.text('amphibie'), findsOneWidget);
   });
+
+  testWidgets('tri : instructeurs, lâchés toutes missions, lâchés solo, élèves, non-pilotes ; puis nom',
+      (tester) async {
+    final api = FakeAdminApi()
+      ..users = [
+        testUser(uid: 'e', displayName: 'Eve Élève', profile: 'eleve'),
+        testUser(uid: 'n', displayName: 'Nina Gestion', profile: null),
+        testUser(uid: 'i2', displayName: 'Zoé Instructeur', profile: 'instructeur'),
+        testUser(uid: 's', displayName: 'Sam Solo', profile: 'lache_solo'),
+        testUser(uid: 't', displayName: 'Tom Toutes', profile: 'lache_toute_mission'),
+        testUser(uid: 'i1', displayName: 'Ali Instructeur', profile: 'instructeur'),
+      ];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    final names = ['Ali Instructeur', 'Zoé Instructeur', 'Tom Toutes', 'Sam Solo', 'Eve Élève',
+        'Nina Gestion'];
+    final ys = [for (final n in names) tester.getTopLeft(find.text(n)).dy];
+    for (var i = 1; i < ys.length; i++) {
+      expect(ys[i], greaterThan(ys[i - 1]), reason: names[i]);
+    }
+  });
+
+  testWidgets('ligne : seule l\'icône du lien à droite, puces sous le nom (dont « admin »)',
+      (tester) async {
+    final api = FakeAdminApi()
+      ..users = [testUser(uid: 'u1', isAdmin: true, amphibiousCleared: true, active: false)];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    final tile = tester.widget<ListTile>(find.byType(ListTile));
+    expect(tile.trailing, isA<IconButton>());
+    for (final t in ['EXT', 'amphibie', 'admin', 'Désactivé']) {
+      expect(find.descendant(of: find.byType(ListTile), matching: find.text(t)), findsOneWidget,
+          reason: t);
+    }
+    expect(find.byIcon(Icons.admin_panel_settings), findsNothing);
+  });
+
+  testWidgets('suppression : bouton en modification, confirmation, appel serveur', (tester) async {
+    final api = FakeAdminApi()..users = [testUser(uid: 'u9', displayName: 'Paul Martin')];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.text('Paul Martin'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer le compte'));
+    await tester.pumpAndSettle();
+    expect(find.text('Supprimer définitivement le compte de Paul Martin ?'), findsOneWidget);
+    await tester.tap(find.text('Oui, supprimer'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, ['u9']);
+    expect(api.updated, isEmpty);
+    expect(find.text('Compte supprimé.'), findsOneWidget);
+  });
+
+  testWidgets('suppression : absente en création ; annuler la confirmation ne supprime rien',
+      (tester) async {
+    final api = FakeAdminApi()..users = [testUser(uid: 'u9', displayName: 'Paul Martin')];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Nouveau compte'));
+    await tester.pumpAndSettle();
+    expect(find.text('Supprimer le compte'), findsNothing);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paul Martin'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer le compte'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Non'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, isEmpty);
+  });
 }
+
