@@ -303,4 +303,20 @@ void main() {
     expect(tileOf('sep-open'), findsNothing);
     expect(tileOf('oct-closed'), findsOneWidget);
   });
+
+  testWidgets('menu Pilote : instructeurs avant les élèves, alphabétique dans chaque groupe',
+      (tester) async {
+    await tester.pumpWidget(host(instructeur, flights, directory: [
+      member('u1', 'DPS', 'instructeur'),
+      member('aaa', 'AAA', 'eleve'),
+      member('zzz', 'ZZZ', 'instructeur'),
+    ]));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pilot-filter')));
+    await tester.pumpAndSettle();
+    double y(String t) => tester.getTopLeft(find.text(t).last).dy;
+    expect(y('DPS · Nom DPS'), lessThan(y('ZZZ · Nom ZZZ')));
+    expect(y('ZZZ · Nom ZZZ'), lessThan(y('AAA · Nom AAA')));
+  });
 }
+

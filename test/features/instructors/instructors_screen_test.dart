@@ -242,4 +242,23 @@ void main() {
     expect(finance.corrected, isEmpty);
     expect(find.text('Le solde est déjà de ${formatFcfa(10000)}.'), findsOneWidget);
   });
+
+  testWidgets('tri : instructeurs d\'abord, puis lâchés, élèves ; alphabétique dans chaque groupe',
+      (tester) async {
+    AppUser acc(String uid, String name, PilotProfile? p) => AppUser(
+          uid: uid, displayName: name, shortName: uid.toUpperCase(), email: '$uid@x.invalid',
+          profile: p, category: UserCategory.gap, isAdmin: false, active: true, balance: 0);
+    final finance = FakeFinanceApi()
+      ..accounts = [
+        acc('el', 'Bob Élève', PilotProfile.eleve),
+        acc('in', 'Zed Instructeur', PilotProfile.instructeur),
+        acc('so', 'Ann Solo', PilotProfile.lacheSolo),
+      ];
+    await tester.pumpWidget(host(finance));
+    await tester.pump();
+    double y(String t) => tester.getTopLeft(find.text(t)).dy;
+    expect(y('Zed Instructeur'), lessThan(y('Ann Solo')));
+    expect(y('Ann Solo'), lessThan(y('Bob Élève')));
+  });
 }
+

@@ -6,7 +6,7 @@ if (admin.apps.length === 0) admin.initializeApp();
 // Même région côté client (FirebaseFunctions.instanceFor(region: 'europe-west1')).
 setGlobalOptions({ region: "europe-west1" });
 
-export { adminCreateUser, adminUpdateUser } from "./admin/users";
+export { adminCreateUser, adminDeleteUser, adminUpdateUser } from "./admin/users";
 export { adminUpsertAircraft } from "./admin/aircraft";
 export { adminUpdatePricing } from "./finance/pricing-store";
 export { creditAccountFn as creditAccount, correctAccountFn as correctAccount } from "./finance/accounts";

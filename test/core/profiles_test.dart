@@ -49,4 +49,20 @@ void main() {
     ));
     expect(find.byType(Icon), findsNothing);
   });
+
+  test('sortedByProfile : instructeurs, lâchés toutes missions, lâchés solo, élèves, non-pilotes ; puis nom', () {
+    final people = [
+      ('Zoé', PilotProfile.eleve),
+      ('marc', null),
+      ('Émile', PilotProfile.instructeur),
+      ('Bruno', PilotProfile.lacheSolo),
+      ('alain', PilotProfile.lacheToutesMissions),
+      ('Damien', PilotProfile.instructeur),
+      ('Anne', PilotProfile.eleve),
+      ('Eric', PilotProfile.instructeur),
+    ];
+    final sorted = sortedByProfile(people, (p) => p.$2, (p) => p.$1).map((p) => p.$1).toList();
+    expect(sorted, ['Damien', 'Émile', 'Eric', 'alain', 'Bruno', 'Anne', 'Zoé', 'marc']);
+  });
 }
+

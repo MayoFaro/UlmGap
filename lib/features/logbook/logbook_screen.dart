@@ -4,6 +4,7 @@
 // (l'action « Clôturer » est dans FlightScreen).
 import 'package:flutter/material.dart';
 
+import '../../core/profiles.dart';
 import '../../core/async_state.dart';
 import '../../data/aircraft.dart';
 import '../../data/app_user.dart';
@@ -138,7 +139,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
       items: [
         const DropdownMenuItem<String?>(value: null, child: Text('Tous les pilotes')),
         if (missingMe) DropdownMenuItem<String?>(value: me.uid, child: Text(me.shortName)),
-        for (final m in dir)
+        for (final m in sortedByProfile(dir, (m) => m.profile, (m) => m.displayName))
           DropdownMenuItem<String?>(value: m.uid, child: Text('${m.shortName} · ${m.displayName}')),
       ],
     );

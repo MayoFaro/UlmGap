@@ -1881,4 +1881,23 @@ void main() {
     await save(tester);
     expect(a.created, hasLength(1));
   });
+
+  testWidgets('choix d\'un équipier : instructeurs, lâchés, élèves, puis alphabétique',
+      (tester) async {
+    final a = api()
+      ..directory = [
+        member('u1', 'JDU', 'eleve'),
+        member('zel', 'ZEL', 'eleve'),
+        member('aso', 'ASO', 'lache_solo'),
+        member('ins', 'INS', 'instructeur'),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'eleve')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter un équipier'));
+    await tester.pumpAndSettle();
+    double y(String uid) => tester.getTopLeft(find.byKey(Key('pick-$uid'))).dy;
+    expect(y('ins'), lessThan(y('aso')));
+    expect(y('aso'), lessThan(y('zel')));
+  });
 }
+

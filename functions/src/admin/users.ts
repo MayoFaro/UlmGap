@@ -90,5 +90,43 @@ export async function updateUser(caller: Caller | undefined, data: unknown): Pro
 
 export const adminCreateUser = onCall((req) =>
   createUser(req.auth as Caller | undefined, req.data));
+/**
+ * Suppression d'un compte vierge (révision du 2026-10-06) : aucun vol (même
+ * annulé) ni aucun mouvement de solde. Sinon, il faut le désactiver : les vols
+ * et l'historique comptable ne sont jamais touchés.
+ */
+export async function deleteUser(caller: Caller | undefined, data: unknown): Promise<void> {
+  const db = admin.firestore();
+  await requireAdmin(db, caller);
+  const d = (data ?? {}) as Record<string, unknown>;
+  const uid = typeof d.uid === "string" ? d.uid.trim() : "";
+  if (!uid || uid.includes("/")) throw new HttpsError("invalid-argument", "Utilisateur manquant.");
+  if (uid === caller!.uid) {
+    throw new HttpsError("failed-precondition", "Vous ne pouvez pas supprimer votre propre compte.");
+  }
+  const ref = db.collection("users").doc(uid);
+  if (!(await ref.get()).exists) throw new HttpsError("not-found", "Compte introuvable.");
+  const [flights, moves] = await Promise.all([
+    db.collection("flights").where("crew", "array-contains", uid).limit(1).get(),
+    db.collection("transactions").where("userUid", "==", uid).limit(1).get(),
+  ]);
+  if (!flights.empty || !moves.empty) {
+    throw new HttpsError("failed-precondition",
+      "Ce compte a un historique (vols ou mouvements de solde) : désactivez-le plutôt.");
+  }
+  // Auth d'abord : un compte sans connexion possible reste sans danger si
+  // l'écriture Firestore échoue ensuite (l'admin peut relancer).
+  await admin.auth().deleteUser(uid).catch((e) => {
+    if ((e as { code?: string }).code !== "auth/user-not-found") throw e;
+  });
+  const batch = db.batch();
+  batch.delete(ref);
+  batch.delete(db.collection("profiles").doc(uid));
+  await batch.commit();
+}
+
+export const adminDeleteUser = onCall((req) =>
+  deleteUser(req.auth as Caller | undefined, req.data));
+
 export const adminUpdateUser = onCall((req) =>
   updateUser(req.auth as Caller | undefined, req.data));

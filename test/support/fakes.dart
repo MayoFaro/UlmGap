@@ -114,9 +114,10 @@ AppUser testUser({
   String shortName = 'JDU',
   int balance = 0,
   bool amphibiousCleared = false,
+  String displayName = 'Jean Dupont',
 }) =>
     AppUser.fromMap(uid, {
-      'displayName': 'Jean Dupont',
+      'displayName': displayName,
       'shortName': shortName,
       'email': 'jean@club.fr',
       'profile': profile,
@@ -161,6 +162,11 @@ class FakeAdminApi implements AdminApi {
 
   @override
   Future<void> updateUser(String uid, Map<String, dynamic> patch) async => updated[uid] = patch;
+
+  final deleted = <String>[];
+
+  @override
+  Future<void> deleteUser(String uid) async => deleted.add(uid);
 
   @override
   Stream<List<Aircraft>> watchAircraft() async* {
