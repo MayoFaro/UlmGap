@@ -13,6 +13,25 @@ class RulePerson {
   final String? profile; // code de profil, null = non pilote
 }
 
+class AmphibiousPerson {
+  const AmphibiousPerson(this.profile, this.amphibiousCleared);
+  final String? profile; // code de profil, null = non pilote
+  final bool amphibiousCleared;
+}
+
+/// Équipage d'un appareil amphibie (spec §3.6) ; null si la règle est respectée.
+String? amphibiousError(List<AmphibiousPerson> crew) {
+  final instructors = crew.where((p) => p.profile == 'instructeur');
+  if (instructors.isNotEmpty) {
+    return instructors.any((p) => p.amphibiousCleared)
+        ? null
+        : "Appareil amphibie : l'instructeur doit être lâché amphibie.";
+  }
+  return crew.any((p) => p.amphibiousCleared)
+      ? null
+      : 'Appareil amphibie : il faut un pilote lâché amphibie à bord.';
+}
+
 class Decision {
   const Decision.ok(this.status, this.instructorUid) : reason = null;
   const Decision.refused(this.reason)

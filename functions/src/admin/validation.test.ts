@@ -24,7 +24,19 @@ test("validateNewUser : normalise et applique les défauts", () => {
   assert.deepEqual(validateNewUser(ok), {
     email: "pilote@club.fr", displayName: "Jean Dupont", shortName: "JDU",
     profile: "eleve", category: "EXT", isAdmin: false, active: true,
+    amphibiousCleared: false,
   });
+});
+
+test("validateNewUser : amphibiousCleared accepté, non booléen refusé", () => {
+  assert.equal(validateNewUser({ ...ok, amphibiousCleared: true }).amphibiousCleared, true);
+  assert.throws(() => validateNewUser({ ...ok, amphibiousCleared: "oui" }), ValidationError);
+});
+
+test("validateUserPatch : amphibiousCleared seul accepté", () => {
+  assert.deepEqual(validateUserPatch({ uid: "u1", amphibiousCleared: true }),
+    { uid: "u1", patch: { amphibiousCleared: true } });
+  assert.throws(() => validateUserPatch({ uid: "u1", amphibiousCleared: 1 }), ValidationError);
 });
 
 test("validateNewUser : profil null accepté (gestionnaire non pilote)", () => {

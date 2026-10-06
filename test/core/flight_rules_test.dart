@@ -54,6 +54,19 @@ void main() {
     });
   }
 
+  for (final c in (fx['amphibious'] as List).cast<Map<String, dynamic>>()) {
+    test('amphibie : ${c['name']}', () {
+      final persons = (c['crew'] as List)
+          .cast<Map<String, dynamic>>()
+          .map((m) => AmphibiousPerson(
+                m['profile'] as String?,
+                m['amphibiousCleared'] as bool,
+              ))
+          .toList();
+      expect(amphibiousError(persons), c['expected']);
+    });
+  }
+
   // Les heures des cas `conflicts` sont en minutes ; findConflict travaille en ms.
   RuleFlight rf(Map<String, dynamic> m) => RuleFlight(
         id: m['id'] as String?,

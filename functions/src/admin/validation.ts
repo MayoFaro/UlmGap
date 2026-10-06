@@ -15,6 +15,7 @@ export interface UserInput {
   category: Category;
   isAdmin: boolean;
   active: boolean;
+  amphibiousCleared: boolean;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -66,6 +67,7 @@ export function validateNewUser(data: unknown): UserInput {
     category: category(d.category),
     isAdmin: bool(d.isAdmin, "Admin", false),
     active: bool(d.active, "Actif", true),
+    amphibiousCleared: bool(d.amphibiousCleared, "Lâché amphibie", false),
   };
 }
 
@@ -83,6 +85,9 @@ export function validateUserPatch(data: unknown): {
   if ("category" in d) patch.category = category(d.category);
   if ("isAdmin" in d) patch.isAdmin = bool(d.isAdmin, "Admin", false);
   if ("active" in d) patch.active = bool(d.active, "Actif", true);
+  if ("amphibiousCleared" in d) {
+    patch.amphibiousCleared = bool(d.amphibiousCleared, "Lâché amphibie", false);
+  }
   if (Object.keys(patch).length === 0) throw new ValidationError("Aucune modification.");
   return { uid, patch };
 }
