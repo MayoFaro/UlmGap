@@ -217,25 +217,6 @@ utilisateur**, élève compris (comme passager), ou un **passager sans compte**.
 
 En `demande`, `instructorUid` = l'instructeur de l'équipage.
 
-### 3.6 Appareil amphibie (révision du 2026-10-06)
-
-À la création, la modification et la validation d'un vol sur un appareil
-`amphibious` (l'admin y échappe, comme pour la matrice §3.2) :
-- **si l'équipage compte un instructeur**, au moins un instructeur doit être
-  lâché amphibie, sinon refus : « Appareil amphibie : l'instructeur doit être
-  lâché amphibie. » ;
-- **sans instructeur**, au moins un membre de `crew` doit être lâché amphibie,
-  sinon refus : « Appareil amphibie : il faut un pilote lâché amphibie à
-  bord. »
-
-Ce contrôle s'ajoute à la matrice (§3.2), qui reste inchangée. Exemples :
-élève + instructeur lâché amphibie : accepté ; élève + instructeur non lâché
-amphibie : refusé ; instructeur non lâché amphibie seul : refusé, avec un
-instructeur lâché amphibie : accepté ; lâché non amphibie seul : refusé ;
-lâché amphibie seul : accepté selon son profil. Les vols déjà créés ne sont
-pas remis en cause si la case ou l'appareil change ensuite. L'aperçu du
-formulaire affiche le refus avant l'enregistrement.
-
 ### 3.3 Actions
 
 | Action | Qui | Effet |
@@ -281,6 +262,25 @@ sont ouvertes : un écart d'exactement 30 min n'est pas un conflit (vol de 9 h
 - la clôture, la correction admin d'un vol passé ou clôturé, et la saisie
   après coup d'un vol passé par un admin ne sont donc jamais bloquées par
   un chevauchement.
+
+### 3.6 Appareil amphibie (révision du 2026-10-06)
+
+À la création, la modification et la validation d'un vol sur un appareil
+`amphibious` (l'admin y échappe, comme pour la matrice §3.2) :
+- **si l'équipage compte un instructeur**, au moins un instructeur doit être
+  lâché amphibie, sinon refus : « Appareil amphibie : l'instructeur doit être
+  lâché amphibie. » ;
+- **sans instructeur**, au moins un membre de `crew` doit être lâché amphibie,
+  sinon refus : « Appareil amphibie : il faut un pilote lâché amphibie à
+  bord. »
+
+Ce contrôle s'ajoute à la matrice (§3.2), qui reste inchangée. Exemples :
+élève + instructeur lâché amphibie : accepté ; élève + instructeur non lâché
+amphibie : refusé ; instructeur non lâché amphibie seul : refusé, avec un
+instructeur lâché amphibie : accepté ; lâché non amphibie seul : refusé ;
+lâché amphibie seul : accepté selon son profil. Les vols déjà créés ne sont
+pas remis en cause si la case ou l'appareil change ensuite. L'aperçu du
+formulaire affiche le refus avant l'enregistrement.
 
 ## 4. Finances
 
