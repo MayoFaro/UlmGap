@@ -23,6 +23,9 @@ doivent jamais accéder à AppGAP.
 - Plan 9, dépassement dès 60 min, trois forfaits de baptême, battement de
   30 min (terminé) :
   `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
+- Plan 10, lâché amphibie et icônes de profil (terminé, branche
+  `feature/lache-amphibie` non fusionnée) :
+  `docs/superpowers/plans/2026-10-06-ulmgap-10-lache-amphibie.md` (spec §3.6)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -106,21 +109,29 @@ d'où le JDK d'Android Studio.
   en dev doit être reconstruite.** **Régler « Temps couvert par le forfait »
   à 60 dans Administration → Tarifs** : le document `settings/pricing` de dev
   contient encore 75 et garderait l'ancienne règle de dépassement.
+- Plan 10 en dev : `adminCreateUser`, `adminUpdateUser`, `createFlight`,
+  `updateFlight`, `validateFlight` et `adminUpdateFlight` redéployées.
+  **L'app installée en dev doit être reconstruite.** **Cocher « Lâché
+  amphibie » sur les comptes concernés** dans Administration → Utilisateurs :
+  sinon seuls les admins peuvent réserver l'appareil amphibie. Branche
+  `feature/lache-amphibie` non fusionnée.
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
-  **toutes les Functions dans leur version du plan 9** (Node 22, dont la
+  **toutes les Functions dans leur version du plan 10** (Node 22, dont la
   tâche planifiée `closingReminders` : le déploiement active Cloud
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
   d'atterrissages et les champs carburant, `correctAccount` le nouveau
   solde, `adminUpdatePricing` les tarifs `instructionCredit`,
   `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
-  iOS installé antérieur au plan 9 doit être mis à jour : il ne peut plus
+  iOS installé antérieur au plan 10 doit être mis à jour : il ne peut plus
   clôturer un vol ni enregistrer les tarifs. Ensuite :
   - premier admin (`cd functions && npm run build && node
     scripts/bootstrap-admin.js --project ulmgap-prod …`) et Authentication
     (e-mail et mot de passe, création de compte par l'utilisateur
     désactivée) ;
-  - marquer l'ULM amphibie dans Administration → Appareils ;
+  - marquer l'ULM amphibie dans Administration → Appareils, puis **cocher
+    « Lâché amphibie » sur les comptes habilités** (Administration →
+    Utilisateurs) avant que quiconque réserve l'appareil amphibie ;
   - vérifier Administration → Tarifs : « Temps couvert par le forfait » 60,
     « Tolérance jusqu'à » 75 et les trois forfaits baptême (Local 70 000,
     Nyonye 90 000, Awagne 110 000) : si le document des tarifs de prod a

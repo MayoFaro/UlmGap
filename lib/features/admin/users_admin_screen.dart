@@ -82,6 +82,7 @@ class UsersAdminScreen extends StatelessWidget {
                       }),
                     ),
                     Chip(label: Text(u.category.code)),
+                    if (u.amphibiousCleared) const Chip(label: Text('amphibie')),
                     if (u.isAdmin) const Icon(Icons.admin_panel_settings),
                     if (!u.active) const Chip(label: Text('Désactivé')),
                   ]),

@@ -12,6 +12,18 @@ export function isInstructionEligible(crew: Person[]): boolean {
   return crew.length === 2 && crew.filter((p) => p.profile === "instructeur").length === 1;
 }
 
+export interface AmphibiousPerson { profile: Profile | null; amphibiousCleared: boolean }
+/** Spec §3.6 : équipage d'un appareil amphibie ; null si la règle est respectée. */
+export function amphibiousError(crew: AmphibiousPerson[]): string | null {
+  const instructors = crew.filter((p) => p.profile === "instructeur");
+  if (instructors.length > 0) {
+    return instructors.some((p) => p.amphibiousCleared) ? null :
+      "Appareil amphibie : l'instructeur doit être lâché amphibie.";
+  }
+  return crew.some((p) => p.amphibiousCleared) ? null :
+    "Appareil amphibie : il faut un pilote lâché amphibie à bord.";
+}
+
 export interface Creator extends Person { isAdmin: boolean }
 
 export type Decision =

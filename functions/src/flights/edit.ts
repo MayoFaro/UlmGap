@@ -34,6 +34,7 @@ export async function createFlight(
     const p = await planFlight(tx, db, {
       id: ref.id, input, mayChoose: mayChoose(me),
       decide: (crew) => decideStatus(me, crew, input.passengers.length),
+      skipAmphibious: me.isAdmin,
     });
     touchLocks(tx, p.locks);
     tx.create(ref, {
@@ -87,6 +88,7 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
       previousStatus: f.get("status") as string,
       decide: (crew) => decideStatus(me, crew, input.passengers.length),
+      skipAmphibious: me.isAdmin,
     });
     touchLocks(tx, p.locks);
     tx.update(ref, { ...p.fields, refusalReason: null });

@@ -113,6 +113,7 @@ AppUser testUser({
   String category = 'EXT',
   String shortName = 'JDU',
   int balance = 0,
+  bool amphibiousCleared = false,
 }) =>
     AppUser.fromMap(uid, {
       'displayName': 'Jean Dupont',
@@ -123,6 +124,7 @@ AppUser testUser({
       'isAdmin': isAdmin,
       'active': active,
       'balance': balance,
+      'amphibiousCleared': amphibiousCleared,
     });
 
 // --- ajouts Task 8 ---
@@ -241,12 +243,14 @@ Flight testFlight({
   });
 }
 
-CrewMember member(String uid, String short, String? profile, {bool active = true}) =>
+CrewMember member(String uid, String short, String? profile,
+    {bool active = true, bool amphibiousCleared = false}) =>
     CrewMember.fromMap(uid, {
       'displayName': 'Nom $short',
       'shortName': short,
       'profile': profile,
       'active': active,
+      'amphibiousCleared': amphibiousCleared,
     });
 
 Flight? _byId(List<Flight> l, String id) {

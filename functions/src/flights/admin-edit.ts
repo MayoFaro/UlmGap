@@ -124,6 +124,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       previousMode,
       forcedMode: mode === "custom" ? "standard" : mode,
       skipActiveChecks: true,
+      skipAmphibious: true,
       skipCredit: closed,
       closed,
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,

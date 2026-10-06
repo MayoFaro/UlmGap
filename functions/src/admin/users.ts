@@ -40,6 +40,7 @@ export async function createUser(caller: Caller | undefined, data: unknown): Pro
     batch.set(db.collection("profiles").doc(uid), {
       displayName: input.displayName, shortName: input.shortName,
       profile: input.profile, active: input.active,
+      amphibiousCleared: input.amphibiousCleared,
     });
     await batch.commit();
   } catch (e) {
@@ -82,6 +83,7 @@ export async function updateUser(caller: Caller | undefined, data: unknown): Pro
     shortName: merged.shortName ?? "",
     profile: merged.profile ?? null,
     active: merged.active === true,
+    amphibiousCleared: merged.amphibiousCleared === true,
   });
   await batch.commit();
 }

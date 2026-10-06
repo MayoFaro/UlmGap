@@ -11,6 +11,7 @@ class AppUser {
     required this.isAdmin,
     required this.active,
     required this.balance,
+    this.amphibiousCleared = false,
   });
 
   final String uid;
@@ -22,6 +23,7 @@ class AppUser {
   final bool isAdmin;
   final bool active;
   final int balance;
+  final bool amphibiousCleared;
 
   bool get isInstructor => profile == PilotProfile.instructeur;
 
@@ -35,5 +37,6 @@ class AppUser {
         isAdmin: m['isAdmin'] == true,
         active: m['active'] == true,
         balance: (m['balance'] as num?)?.toInt() ?? 0,
+        amphibiousCleared: m['amphibiousCleared'] == true,
       );
 }

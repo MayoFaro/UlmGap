@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   checkPayer, conflictCause, decideStatus, designatedInstructor, findConflict, payerOf,
-  resolvePricingMode, isPlanning, isInstructionEligible } from "./flights";
+  resolvePricingMode, isPlanning, isInstructionEligible, amphibiousError } from "./flights";
 
 const fx = JSON.parse(fs.readFileSync(
   path.resolve(__dirname, "../../../test/fixtures/flight_rules.json"), "utf8"));
@@ -80,6 +80,12 @@ test("isPlanning : contrôle des conflits pour un vol à venir non clôturé seu
 for (const c of fx.instruction) {
   test(`instruction : ${c.name}`, () => {
     assert.equal(isInstructionEligible(c.crew), c.expected);
+  });
+}
+
+for (const c of fx.amphibious) {
+  test(`amphibie : ${c.name}`, () => {
+    assert.equal(amphibiousError(c.crew), c.expected);
   });
 }
 

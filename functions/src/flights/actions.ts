@@ -73,6 +73,7 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
       previousStatus: f.get("status") as string,
       decide: () => ({ ok: true, status: "valide", instructorUid }),
+      skipAmphibious: me.isAdmin,
     });
     touchLocks(tx, p.locks);
     tx.update(ref, p.fields);

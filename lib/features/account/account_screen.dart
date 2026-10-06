@@ -65,6 +65,7 @@ class AccountScreen extends StatelessWidget {
                     ]),
                     const SizedBox(height: 4),
                     Text(current.category.code),
+                    if (current.amphibiousCleared) const Text('Lâché amphibie'),
                     const SizedBox(height: 8),
                     Text(
                       'Solde : ${formatFcfa(current.balance)}',

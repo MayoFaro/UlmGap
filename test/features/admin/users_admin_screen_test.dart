@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/profile_badge.dart';
+import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/admin/users_admin_screen.dart';
 
@@ -44,6 +45,7 @@ void main() {
       'category': 'EXT',
       'isAdmin': false,
       'active': true,
+      'amphibiousCleared': false,
     });
   });
 
@@ -111,5 +113,75 @@ void main() {
     await tester.pumpWidget(host(FakeAdminApi()));
     await tester.pump();
     expect(find.text('Aucun compte.'), findsOneWidget);
+  });
+
+  testWidgets('plan 10 : case « Lâché amphibie » pré-cochée et envoyée en modification',
+      (tester) async {
+    final api = FakeAdminApi()..users = [testUser(uid: 'u1', amphibiousCleared: true)];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.text('Jean Dupont'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('user-amphibious'))).value, isTrue);
+    await tester.tap(find.byKey(const Key('user-amphibious')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(api.updated['u1']!['amphibiousCleared'], isFalse);
+  });
+
+  testWidgets('plan 10 : en création, la case est décochée puis envoyée cochée',
+      (tester) async {
+    final api = FakeAdminApi();
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Nouveau compte'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lâché amphibie'), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('user-amphibious'))).value, isFalse);
+    await tester.enterText(find.byKey(const Key('f-email')), 'p@club.fr');
+    await tester.enterText(find.byKey(const Key('f-name')), 'Paul');
+    await tester.enterText(find.byKey(const Key('f-short')), 'PMA');
+    await tester.tap(find.byKey(const Key('user-amphibious')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(api.created.single['amphibiousCleared'], isTrue);
+  });
+
+  testWidgets('plan 10 : le menu Profil montre l\'icône de chaque profil pilote',
+      (tester) async {
+    final api = FakeAdminApi();
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Nouveau compte'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Élève'));
+    await tester.pumpAndSettle();
+    for (final p in PilotProfile.values) {
+      final item = find.ancestor(
+          of: find.text(p.label), matching: find.byType(DropdownMenuItem<PilotProfile?>));
+      expect(
+          find.descendant(
+              of: item.last,
+              matching: find.byWidgetPredicate((w) => w is ProfileBadge && w.profile == p)),
+          findsOneWidget,
+          reason: p.label);
+    }
+    final none = find.ancestor(
+        of: find.text('Non pilote'), matching: find.byType(DropdownMenuItem<PilotProfile?>));
+    expect(find.descendant(of: none.last, matching: find.byType(ProfileBadge)), findsNothing);
+  });
+
+  testWidgets('plan 10 : « amphibie » visible dans la liste pour un compte lâché amphibie',
+      (tester) async {
+    final api = FakeAdminApi()
+      ..users = [
+        testUser(uid: 'u1', amphibiousCleared: true),
+        testUser(uid: 'u2', shortName: 'ABC'),
+      ];
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    expect(find.text('amphibie'), findsOneWidget);
   });
 }

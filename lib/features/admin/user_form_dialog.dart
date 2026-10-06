@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/profile_badge.dart';
 import '../../core/profiles.dart';
 import '../../data/app_user.dart';
 import 'validators.dart';
@@ -27,6 +28,7 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   late UserCategory _category = widget.user?.category ?? UserCategory.ext;
   late bool _isAdmin = widget.user?.isAdmin ?? false;
   late bool _active = widget.user?.active ?? true;
+  late bool _amphibiousCleared = widget.user?.amphibiousCleared ?? false;
 
   bool get _isNew => widget.user == null;
 
@@ -48,6 +50,7 @@ class _UserFormDialogState extends State<_UserFormDialog> {
       'category': _category.code,
       'isAdmin': _isAdmin,
       'active': _active,
+      'amphibiousCleared': _amphibiousCleared,
     });
   }
 
@@ -86,7 +89,14 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Non pilote')),
                   for (final p in PilotProfile.values)
-                    DropdownMenuItem(value: p, child: Text(p.label)),
+                    DropdownMenuItem(
+                      value: p,
+                      child: Row(children: [
+                        ProfileBadge(profile: p, compact: true),
+                        const SizedBox(width: 8),
+                        Text(p.label),
+                      ]),
+                    ),
                 ],
                 onChanged: (v) => setState(() => _profile = v),
               ),
@@ -98,6 +108,12 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                     DropdownMenuItem(value: c, child: Text(c.code)),
                 ],
                 onChanged: (v) => setState(() => _category = v ?? _category),
+              ),
+              SwitchListTile(
+                key: const Key('user-amphibious'),
+                title: const Text('Lâché amphibie'),
+                value: _amphibiousCleared,
+                onChanged: (v) => setState(() => _amphibiousCleared = v),
               ),
               SwitchListTile(
                 title: const Text('Administrateur'),

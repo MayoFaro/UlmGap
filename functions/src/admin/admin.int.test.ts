@@ -53,7 +53,27 @@ test("création : Auth, users et profiles cohérents", async () => {
   assert.equal(u.balance, 0);
   assert.equal(u.isAdmin, false);
   const p = (await db.collection("profiles").doc(uid).get()).data()!;
-  assert.deepEqual(p, { displayName: "Jean Dupont", shortName: "JDU", profile: "eleve", active: true });
+  assert.deepEqual(p, { displayName: "Jean Dupont", shortName: "JDU", profile: "eleve", active: true,
+    amphibiousCleared: false });
+  assert.equal(u.amphibiousCleared, false);
+});
+
+test("création avec amphibiousCleared : users et profiles à true", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const { uid } = await createUser(me, { ...newUser(), amphibiousCleared: true });
+  assert.equal((await db.collection("users").doc(uid).get()).get("amphibiousCleared"), true);
+  assert.equal((await db.collection("profiles").doc(uid).get()).get("amphibiousCleared"), true);
+});
+
+test("modification : ancien compte sans le champ, profiles reçoit false ; puis true des deux côtés", async () => {
+  const me = await seedUser(`a-${uniq()}`, { isAdmin: true });
+  const uid = `old-${uniq()}`;
+  await seedUser(uid, { displayName: "Ancien", shortName: "ANC", profile: "eleve", category: "EXT" });
+  await updateUser(me, { uid, category: "MIL" });
+  assert.equal((await db.collection("profiles").doc(uid).get()).get("amphibiousCleared"), false);
+  await updateUser(me, { uid, amphibiousCleared: true });
+  assert.equal((await db.collection("users").doc(uid).get()).get("amphibiousCleared"), true);
+  assert.equal((await db.collection("profiles").doc(uid).get()).get("amphibiousCleared"), true);
 });
 
 test("e-mail déjà utilisé : already-exists, aucun document orphelin", async () => {
@@ -149,7 +169,8 @@ test("M4 : compte sans profiles : le document créé est complet", async () => {
   });
   await updateUser(me, { uid: rec.uid, category: "GR" });
   assert.deepEqual((await db.collection("profiles").doc(rec.uid).get()).data(),
-    { displayName: "Ancien", shortName: "ANC", profile: "eleve", active: true });
+    { displayName: "Ancien", shortName: "ANC", profile: "eleve", active: true,
+      amphibiousCleared: false });
 });
 
 test("M7 : deux créations simultanées de la même immatriculation : une seule passe", async () => {

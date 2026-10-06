@@ -68,6 +68,12 @@ Libellés, couleurs et icônes sont définis dans **un seul fichier** de l'app
 s'affiche à côté du nom partout où une personne apparaît : planning, détail
 d'un vol, sélection d'équipage, liste des comptes, « Mon compte ».
 
+**Lâché amphibie** (`users.amphibiousCleared`, révision du 2026-10-06) : case
+cochée par un admin, indépendante du profil. Elle conditionne les vols sur un
+appareil amphibie (§3.6). La fenêtre de compte, la liste des utilisateurs et
+« Mon compte » l'affichent (« amphibie »). Dans le menu « Profil » de la
+fenêtre de compte, chaque choix montre l'icône de son badge.
+
 **Appartenance** (`users.category`) : `GAP` / `GR` / `MIL` / `EXT`. Elle
 détermine le forfait et le taux de dépassement (§4).
 
@@ -90,12 +96,13 @@ main dans la console Firebase.
 | `category` | string | Appartenance : `GAP` / `GR` / `MIL` / `EXT` |
 | `isAdmin` | bool | |
 | `active` | bool | Faux : plus de connexion, ne peut plus être ajouté à un nouveau vol |
+| `amphibiousCleared` | bool | Lâché amphibie (§1, §3.6), faux par défaut |
 | `balance` | int | Solde en FCFA (peut être négatif) |
 | `fcmToken` | string? | Seul champ modifiable par l'utilisateur lui-même |
 
 ### 2.2 `profiles/{uid}`, annuaire public en lecture
 
-`displayName`, `shortName`, `profile`, `active`, tenus à jour par les Functions
+`displayName`, `shortName`, `profile`, `active`, `amphibiousCleared`, tenus à jour par les Functions
 en même temps que `users`. Il permet d'afficher équipages et badges sans
 exposer à tous les soldes, e-mails ou catégories.
 
@@ -255,6 +262,25 @@ sont ouvertes : un écart d'exactement 30 min n'est pas un conflit (vol de 9 h
 - la clôture, la correction admin d'un vol passé ou clôturé, et la saisie
   après coup d'un vol passé par un admin ne sont donc jamais bloquées par
   un chevauchement.
+
+### 3.6 Appareil amphibie (révision du 2026-10-06)
+
+À la création, la modification et la validation d'un vol sur un appareil
+`amphibious` (l'admin y échappe, comme pour la matrice §3.2) :
+- **si l'équipage compte un instructeur**, au moins un instructeur doit être
+  lâché amphibie, sinon refus : « Appareil amphibie : l'instructeur doit être
+  lâché amphibie. » ;
+- **sans instructeur**, au moins un membre de `crew` doit être lâché amphibie,
+  sinon refus : « Appareil amphibie : il faut un pilote lâché amphibie à
+  bord. »
+
+Ce contrôle s'ajoute à la matrice (§3.2), qui reste inchangée. Exemples :
+élève + instructeur lâché amphibie : accepté ; élève + instructeur non lâché
+amphibie : refusé ; instructeur non lâché amphibie seul : refusé, avec un
+instructeur lâché amphibie : accepté ; lâché non amphibie seul : refusé ;
+lâché amphibie seul : accepté selon son profil. Les vols déjà créés ne sont
+pas remis en cause si la case ou l'appareil change ensuite. L'aperçu du
+formulaire affiche le refus avant l'enregistrement.
 
 ## 4. Finances
 

@@ -321,3 +321,52 @@ test("baptême retiré avec le passager : mode recalculé", async () => {
   assert.equal((await get(id)).pricingMode, "standard");
   assert.equal((await get(id)).baptismTier, null);
 });
+
+// --- Plan 10 : lâché amphibie (spec §3.6) ---
+
+const SOLO_MSG = "Appareil amphibie : il faut un pilote lâché amphibie à bord.";
+const INSTR_MSG = "Appareil amphibie : l'instructeur doit être lâché amphibie.";
+
+test("amphibie : lâché solo non lâché amphibie refusé, lâché amphibie accepté", async () => {
+  const a = await seedAircraft(true, true);
+  const no = await seedUser({ profile: "lache_toute_mission" });
+  await assert.rejects(createFlight(no, draft(a, [no.uid])),
+    (e) => code(e) === "permission-denied" && (e as Error).message === SOLO_MSG);
+  const yes = await seedUser({ profile: "lache_toute_mission", amphibiousCleared: true });
+  const { status } = await createFlight(yes, draft(a, [yes.uid]));
+  assert.equal(status, "valide");
+});
+
+test("amphibie : demande d'élève, instructeur non lâché refusé, lâché accepté", async () => {
+  const a = await seedAircraft(true, true);
+  const eleve = await seedUser({ profile: "eleve" });
+  const no = await seedUser({ profile: "instructeur" });
+  await assert.rejects(createFlight(eleve, draft(a, [eleve.uid, no.uid])),
+    (e) => code(e) === "permission-denied" && (e as Error).message === INSTR_MSG);
+  const yes = await seedUser({ profile: "instructeur", amphibiousCleared: true });
+  const { status } = await createFlight(eleve, draft(a, [eleve.uid, yes.uid]));
+  assert.equal(status, "demande");
+});
+
+test("amphibie : modification vers l'appareil amphibie par un non lâché refusée", async () => {
+  const plain = await seedAircraft();
+  const amphib = await seedAircraft(true, true);
+  const me = await seedUser({ profile: "lache_toute_mission" });
+  const { id } = await createFlight(me, draft(plain, [me.uid]));
+  await assert.rejects(updateFlight(me, { flightId: id, ...draft(amphib, [me.uid]) }),
+    (e) => code(e) === "permission-denied" && (e as Error).message === SOLO_MSG);
+});
+
+test("amphibie : un admin non lâché crée un vol sur amphibie avec un équipage non lâché", async () => {
+  const a = await seedAircraft(true, true);
+  const adm = await seedUser({ profile: null, isAdmin: true });
+  const p = await seedUser({ profile: "lache_toute_mission" });
+  const { status } = await createFlight(adm, draft(a, [p.uid]));
+  assert.equal(status, "valide");
+});
+
+test("appareil non amphibie : un lâché non amphibie vole", async () => {
+  const me = await seedUser({ profile: "lache_toute_mission" });
+  const { status } = await createFlight(me, draft(await seedAircraft(), [me.uid]));
+  assert.equal(status, "valide");
+});

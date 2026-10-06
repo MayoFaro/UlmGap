@@ -623,3 +623,14 @@ test("suppression : remboursement et reprise du crédit sur le même compte", as
   assert.equal(await balance(ins.uid), 500_000);
   await assertInvariant(id);
 });
+
+test("amphibie : correction admin d'un vol à venir d'un équipage non lâché amphibie acceptée", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const a = await seedAircraft(true, true);
+  const id = await seedFlight({
+    start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: pilot.uid,
+  });
+  await adminUpdateFlight(boss, await correction(id, { destination: "Kara" }));
+  assert.equal((await getFlight(id)).destination, "Kara");
+});
