@@ -21,7 +21,8 @@ FirebaseOptions firebaseOptionsFor(AppEnv env) => env == AppEnv.prod
 /// → Cloud Messaging → Certificats Web Push). Vide : pas de notifications sur
 /// le web, sans erreur (plan 5).
 const _webVapidKeyDev = '';
-const _webVapidKeyProd = '';
+const _webVapidKeyProd =
+    'BGoTZJe3DaBUYL-E-4KVxGp7Me524RcpqdP7eUs6neO6LYRl2247sdI5IyJoc9FXWcJsDMZo7yqHr2Cf-KLX6Z4';
 
 String webVapidKeyFor(AppEnv env) => env == AppEnv.prod ? _webVapidKeyProd : _webVapidKeyDev;
 

@@ -22,4 +22,8 @@ void main() {
         'Recompiler avec --flavor prod --dart-define=ENV=prod.');
     expect(flavorMismatch(AppEnv.prod, 'dev'), isNotNull);
   });
+
+  test('clé VAPID web : renseignée en prod', () {
+    expect(webVapidKeyFor(AppEnv.prod), startsWith('BGoTZJe3'));
+  });
 }
