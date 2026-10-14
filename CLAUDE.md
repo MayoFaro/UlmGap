@@ -28,8 +28,10 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
 - Plan 10, lâché amphibie et icônes de profil (terminé) :
   `docs/superpowers/plans/2026-10-06-ulmgap-10-lache-amphibie.md` (spec §3.6)
-- Plan 11, suivi de caisse (terminé sur `feature/caisse`, non fusionné) :
+- Plan 11, suivi de caisse (terminé, fusionné dans `main`) :
   `docs/superpowers/plans/2026-10-14-ulmgap-11-caisse.md` (spec §11)
+- Plan 12, vol technique (terminé sur `feature/vol-technique`, non fusionné) :
+  `docs/superpowers/plans/2026-10-14-ulmgap-12-vol-technique.md` (spec §12)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -78,18 +80,21 @@ d'où le JDK d'Android Studio.
 
 ## État au 2026-10-14
 
-- Plan 11 (suivi de caisse) terminé sur la branche `feature/caisse`, **non
-  fusionné** dans `main`. Tests verts (Flutter, analyse, unitaires, intégration).
-  En dev, **à déployer** : règles Firestore et Functions `creditAccount`,
-  `correctAccount`, `addCashMovement`, `correctCashMovement`, `closeMigration`
-  (`firebase deploy --project dev --only firestore:rules,functions:…`).
-  **L'app installée en dev doit être reconstruite.** Import de la caisse en dev
-  : à faire, après relecture par l'utilisateur de `docs/caisse-import.csv`
-  (ignoré par git, hors dépôt).
+- Plan 11 (suivi de caisse) fusionné dans `main` et déployé en dev : règles
+  Firestore, index et Functions de la caisse. **L'app installée en dev doit
+  être reconstruite.** Import de la caisse en dev : à faire, après relecture
+  par l'utilisateur de `docs/caisse-import.csv` (ignoré par git, hors dépôt).
   **L'import doit suivre immédiatement le déploiement des Functions, avant
   toute opération de caisse ou tout Crédit carburant** : `importCashbox`
   refuse une caisse non vide (« La caisse contient déjà des opérations :
   import refusé. »).
+- Plan 12 (vol technique) terminé sur la branche `feature/vol-technique`, **non
+  fusionné** dans `main`. Tests verts (Flutter, analyse, unitaires, intégration).
+  En dev, **à redéployer** : Functions `createFlight`, `updateFlight`,
+  `validateFlight`, `closeFlight`, `adminUpdateFlight`
+  (`firebase deploy --project dev --only functions:createFlight,functions:updateFlight,functions:validateFlight,functions:closeFlight,functions:adminUpdateFlight`).
+  **L'app installée en dev doit être reconstruite.** Recette « vol ww »
+  (Wonga-Wongué, spec §12.4) : à faire en dev avant la fusion.
 - Plans 1 à 5 et 7 à 10 terminés et **tous fusionnés dans `main`** (2026-10-06).
   Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
   la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
@@ -169,6 +174,11 @@ d'où le JDK d'Android Studio.
     déjà été enregistré, il peut garder 75 pour « Temps couvert » et donc
     l'ancienne règle de dépassement ;
   - clé VAPID web du projet prod : faite (2026-10-06, `lib/core/env.dart`).
+- Plan 12 en prod, avec le déploiement du plan 10 ci-dessus et après
+  fusion de `feature/vol-technique` : déployer les Functions `createFlight`,
+  `updateFlight`, `validateFlight`, `closeFlight` et `adminUpdateFlight` en
+  même temps que l'app web. Tout build installé antérieur au plan 12 ne sait
+  ni afficher ni clôturer un vol technique.
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :
   la 14 supprime l'API `admin.firestore()` utilisée partout). Le Node local
   reste en 20 : accepté par les tests et l'émulateur.
