@@ -153,7 +153,7 @@ d'où le JDK d'Android Studio.
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
   d'atterrissages et les champs carburant, `correctAccount` le nouveau
   solde, `adminUpdatePricing` les tarifs `instructionCredit`,
-  `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
+  `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Règles et **index composites** nouveaux depuis la confidentialité des demandes (`docs/operations/confidentialite-demandes.md`) : déployer d'abord `firestore:indexes`, attendre qu'ils soient prêts (sinon le planning affiche « Impossible de charger les données »), puis les règles. Tout build Android ou
   iOS installé antérieur au plan 10 doit être mis à jour : il ne peut plus
   clôturer un vol ni enregistrer les tarifs. Ensuite :
   - premier admin (`cd functions && npm run build && node
