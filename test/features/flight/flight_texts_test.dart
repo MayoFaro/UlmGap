@@ -59,6 +59,13 @@ void main() {
         endsWith('le compte de DPS'));
   });
 
+  test('plan 12 : closedSummary d\'un vol technique (association) : non facturé', () {
+    expect(
+        closedSummary(actualMinutes: 30, billedAmount: 0, billedTo: 'association',
+            debitedShortName: 'DPS', landings: 1),
+        'Clôturé : 0 h 30, Vol technique : non facturé (association), 1 att.');
+  });
+
   test('savedMessage : confirmation selon le résultat du serveur', () {
     expect(savedMessage(FlightStatus.valide, 'INS', created: true), 'Vol enregistré.');
     expect(savedMessage(FlightStatus.demande, 'INS', created: true), 'Demande envoyée à INS.');

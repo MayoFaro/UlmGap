@@ -1,6 +1,6 @@
 // Écran « Relevé des vols facturés » (admin, Task 12) : vols clôturés non
 // supprimés sur une période, totaux débité sur comptes / facturé hors app,
-// export CSV (web seulement).
+// vols techniques à part (plan 12), export CSV (web seulement).
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -34,6 +34,14 @@ const billingCsvHeaders = [
   'Compte débité',
 ];
 
+/// Imputation d'un vol clôturé (plan 12 : un vol technique est à la charge
+/// de l'association).
+String _imputation(Flight f) => switch (f.billedTo) {
+      'off_app' => 'Hors app',
+      'association' => 'Association',
+      _ => 'Compte',
+    };
+
 /// Une ligne du CSV par vol de [flights], dans l'ordre reçu.
 List<List<String>> billingCsvRows(List<Flight> flights, Map<String, CrewMember> dir) => [
       for (final f in flights)
@@ -47,8 +55,10 @@ List<List<String>> billingCsvRows(List<Flight> flights, Map<String, CrewMember> 
           flightPricingLabel(f.pricingMode, f.baptismTier),
           f.actualFlightMinutes?.toString() ?? '',
           (f.billedAmount ?? 0).toString(),
-          f.billedTo == 'off_app' ? 'Hors app' : 'Compte',
-          f.billedTo == 'off_app' ? '' : (dir[f.payerUidField ?? f.payerUid]?.shortName ?? '?'),
+          _imputation(f),
+          f.billedTo == 'off_app' || f.billedTo == 'association'
+              ? ''
+              : (dir[f.payerUidField ?? f.payerUid]?.shortName ?? '?'),
         ],
     ];
 
@@ -135,9 +145,15 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
 
     var debitedTotal = 0;
     var offAppTotal = 0;
+    // Plan 12 : vols techniques comptés à part (nombre et temps de vol).
+    var technicalCount = 0;
+    var technicalMinutes = 0;
     for (final f in flights) {
       final amount = f.billedAmount ?? 0;
-      if (f.billedTo == 'off_app') {
+      if (f.billedTo == 'association') {
+        technicalCount++;
+        technicalMinutes += f.actualFlightMinutes ?? 0;
+      } else if (f.billedTo == 'off_app') {
         offAppTotal += amount;
       } else {
         debitedTotal += amount;
@@ -179,8 +195,8 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
                         : formatDurationHm(f.actualFlightMinutes!))),
                     DataCell(Text(flightPricingLabel(f.pricingMode, f.baptismTier))),
                     DataCell(Text(formatFcfa(f.billedAmount ?? 0))),
-                    DataCell(Text(f.billedTo == 'off_app'
-                        ? 'Hors app'
+                    DataCell(Text(f.billedTo == 'off_app' || f.billedTo == 'association'
+                        ? _imputation(f)
                         : 'Compte de ${dir[f.payerUidField ?? f.payerUid]?.shortName ?? '?'}')),
                   ]),
               ],
@@ -192,6 +208,16 @@ class _BillingReportScreenState extends State<BillingReportScreen> {
             child: Column(children: [
               totalRow('Débité sur comptes', debitedTotal),
               totalRow('Facturé hors app', offAppTotal),
+              if (technicalCount > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Vols techniques : $technicalCount '
+                        'vol${technicalCount > 1 ? 's' : ''}, '
+                        '${formatDurationHm(technicalMinutes)}'),
+                  ),
+                ),
               if (kIsWeb) ...[
                 const SizedBox(height: 12),
                 FilledButton.icon(

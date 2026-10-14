@@ -186,7 +186,13 @@ class _FuelLogScreenState extends State<FuelLogScreen> {
       onSelectChanged: (_) => Navigator.push(context,
           MaterialPageRoute(builder: (_) => FlightScreen(me: widget.me, flight: f))),
       cells: [
-        DataCell(_cell(id, 'date', formatShortDate(f.start))),
+        DataCell(f.isTechnical
+            ? Row(mainAxisSize: MainAxisSize.min, children: [
+                _cell(id, 'date', formatShortDate(f.start)),
+                const SizedBox(width: 4),
+                _technicalMark(id),
+              ])
+            : _cell(id, 'date', formatShortDate(f.start))),
         DataCell(_cell(id, 'crew', crewText(f.crew, f.passengers, dir))),
         DataCell(_cell(id, 'time', formatDurationHm(minutes))),
         DataCell(start),
@@ -202,6 +208,20 @@ class _FuelLogScreenState extends State<FuelLogScreen> {
       ],
     );
   }
+
+  /// Plan 12 (spec §12.3) : marque « T » d'un vol technique.
+  Widget _technicalMark(String id) => Tooltip(
+        message: 'Vol technique',
+        child: Container(
+          key: Key('fuel-$id-technical'),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text('T', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      );
 
   /// Totaux de la période : temps et atterrissages de tous les vols ;
   /// ajouts, consommation et moyenne sur les vols avec carburant.

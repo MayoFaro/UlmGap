@@ -104,9 +104,12 @@ String closedSummary({
 }) {
   final duration = formatDurationHm(actualMinutes);
   final amount = formatFcfa(billedAmount);
-  final base = billedTo == 'off_app'
-      ? 'Clôturé : $duration, $amount facturé hors app'
-      : 'Clôturé : $duration, $amount débité sur le compte de $debitedShortName';
+  final base = switch (billedTo) {
+    'off_app' => 'Clôturé : $duration, $amount facturé hors app',
+    // Plan 12 : vol technique, à la charge de l'association.
+    'association' => 'Clôturé : $duration, $technicalUnbilledText',
+    _ => 'Clôturé : $duration, $amount débité sur le compte de $debitedShortName',
+  };
   final counts = landingsText(landings, waterLandings, separator: ', ');
   return counts.isEmpty ? base : '$base, $counts';
 }

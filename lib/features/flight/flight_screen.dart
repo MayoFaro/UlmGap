@@ -56,6 +56,9 @@ class _FlightScreenState extends State<FlightScreen> {
   bool _instruction = false;
   bool _baptism = false;
   String? _baptismTier; // plan 9 : local | nyonye | awagne
+  // Plan 12 : vol technique (non facturé) et son motif obligatoire.
+  bool _technical = false;
+  final _technicalReason = TextEditingController();
   bool _saving = false;
 
   // --- Task 10 (finances) : correction admin d'un vol clôturé ---
@@ -141,6 +144,8 @@ class _FlightScreenState extends State<FlightScreen> {
       _instruction = f.instruction;
       _baptism = f.isBaptism;
       _baptismTier = f.baptismTier;
+      _technical = f.isTechnical;
+      _technicalReason.text = f.technicalReason ?? '';
       // Task 10 : préremplissage des champs de clôture pour une correction
       // admin éventuelle (aperçu de régularisation calculé avant même que le
       // bouton « Corriger » ne soit pressé n'est pas nécessaire ici : ces
@@ -217,6 +222,7 @@ class _FlightScreenState extends State<FlightScreen> {
     _payerFlightsSub?.cancel();
     _destination.dispose();
     _destinationFocus.dispose();
+    _technicalReason.dispose();
     _correctMinutes.dispose();
     _correctLandings.dispose();
     _correctWaterLandings.dispose();
@@ -262,7 +268,24 @@ class _FlightScreenState extends State<FlightScreen> {
   }
 
   bool get _allGap => _crew.every((u) => _category(u) == UserCategory.gap);
-  bool get _showFuelChoice => _mayChoose && _allGap && _passenger == null;
+  bool get _showFuelChoice => _mayChoose && _allGap && _passenger == null && !_technical;
+
+  /// Plan 12 (spec §12.1) : case « Vol technique » réservée aux instructeurs
+  /// et aux admins ; le créateur d'un vol déjà technique la garde.
+  bool get _technicalVisible => _isStaff || (widget.flight?.isTechnical ?? false);
+
+  /// Cocher « Vol technique » retire l'instruction, le carburant seulement et
+  /// le baptême (incompatibles, refusés par le serveur).
+  void _setTechnical(bool v) => setState(() {
+        _technical = v;
+        if (v) {
+          _instruction = false;
+          _fuelOnly = false;
+          _baptism = false;
+          _baptismTier = null;
+          _correctCustomChecked = false;
+        }
+      });
 
   Decision get _decision => _validating
       ? Decision.ok('valide', _current!.instructorUid)
@@ -291,17 +314,20 @@ class _FlightScreenState extends State<FlightScreen> {
   ///   reste correct tant que seule SA propre catégorie (toujours connue)
   ///   entre en jeu.
   String get _pricingMode {
+    if (_technical) return 'technical';
     if (_passenger != null && _baptism) return 'baptism';
     final stored = widget.flight;
     final storedHadNoPassenger = stored == null || stored.passengers.isEmpty;
-    final previous = storedHadNoPassenger ? stored?.pricingMode : null;
+    // Plan 12 : un vol qui cesse d'être technique ne reprend pas ce mode.
+    final storedMode = (stored?.isTechnical ?? false) ? null : stored?.pricingMode;
+    final previous = storedHadNoPassenger ? storedMode : null;
 
-    if (stored != null && !_mayChoose) {
+    if (stored != null && storedMode != null && !_mayChoose) {
       final sameCrew = _crew.length == stored.crew.length &&
           _crew.toSet().containsAll(stored.crew) &&
           stored.crew.toSet().containsAll(_crew);
       final samePassengerSituation = (_passenger != null) == stored.passengers.isNotEmpty;
-      if (sameCrew && samePassengerSituation) return stored.pricingMode;
+      if (sameCrew && samePassengerSituation) return storedMode;
     }
 
     return resolvePricingMode(
@@ -381,6 +407,7 @@ class _FlightScreenState extends State<FlightScreen> {
     final category = _category(_debitedUid);
     if (category == null) return null;
     if (_pricingMode == 'baptism') return null; // facturé hors app
+    if (_pricingMode == 'technical') return null; // non facturé (plan 12)
     return computedCost(_pricingMode, defaultFlightMinutes, category, _pricingForCost);
   }
 
@@ -435,6 +462,7 @@ class _FlightScreenState extends State<FlightScreen> {
   /// Lignes « Coût estimé » / « Crédit disponible », affichées dans l'aperçu
   /// (saisie) ou en tête de fiche (consultation d'un vol non clôturé).
   List<Widget> _financeLines(BuildContext context) {
+    if (_technical) return const [Text(technicalUnbilledText)];
     if (_passenger != null && _baptism) {
       final tier = _baptismTier ?? 'local';
       return [
@@ -506,7 +534,7 @@ class _FlightScreenState extends State<FlightScreen> {
     if (minutes == null) return null;
     final shortAmount = _correctNeedsShortAmount ? parseAmount(_correctShortAmount.text) : null;
     if (_correctNeedsShortAmount && shortAmount == null) return null;
-    final customChecked = _correctCustomChecked && _pricingMode != 'baptism';
+    final customChecked = _correctCustomChecked && _customAmountAllowed;
     final customAmount = customChecked ? parseAmount(_correctCustomAmount.text) : null;
     if (customChecked && customAmount == null) return null;
     final ClosingBill bill;
@@ -530,6 +558,10 @@ class _FlightScreenState extends State<FlightScreen> {
       (billedTo: bill.billedTo, payerUid: _debitedUid, amount: bill.billedAmount),
     );
   }
+
+  /// « Montant différent » : sans objet pour un baptême (montant fixe) ou un
+  /// vol technique (non facturé, plan 12).
+  bool get _customAmountAllowed => _pricingMode != 'baptism' && _pricingMode != 'technical';
 
   /// `+15 000 FCFA` (crédit/remboursement) ou `−15 000 FCFA` (débit) :
   /// formatFcfa gère déjà le signe négatif, seul le « + » manque ici.
@@ -632,7 +664,7 @@ class _FlightScreenState extends State<FlightScreen> {
     // l'animation de fermeture et Flutter l'utilise après dispose().
     final r = await showDialog<({String name, bool baptism, String? tier})>(
       context: context,
-      builder: (_) => const _PassengerDialog(),
+      builder: (_) => _PassengerDialog(allowBaptism: !_technical),
     );
     if (r != null && r.name.isNotEmpty) {
       setState(() {
@@ -670,6 +702,11 @@ class _FlightScreenState extends State<FlightScreen> {
           ? baptismTierMissingMessage
           : null;
 
+  /// Plan 12 : motif obligatoire d'un vol technique (message du serveur).
+  String? _technicalReasonError() => _technical && _technicalReason.text.trim().isEmpty
+      ? 'Motif du vol technique obligatoire.'
+      : null;
+
   /// Décision utilisateur 1 : contrôle du crédit (le serveur refuse aussi) —
   /// commun à un enregistrement normal et à une correction admin d'un vol non
   /// clôturé (skipCredit ne vaut que pour un vol déjà clôturé côté serveur).
@@ -689,6 +726,8 @@ class _FlightScreenState extends State<FlightScreen> {
     if (common != null) return common;
     final tierError = _baptismTierError();
     if (tierError != null) return tierError;
+    final reasonError = _technicalReasonError();
+    if (reasonError != null) return reasonError;
     // Seul un admin crée après coup un vol passé (vol oublié).
     final pastAllowed = _me.isAdmin && widget.flight == null;
     if (!pastAllowed && !_start.isAfter(widget.now())) return 'L\'heure de départ est passée.';
@@ -718,9 +757,11 @@ class _FlightScreenState extends State<FlightScreen> {
         crew: _crew,
         passengers: [if (_passenger != null) _passenger!],
         pricingMode: _showFuelChoice ? (_fuelOnly ? 'fuel_only' : 'standard') : null,
-        instruction: _instruction && _instructionEligible,
-        baptism: _passenger != null && _baptism,
-        baptismTier: _passenger != null && _baptism ? _baptismTier : null,
+        instruction: _instruction && _instructionEligible && !_technical,
+        baptism: _passenger != null && _baptism && !_technical,
+        baptismTier: _passenger != null && _baptism && !_technical ? _baptismTier : null,
+        technical: _technical,
+        technicalReason: _technical ? _technicalReason.text.trim() : null,
       );
 
   /// Exécute une action serveur, gère erreurs et succès communs (spec §11-12) :
@@ -772,6 +813,8 @@ class _FlightScreenState extends State<FlightScreen> {
             'instruction': d.instruction,
             'baptism': d.baptism,
             'baptismTier': d.baptismTier,
+            'technical': d.technical,
+            if (d.technical) 'technicalReason': d.technicalReason,
           });
           return 'Vol validé.';
         case _Mode.view:
@@ -901,6 +944,8 @@ class _FlightScreenState extends State<FlightScreen> {
     if (common != null) return common;
     final tierError = _baptismTierError();
     if (tierError != null) return tierError;
+    final reasonError = _technicalReasonError();
+    if (reasonError != null) return reasonError;
     final f = _current!;
     if (f.isClosed) {
       final m = _correctActualMinutes;
@@ -925,7 +970,7 @@ class _FlightScreenState extends State<FlightScreen> {
           return 'Montant trop élevé (${formatFcfa(maxManualAmount)} au maximum).';
         }
       }
-      if (_correctCustomChecked && _pricingMode != 'baptism') {
+      if (_correctCustomChecked && _customAmountAllowed) {
         final custom = parseAmount(_correctCustomAmount.text);
         if (custom == null) return 'Indiquez le montant.';
         if (custom > maxManualAmount) {
@@ -961,8 +1006,9 @@ class _FlightScreenState extends State<FlightScreen> {
     if (_correctNeedsShortAmount) {
       payload['shortFlightAmount'] = parseAmount(_correctShortAmount.text);
     }
-    if (_pricingMode == 'baptism') {
-      // Baptême : montant fixe, le serveur déduit le mode des drapeaux.
+    if (_pricingMode == 'baptism' || _pricingMode == 'technical') {
+      // Baptême : montant fixe ; vol technique : non facturé (le serveur
+      // refuse tout mode ou montant). Le serveur déduit le mode des drapeaux.
       payload.remove('pricingMode');
     } else if (_correctCustomChecked) {
       payload['customAmount'] = parseAmount(_correctCustomAmount.text);
@@ -1107,7 +1153,10 @@ class _FlightScreenState extends State<FlightScreen> {
               ListTile(title: Text('Instructeur désigné : ${_short(f.instructorUid!)}')),
             if (f.instruction)
               ListTile(title: Text('Vol d\'instruction (${_instructorLabel(f)})')),
-            ListTile(title: const Text('Tarification'), subtitle: Text(flightPricingLabel(f.pricingMode, f.baptismTier))),
+            if (f.isTechnical)
+              ListTile(title: Text(technicalTitle(f.technicalReason)))
+            else
+              ListTile(title: const Text('Tarification'), subtitle: Text(flightPricingLabel(f.pricingMode, f.baptismTier))),
             // Task 9 : coût estimé / crédit disponible d'un vol non clôturé,
             // hors mode saisie (l'aperçu ci-dessous les affiche alors à la
             // place, avec les valeurs du brouillon en cours).
@@ -1194,15 +1243,17 @@ class _FlightScreenState extends State<FlightScreen> {
               trailing: !_crewEditable
                   ? null
                   : Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
-                      Tooltip(
-                        message: 'Baptême de l\'air',
-                        child: Checkbox(
-                          key: const Key('passenger-baptism-toggle'),
-                          value: _baptism,
-                          onChanged: (v) => setState(() => _baptism = v ?? false),
+                      // Plan 12 : pas de baptême sur un vol technique.
+                      if (!_technical)
+                        Tooltip(
+                          message: 'Baptême de l\'air',
+                          child: Checkbox(
+                            key: const Key('passenger-baptism-toggle'),
+                            value: _baptism,
+                            onChanged: (v) => setState(() => _baptism = v ?? false),
+                          ),
                         ),
-                      ),
-                      if (_baptism)
+                      if (_baptism && !_technical)
                         DropdownButton<String>(
                           key: const Key('passenger-baptism-tier-line'),
                           value: baptismTiers.contains(_baptismTier) ? _baptismTier : null,
@@ -1273,7 +1324,23 @@ class _FlightScreenState extends State<FlightScreen> {
               ),
             ),
           ),
-          if (_instructionEligible)
+          if (_technicalVisible) ...[
+            CheckboxListTile(
+              key: const Key('technical'),
+              title: const Text('Vol technique'),
+              value: _technical,
+              onChanged: _fieldsEditable ? (v) => _setTechnical(v ?? false) : null,
+            ),
+            if (_technical)
+              TextField(
+                key: const Key('technical-reason'),
+                controller: _technicalReason,
+                enabled: _fieldsEditable,
+                maxLength: 80,
+                decoration: const InputDecoration(labelText: 'Motif (obligatoire)'),
+              ),
+          ],
+          if (_instructionEligible && !_technical)
             CheckboxListTile(
               key: const Key('f-instruction'),
               title: const Text('Vol d\'instruction'),
@@ -1341,7 +1408,7 @@ class _FlightScreenState extends State<FlightScreen> {
                 decoration: const InputDecoration(labelText: 'Montant à facturer'),
                 onChanged: (_) => setState(() {}),
               ),
-            if (_passenger != null && _pricingMode != 'baptism') ...[
+            if (_passenger != null && _customAmountAllowed) ...[
               CheckboxListTile(
                 key: const Key('correct-custom-check'),
                 contentPadding: EdgeInsets.zero,
@@ -1414,7 +1481,10 @@ class _FlightScreenState extends State<FlightScreen> {
 /// Dialogue « passager sans compte » : possède son propre contrôleur (dispose
 /// naturel à la fermeture, voir _addPassenger ci-dessus).
 class _PassengerDialog extends StatefulWidget {
-  const _PassengerDialog();
+  const _PassengerDialog({required this.allowBaptism});
+
+  /// Plan 12 : option « Baptême de l'air » masquée sur un vol technique.
+  final bool allowBaptism;
 
   @override
   State<_PassengerDialog> createState() => _PassengerDialogState();
@@ -1442,16 +1512,17 @@ class _PassengerDialogState extends State<_PassengerDialog> {
           controller: _c,
           decoration: const InputDecoration(labelText: 'Nom'),
         ),
-        CheckboxListTile(
-          key: const Key('passenger-baptism'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Baptême de l\'air'),
-          value: _baptism,
-          onChanged: (v) => setState(() {
-            _baptism = v ?? false;
-            _error = null;
-          }),
-        ),
+        if (widget.allowBaptism)
+          CheckboxListTile(
+            key: const Key('passenger-baptism'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Baptême de l\'air'),
+            value: _baptism,
+            onChanged: (v) => setState(() {
+              _baptism = v ?? false;
+              _error = null;
+            }),
+          ),
         if (_baptism)
           // Aucun forfait par défaut : le choix doit être explicite.
           SegmentedButton<String>(

@@ -207,4 +207,66 @@ void main() {
     final rows = billingCsvRows([f], {'u1': member('u1', 'DPS', 'instructeur')});
     expect(rows.single[6], 'Baptême Nyonye');
   });
+
+  testWidgets('vol technique : mode, payeur association, total distinct, hors des autres totaux',
+      (tester) async {
+    _useTallView(tester);
+    final finance = FakeFinanceApi()
+      ..flights = [
+        testFlight(id: 'f1', start: DateTime(2026, 10, 5), isClosed: true,
+            actualFlightMinutes: 60, billedAmount: 12000, billedTo: 'account'),
+        testFlight(id: 'f2', start: DateTime(2026, 10, 6), isClosed: true,
+            actualFlightMinutes: 45, billedAmount: 25000, billedTo: 'off_app',
+            passengers: const ['Paul'], pricingMode: 'custom'),
+        testFlight(id: 't1', start: DateTime(2026, 10, 7), isClosed: true,
+            pricingMode: 'technical', technicalReason: 'Convoyage',
+            actualFlightMinutes: 50, billedAmount: 0, billedTo: 'association'),
+      ];
+    await tester.pumpWidget(host(finance, FakeFlightApi()..directory = [member('u1', 'DPS', 'instructeur')]));
+    await tester.pump();
+    expect(find.text('Vol technique'), findsOneWidget);
+    expect(find.text('Association'), findsOneWidget);
+    expect(find.text('Vols techniques : 1 vol, 0 h 50'), findsOneWidget);
+    // Débité = 12 000 seulement ; hors app = 25 000 seulement.
+    expect(find.text(formatFcfa(12000)), findsNWidgets(2)); // ligne f1 + total
+    expect(find.text(formatFcfa(25000)), findsNWidgets(2)); // ligne f2 + total
+  });
+
+  testWidgets('vols techniques : pluriel', (tester) async {
+    _useTallView(tester);
+    final finance = FakeFinanceApi()
+      ..flights = [
+        for (final id in ['t1', 't2'])
+          testFlight(id: id, start: DateTime(2026, 10, 7), isClosed: true,
+              pricingMode: 'technical', actualFlightMinutes: 45, billedAmount: 0,
+              billedTo: 'association'),
+      ];
+    await tester.pumpWidget(host(finance, FakeFlightApi()));
+    await tester.pump();
+    expect(find.text('Vols techniques : 2 vols, 1 h 30'), findsOneWidget);
+  });
+
+  testWidgets('aucun vol technique : pas de total des vols techniques', (tester) async {
+    _useTallView(tester);
+    final finance = FakeFinanceApi()
+      ..flights = [
+        testFlight(id: 'f1', start: DateTime(2026, 10, 5), isClosed: true,
+            actualFlightMinutes: 60, billedAmount: 12000, billedTo: 'account'),
+      ];
+    await tester.pumpWidget(host(finance, FakeFlightApi()));
+    await tester.pump();
+    expect(find.textContaining('Vols techniques'), findsNothing);
+  });
+
+  test('billingCsvRows : vol technique, montant 0, imputation association', () {
+    final f = testFlight(
+        id: 't1', isClosed: true, pricingMode: 'technical', technicalReason: 'Convoyage',
+        actualFlightMinutes: 50, billedAmount: 0, billedTo: 'association');
+    final rows = billingCsvRows([f], {'u1': member('u1', 'DPS', 'instructeur')});
+    expect(rows.single[6], 'Vol technique');
+    expect(rows.single[8], '0');
+    expect(rows.single[9], 'Association');
+    expect(rows.single[10], '');
+  });
 }
+
