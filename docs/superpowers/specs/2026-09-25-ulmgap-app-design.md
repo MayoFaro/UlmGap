@@ -25,7 +25,8 @@ avec :
   2026-09-30 : plus de compteur par appareil) ;
 - un relevé admin de tout ce qui a été facturé ;
 - un **suivi carburant** par appareil (révision du 2026-10-02, §9) ;
-- un **suivi de caisse** de l'association (révision du 2026-10-14, §11).
+- un **suivi de caisse** de l'association (révision du 2026-10-14, §11) ;
+- des **vols techniques** non facturés (révision du 2026-10-14, §12).
 
 ## Décisions structurantes
 
@@ -987,3 +988,63 @@ Montants entiers en FCFA, sans plafond (comme les crédits, §4.4).
 - Règles Firestore : lecture staff seulement, aucune écriture client.
 - Widgets : écran Caisse (en-tête, filtres, totaux), dialogues d'opération
   et de correction, bouton « Reprise terminée ».
+
+## 12. Vol technique (révision du 2026-10-14)
+
+But : un vol au profit de l'association (convoyage, essai, maintenance…)
+n'est facturé à personne. Principe du §11 : **la caisse suit l'argent, la
+cuve suit les litres**. Le carburant d'un vol technique, déjà payé à
+l'achat, n'est débité ni au pilote ni à la caisse ; ses litres seront
+comptés en consommation de l'association au plan « suivi de cuve ».
+
+### 12.1 Saisie
+
+- **Case « Vol technique »** (`flights.technical`, bool) dans le formulaire
+  de vol (création, modification, validation, correction admin), visible des
+  **instructeurs et des admins** seulement, avec un **motif obligatoire**
+  (`flights.technicalReason`, texte libre, 80 caractères au maximum :
+  « Convoyage Wonga-Wongué », « Essai moteur »).
+- Le serveur refuse `technical: true` posé par un autre qu'un instructeur
+  ou un admin : « Vol technique : réservé aux instructeurs et aux admins. »
+  Le créateur non instructeur d'un vol déjà technique (case posée par
+  l'instructeur à la validation) peut le modifier sans perdre la case.
+- **Incompatibilités** (refus serveur, case masquée dans l'app) : vol
+  d'instruction (§10.1) et baptême de l'air (§10.2). Un **passager sans
+  compte** reste possible (mécanicien), sans facturation.
+- Matrice des droits (§3.2), contrôles communs (§3.4), conflits (§3.5) et
+  appareil amphibie (§3.6) : inchangés.
+
+### 12.2 Facturation
+
+- Mode **`technical`**, prioritaire sur tous les autres (`standard`,
+  `fuel_only`, `baptism`) ; `custom` impossible.
+- **Aucun contrôle de crédit** (§4.4).
+- **Clôture** : dialogue inchangé (durée, atterrissages, amerrissages,
+  carburant), sans « Montant à facturer » ni « Montant différent » (refus
+  serveur : « Aucun montant pour un vol technique. »). Le vol enregistre
+  `billedAmount: 0`, `billedTo: "association"` ; **aucun mouvement** de
+  compte ni de caisse ; pas de crédit d'instruction. Résumé : « Vol
+  technique : non facturé (association) ».
+- **Correction admin** d'un vol clôturé (§4.5) : passer un vol en technique
+  rembourse le débit du payeur (transaction `flight_adjustment`) ; l'inverse
+  le débite. Aucune ligne de caisse.
+
+### 12.3 Affichages
+
+- Fiche du vol : « Vol technique — motif ».
+- Aperçu du formulaire : « Vol technique : non facturé (association) ».
+- Relevé des vols facturés et export CSV : mode « Vol technique », montant
+  0, payeur « association » ; total distinct « Vols techniques : N vols,
+  durée totale ».
+- Suivi carburant (§9.5) : les lignes des vols techniques portent une
+  marque « T » (bulle d'aide « Vol technique »).
+- Carnet de vol : heures comptées normalement.
+- Ni règle Firestore, ni index, ni champ du contrat du pont ne changent
+  (`pricingMode` n'est pas lu par le pont).
+
+### 12.4 Recette
+
+Le vol « ww » (Wonga-Wongué), passé et non clôturé : un admin le corrige
+en « Vol technique » (motif « Convoyage Wonga-Wongué »), puis on le
+clôture. Attendu : aucun compte débité, aucune ligne de caisse,
+`billedTo: "association"`.
