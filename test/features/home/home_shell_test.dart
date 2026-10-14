@@ -19,6 +19,7 @@ Widget host(AppUser user) => AppServices(
       users: FakeUserRepository(),
       flights: FakeFlightApi(),
       finance: FakeFinanceApi(),
+      cash: FakeCashApi(),
       child: MaterialApp(home: HomeShell(user: user)),
     );
 
@@ -47,6 +48,16 @@ void main() {
     await tester.tap(find.byTooltip('Pilotes'));
     await tester.pumpAndSettle();
     expect(find.byType(InstructorsScreen), findsOneWidget);
+  });
+
+  testWidgets('icône Caisse : visible pour un instructeur, absente pour un élève',
+      (tester) async {
+    await tester.pumpWidget(host(testUser(profile: 'instructeur')));
+    await tester.pump();
+    expect(find.byTooltip('Caisse'), findsOneWidget);
+    await tester.pumpWidget(host(testUser(profile: 'eleve')));
+    await tester.pump();
+    expect(find.byTooltip('Caisse'), findsNothing);
   });
 
   testWidgets('icône Pilotes : présente pour un admin non instructeur',
@@ -93,7 +104,7 @@ void main() {
     expect(find.byTooltip('Compteurs'), findsNothing);
   });
 
-  testWidgets('admin sur 360 px de large : pas de débordement, 4 icônes accessibles',
+  testWidgets('admin sur 360 px de large : pas de débordement, 5 icônes accessibles',
       (tester) async {
     tester.view.physicalSize = const Size(360, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -102,7 +113,7 @@ void main() {
     await tester.pumpWidget(host(testUser(profile: 'instructeur', isAdmin: true)));
     await tester.pump();
     expect(tester.takeException(), isNull);
-    for (final t in ['Carnet de vol', 'Mon compte', 'Pilotes', 'Administration']) {
+    for (final t in ['Carnet de vol', 'Mon compte', 'Pilotes', 'Caisse', 'Administration']) {
       expect(find.byTooltip(t).hitTestable(), findsOneWidget, reason: t);
     }
   });
