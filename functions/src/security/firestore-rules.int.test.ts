@@ -5,7 +5,7 @@ import * as path from "node:path";
 import {
   RulesTestEnvironment, assertFails, assertSucceeds, initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { and, collection, doc, getDoc, getDocs, or, orderBy, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
 
 let env: RulesTestEnvironment;
 
@@ -93,4 +93,91 @@ test("aucune écriture client sur les collections métier", async () => {
   await assertFails(setDoc(doc(db, "transactions/new"), { amount: 1 }));
   await assertFails(setDoc(doc(db, "settings/pricing"), { hourlyRate: 1 }));
   await assertFails(setDoc(doc(db, "autre/x"), { a: 1 }));
+});
+
+// Une demande, même refusée/expirée/annulée, reste entre ses deux interlocuteurs.
+async function seedPrivateRequests() {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "users/other"), { active: true, isAdmin: false, profile: "instructeur" });
+    await setDoc(doc(db, "users/admin"), { active: true, isAdmin: true, profile: null });
+    for (const [id, status, deleted] of [
+      ["pending", "demande", false], ["refused", "refuse", false],
+      ["cancelled", "demande", true],
+    ] as const) {
+      await setDoc(doc(db, `flights/${id}`), {
+        status, deleted, createdBy: "eleve", instructorUid: "instr",
+        crew: ["eleve", "instr"], start: Timestamp.fromMillis(1000),
+      });
+    }
+    await updateDoc(doc(db, "flights/f1"), {
+      start: Timestamp.fromMillis(2000), aircraftId: "a1", payerUid: "eleve", isClosed: false,
+    });
+  });
+}
+
+test("demandes privées : lecture réservée au demandeur et à l'instructeur désigné, sans exception admin", async () => {
+  await seedPrivateRequests();
+  for (const id of ["pending", "refused", "cancelled"]) {
+    for (const uid of ["eleve", "instr"]) {
+      await assertSucceeds(getDoc(doc(as(uid), `flights/${id}`)));
+    }
+    for (const uid of ["other", "admin"]) {
+      await assertFails(getDoc(doc(as(uid), `flights/${id}`)));
+    }
+  }
+});
+
+test("planning : requête globale interdite, requête limitée aux vols visibles autorisée", async () => {
+  await seedPrivateRequests();
+  for (const uid of ["eleve", "instr", "other", "admin"]) {
+    const flights = collection(as(uid), "flights");
+    await assertFails(getDocs(query(flights, where("start", ">=", Timestamp.fromMillis(0)))));
+    const result = await assertSucceeds(getDocs(query(flights,
+      and(or(where("status", "==", "valide"), where("createdBy", "==", uid), where("instructorUid", "==", uid)),
+        where("start", ">=", Timestamp.fromMillis(0))), orderBy("start"),
+    )));
+    const expected = uid === "eleve" || uid === "instr" ? 4 : 1;
+    if (result.size !== expected) throw new Error(`Visibilité incorrecte pour ${uid}: ${result.size}`);
+    await assertSucceeds(getDocs(query(flights, where("status", "==", "valide"))));
+  }
+});
+
+test("validation : le vol devient public ; retour en demande : il redevient privé", async () => {
+  await seedPrivateRequests();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "flights/pending"), { status: "valide" });
+  });
+  await assertSucceeds(getDoc(doc(as("other"), "flights/pending")));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "flights/pending"), { status: "demande" });
+  });
+  await assertFails(getDoc(doc(as("other"), "flights/pending")));
+});
+
+test("lectures auxiliaires : carnet, carburant, crédit et destinations ne lisent que les vols validés", async () => {
+  await seedPrivateRequests();
+  const flights = collection(as("other"), "flights");
+  const publicFilter = where("status", "==", "valide");
+  for (const q of [
+    query(flights, publicFilter, where("start", ">=", Timestamp.fromMillis(0)),
+      where("start", "<", Timestamp.fromMillis(3000)), orderBy("start")),
+    query(flights, publicFilter, where("aircraftId", "==", "a1")),
+    query(flights, publicFilter, where("payerUid", "==", "eleve"), where("isClosed", "==", false)),
+    query(flights, publicFilter, where("isClosed", "==", false)),
+    query(flights, publicFilter, orderBy("start", "desc")),
+  ]) {
+    const result = await assertSucceeds(getDocs(q));
+    if (result.size !== 1 || result.docs[0].id !== "f1") throw new Error("Vols privés dans une lecture auxiliaire");
+  }
+});
+
+test("changement d'instructeur : l'ancien destinataire perd l'accès", async () => {
+  await seedPrivateRequests();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "flights/pending"), { instructorUid: "other", crew: ["eleve", "other"] });
+  });
+  await assertFails(getDoc(doc(as("instr"), "flights/pending")));
+  await assertSucceeds(getDoc(doc(as("other"), "flights/pending")));
+  await assertSucceeds(getDoc(doc(as("eleve"), "flights/pending")));
 });

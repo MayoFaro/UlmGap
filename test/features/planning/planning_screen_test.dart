@@ -39,6 +39,34 @@ bool _hasFillAncestor(Finder textFinder, Color fill) => find
 bool _hasHighlightAncestor(Finder textFinder) => _hasFillAncestor(textFinder, highlightFill);
 
 void main() {
+  for (final viewer in [
+    testUser(uid: 'outsider'),
+    testUser(uid: 'outsider', profile: 'instructeur'),
+    testUser(uid: 'outsider', isAdmin: true),
+    testUser(uid: 'u1'),
+    testUser(uid: 'ins', profile: 'instructeur'),
+  ]) {
+    testWidgets('demandes privées : ${viewer.uid}, ${viewer.profile}, admin=${viewer.isAdmin}',
+        (tester) async {
+      final a = api()..flights = [
+        testFlight(id: 'p', start: now.add(const Duration(hours: 1)),
+            status: 'demande', createdBy: 'u1', instructorUid: 'ins',
+            crew: ['u1', 'ins'], destination: 'Privée'),
+        testFlight(id: 'r', start: now.add(const Duration(hours: 3)),
+            status: 'refuse', createdBy: 'u1', instructorUid: 'ins',
+            crew: ['u1', 'ins'], destination: 'Refus privé'),
+        testFlight(id: 'v', start: now.add(const Duration(hours: 5)),
+            status: 'valide', destination: 'Vol public'),
+      ];
+      await tester.pumpWidget(host(a, viewer));
+      await tester.pumpAndSettle();
+      final privateVisible = viewer.uid == 'u1' || viewer.uid == 'ins';
+      expect(find.textContaining('→ Privée'), privateVisible ? findsWidgets : findsNothing);
+      expect(find.textContaining('→ Refus privé'), privateVisible ? findsWidgets : findsNothing);
+      expect(find.textContaining('→ Vol public'), findsWidgets);
+    });
+  }
+
   testWidgets('vol refusé : grisé, jamais surligné en bleu, même pour un membre de l\'équipage',
       (tester) async {
     final a = api()

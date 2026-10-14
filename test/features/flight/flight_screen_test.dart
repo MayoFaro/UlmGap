@@ -683,6 +683,9 @@ void main() {
     await tester.tap(find.text('Clôturer'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('closing-minutes')), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const Key('closing-minutes'))).controller!.text, '60');
+    await tester.enterText(find.byKey(const Key('closing-minutes')), '90');
+    await tester.pumpAndSettle();
     // 90 min GAP : 12 000 + 12 000 × (90 - 60) / 60 = 18 000 (plan 9).
     expect(find.text('Montant : ${formatFcfa(18000)}'), findsOneWidget);
     await fillFuel(tester);
@@ -760,7 +763,7 @@ void main() {
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     expect(finance.closed.single['flightId'], 'c5');
-    expect(finance.closed.single['actualMinutes'], 90);
+    expect(finance.closed.single['actualMinutes'], 60);
     expect(find.text('planning'), findsOneWidget);
     expect(find.byType(FlightScreen), findsNothing);
   });

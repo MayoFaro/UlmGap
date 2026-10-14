@@ -163,24 +163,22 @@ test("concurrence : deux créations simultanées du même compte débité, le cr
   assert.equal(code(rejected.reason), "failed-precondition");
 });
 
-test("crédit : l'ancien snapshot d'un autre vol (includedMinutes 75, sans tolérance) garde l'ancien calcul", async () => {
-  const me = await seedUser({ profile: "instructeur", category: "GAP", balance: 26_000 });
-  const a1 = await seedAircraft();
-  const a2 = await seedAircraft();
-  const { toleranceMinutes: _t, ...oldSnapshot } = { ...DEFAULT_PRICING, includedMinutes: 75 };
-  // Autre vol de 90 min avec ancien snapshot : 12 000 + 12 000 × 15 / 60 = 15 000.
-  await seedFlight({
-    start: at(200), end: at(200) + 90 * 60_000, crew: [me.uid], createdBy: me.uid, aircraftId: a1,
-    pricingSnapshot: oldSnapshot,
-  });
-  // Vol de 60 min (forfait 12 000) : disponible 26 000 − 15 000 = 11 000 < 12 000.
+test("créneaux indépendants des 60 minutes réservées, y compris après modification", async () => {
+  const me = await seedUser({ profile: "instructeur", category: "GAP", balance: 24_000 });
+  const a = await seedAircraft();
+  const { id } = await createFlight(me, draft(a, [me.uid], {
+    start: at(200), end: at(203),
+  }));
+  await updateFlight(me, { flightId: id, ...draft(a, [me.uid], {
+    start: at(200), end: at(205),
+  }) });
+  assert.equal((await get(id)).end.toMillis(), at(205));
+  // Le premier vol réserve 12 000, malgré cinq heures d'immobilisation.
+  const second = await createFlight(me, draft(await seedAircraft(), [me.uid]));
+  assert.equal(second.status, "valide");
   await assert.rejects(
-    createFlight(me, draft(a2, [me.uid])),
-    (e) => {
-      assert.equal(code(e), "failed-precondition");
-      assert.deepEqual(credit(e), { missing: 1_000, available: 11_000, cost: 12_000 });
-      return true;
-    },
+    createFlight(me, draft(await seedAircraft(), [me.uid], { start: at(220), end: at(223) })),
+    (e) => credit(e)?.missing === 12_000,
   );
 });
 

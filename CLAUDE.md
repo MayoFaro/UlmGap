@@ -1,3 +1,6 @@
+fvm flutter build apk --release --flavor prod --dart-define=ENV=prod
+fvm flutter build web --release --dart-define=ENV=prod
+firebase deploy --only hosting --project prod
 # UlmGap : consignes pour Claude Code
 
 Application Flutter (Android, iOS, web) de gestion des vols ULM, séparée

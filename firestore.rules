@@ -28,7 +28,15 @@ service cloud.firestore {
     match /profiles/{uid} { allow read: if signedIn(); }
     match /aircraft/{id} { allow read: if signedIn(); }
     match /settings/{id} { allow read: if signedIn(); }
-    match /flights/{id} { allow read: if signedIn(); }
+    match /flights/{id} {
+      // Seuls les vols validés sont publics au sein du club. Une demande
+      // reste privée après refus, expiration ou annulation, même pour le staff.
+      allow read: if signedIn() && (
+        resource.data.status == 'valide'
+        || resource.data.createdBy == request.auth.uid
+        || resource.data.instructorUid == request.auth.uid
+      );
+    }
 
     match /transactions/{id} {
       allow read: if signedIn() && (resource.data.userUid == request.auth.uid || isStaff());

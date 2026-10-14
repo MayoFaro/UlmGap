@@ -10,7 +10,7 @@ import {
   isPlanning, payerOf, resolvePricingMode,
 } from "../rules/flights";
 import {
-  availableCredit, estimatedCost, formatFcfa, Pricing, pricingWithDefaults, toCategory,
+  availableCredit, DEFAULT_FLIGHT_MINUTES, estimatedCost, formatFcfa, Pricing, pricingWithDefaults, toCategory,
 } from "../rules/pricing";
 import { checkMinDuration, type FlightInput } from "./validation";
 
@@ -161,7 +161,7 @@ async function checkCredit(
   tx: Tx, db: Db, locks: Ref[],
   a: {
     id: string; payerUid: string; category: string; pricingMode: "standard" | "fuel_only";
-    plannedMinutes: number; balance: number; shortName: string;
+    balance: number; shortName: string;
     ownPricing: Pricing; fallbackPricing: Pricing;
   },
 ): Promise<Ref[]> {
@@ -185,17 +185,15 @@ async function checkCredit(
       d.get("deleted") !== true &&
       (d.get("pricingMode") === "standard" || d.get("pricingMode") === "fuel_only"))
     .map((d) => {
-      const start = (d.get("start") as FirebaseFirestore.Timestamp).toMillis();
-      const end = (d.get("end") as FirebaseFirestore.Timestamp).toMillis();
       // Ancien snapshot sans toleranceMinutes : complété par pricingWithDefaults.
       const snapshot = d.get("pricingSnapshot") as Partial<Pricing> | null | undefined;
       const otherPricing = snapshot ? pricingWithDefaults(snapshot) : a.fallbackPricing;
       return estimatedCost(
-        d.get("pricingMode") as "standard" | "fuel_only", (end - start) / 60_000, category, otherPricing,
+        d.get("pricingMode") as "standard" | "fuel_only", DEFAULT_FLIGHT_MINUTES, category, otherPricing,
       );
     });
   const available = availableCredit(a.balance, otherCosts);
-  const cost = estimatedCost(a.pricingMode, a.plannedMinutes, category, a.ownPricing);
+  const cost = estimatedCost(a.pricingMode, DEFAULT_FLIGHT_MINUTES, category, a.ownPricing);
   if (available < cost) {
     const missing = cost - available;
     throw new HttpsError("failed-precondition",
@@ -270,7 +268,7 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
   if (!a.skipCredit && pricingMode !== "baptism") {
     locks = await checkCredit(tx, db, locks, {
       id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
-      shortName: payer.shortName, plannedMinutes: (a.input.end - a.input.start) / 60_000,
+      shortName: payer.shortName,
       ownPricing: pricingSnapshot ?? pricing, fallbackPricing: pricing,
     });
   }

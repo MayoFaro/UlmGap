@@ -59,11 +59,11 @@ abstract class FinanceApi {
   Future<void> adminUpdateFlight(String flightId, Map<String, dynamic> payload);
   Future<void> adminDeleteFlight(String flightId);
 
-  /// Vols dont le départ tombe dans [from, to[, pour le calcul du crédit
+  /// Vols validés dont le départ tombe dans [from, to[, pour le calcul du crédit
   /// disponible et les écrans admin.
   Stream<List<Flight>> watchFlightsBetween(DateTime from, DateTime to);
 
-  /// Vols non clôturés dont [payerUid] est le compte débité, passés compris
+  /// Vols validés non clôturés dont [payerUid] est le compte débité, passés compris
   /// (crédit disponible, spec §4.4 : même requête que le serveur, égalités
   /// seules, sans index composite).
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid);
@@ -169,6 +169,7 @@ class FirebaseFinanceApi implements FinanceApi {
 
   @override
   Stream<List<Flight>> watchFlightsBetween(DateTime from, DateTime to) => _flights
+      .where('status', isEqualTo: 'valide')
       .where('start', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
       .where('start', isLessThan: Timestamp.fromDate(to))
       .orderBy('start')
@@ -177,6 +178,7 @@ class FirebaseFinanceApi implements FinanceApi {
 
   @override
   Stream<List<Flight>> watchUnclosedFlightsPaidBy(String payerUid) => _flights
+      .where('status', isEqualTo: 'valide')
       .where('payerUid', isEqualTo: payerUid)
       .where('isClosed', isEqualTo: false)
       .snapshots()

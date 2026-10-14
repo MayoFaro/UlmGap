@@ -3,6 +3,9 @@
 // test/fixtures/pricing_cases.json.
 import 'profiles.dart';
 
+/// Temps de vol par défaut, indépendant du créneau d’immobilisation.
+const defaultFlightMinutes = 60;
+
 /// Plan 9 : forfaits de baptême (clés de [Pricing.baptismFees]).
 const baptismTiers = ['local', 'nyonye', 'awagne'];
 

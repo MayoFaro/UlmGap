@@ -5,6 +5,9 @@
 import { isInstructionEligible } from "./flights";
 import type { Person } from "./flights";
 
+// Temps de vol avant clôture, indépendant du créneau réservé.
+export const DEFAULT_FLIGHT_MINUTES = 60;
+
 export type Category = "GAP" | "GR" | "MIL" | "EXT";
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
 

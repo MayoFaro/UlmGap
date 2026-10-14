@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/profiles.dart';
 import 'aircraft.dart';
@@ -61,7 +62,7 @@ FlightStatus _statusOf(Object? v) =>
     FlightStatus.values.firstWhere((s) => s.name == v, orElse: () => FlightStatus.valide);
 
 abstract class FlightApi {
-  /// Vols dont le départ est à partir de [from], triés par départ.
+  /// Vols visibles par le compte connecté à partir de [from], triés par départ.
   Stream<List<Flight>> watchFrom(DateTime from);
   Stream<Flight?> watchFlight(String id);
   Stream<List<CrewMember>> watchDirectory();
@@ -70,7 +71,7 @@ abstract class FlightApi {
   Stream<Map<String, UserCategory>> watchCategories();
   Stream<List<Aircraft>> watchAircraft();
 
-  /// Vols d'un appareil (écran Suivi carburant) ; égalité seule, tri dans l'app.
+  /// Vols validés d'un appareil (Suivi carburant) ; tri dans l'app.
   Stream<List<Flight>> watchAircraftFlights(String aircraftId);
   Future<List<String>> recentDestinations();
 
@@ -84,17 +85,31 @@ abstract class FlightApi {
 }
 
 class FirebaseFlightApi implements FlightApi {
-  FirebaseFlightApi({FirebaseFirestore? db, FirebaseFunctions? fn})
+  FirebaseFlightApi({FirebaseFirestore? db, FirebaseFunctions? fn, FirebaseAuth? auth})
       : _db = db ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance,
         _fn = fn ?? FirebaseFunctions.instanceFor(region: 'europe-west1');
 
   final FirebaseFirestore _db;
+  final FirebaseAuth _auth;
   final FirebaseFunctions _fn;
 
   CollectionReference<Map<String, dynamic>> get _flights => _db.collection('flights');
 
+  /// Même périmètre que les règles Firestore, appliqué dans la requête :
+  /// les demandes d'autres personnes ne sont jamais téléchargées.
+  Query<Map<String, dynamic>> get _visibleFlights {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('Connexion requise.');
+    return _flights.where(Filter.or(
+      Filter('status', isEqualTo: 'valide'),
+      Filter('createdBy', isEqualTo: uid),
+      Filter('instructorUid', isEqualTo: uid),
+    ));
+  }
+
   @override
-  Stream<List<Flight>> watchFrom(DateTime from) => _flights
+  Stream<List<Flight>> watchFrom(DateTime from) => _visibleFlights
       .where('start', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
       .orderBy('start')
       .snapshots()
@@ -129,13 +144,16 @@ class FirebaseFlightApi implements FlightApi {
 
   @override
   Stream<List<Flight>> watchAircraftFlights(String aircraftId) => _flights
+      .where('status', isEqualTo: 'valide')
       .where('aircraftId', isEqualTo: aircraftId)
       .snapshots()
       .map((q) => q.docs.map((d) => Flight.fromMap(d.id, d.data())).toList());
 
   @override
   Future<List<String>> recentDestinations() async {
-    final q = await _flights.orderBy('start', descending: true).limit(200).get();
+    final q = await _flights
+        .where('status', isEqualTo: 'valide')
+        .orderBy('start', descending: true).limit(200).get();
     final seen = <String>{};
     for (final d in q.docs) {
       final s = (d.data()['destination'] as String?)?.trim() ?? '';

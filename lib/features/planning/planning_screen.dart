@@ -201,7 +201,8 @@ class _PlanningScreenState extends State<PlanningScreen> {
       List<Aircraft> aircraft) {
     final now = widget.now();
     final me = widget.me;
-    final flights = (snap.data ?? const <Flight>[]).where((f) => !f.deleted).toList();
+    final flights = (snap.data ?? const <Flight>[])
+        .where((f) => !f.deleted && f.isVisibleTo(me.uid)).toList();
     final state = asyncState(snap, isEmpty: flights.isEmpty, empty: 'Aucun vol à venir.');
 
     Widget header(String text) => Padding(

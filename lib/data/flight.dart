@@ -152,6 +152,11 @@ class Flight {
         fuelEndLiters: (m['fuelEndLiters'] as num?)?.toInt(),
       );
 
+  /// Une demande reste privée même après refus ou expiration.
+  /// Le statut d'administrateur ne donne pas accès aux demandes d'autrui.
+  bool isVisibleTo(String uid) =>
+      status == FlightStatus.valide || createdBy == uid || instructorUid == uid;
+
   /// Demande non validée à l'heure du départ : considérée comme refusée.
   bool isExpiredRequest(DateTime now) =>
       status == FlightStatus.demande && !start.isAfter(now);

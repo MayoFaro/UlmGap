@@ -381,7 +381,7 @@ class _FlightScreenState extends State<FlightScreen> {
     final category = _category(_debitedUid);
     if (category == null) return null;
     if (_pricingMode == 'baptism') return null; // facturé hors app
-    return computedCost(_pricingMode, _end.difference(_start).inMinutes, category, _pricingForCost);
+    return computedCost(_pricingMode, defaultFlightMinutes, category, _pricingForCost);
   }
 
   /// Abonne l'écran aux vols non clôturés du compte débité courant (appelé
@@ -413,7 +413,7 @@ class _FlightScreenState extends State<FlightScreen> {
             !o.isClosed &&
             !o.deleted &&
             (o.pricingMode == 'standard' || o.pricingMode == 'fuel_only'))
-          estimatedCost(o.pricingMode, o.end.difference(o.start).inMinutes, category,
+          estimatedCost(o.pricingMode, defaultFlightMinutes, category,
               o.pricingSnapshot ?? _pricing),
     ];
   }
@@ -862,7 +862,7 @@ class _FlightScreenState extends State<FlightScreen> {
     final result = await showDialog<ClosingResult>(
       context: context,
       builder: (_) => ClosingDialog(
-        plannedMinutes: f.end.difference(f.start).inMinutes,
+        plannedMinutes: defaultFlightMinutes,
         mode: f.pricingMode,
         category: category,
         pricing: _pricingForCost,
@@ -1130,7 +1130,7 @@ class _FlightScreenState extends State<FlightScreen> {
           Row(children: [
             Expanded(
               child: ListTile(
-                title: const Text('Départ'),
+                title: const Text('Début'),
                 subtitle: Text(formatTime(_start)),
                 onTap: _fieldsEditable ? _pickStart : null,
               ),
@@ -1143,6 +1143,11 @@ class _FlightScreenState extends State<FlightScreen> {
               ),
             ),
           ]),
+          if (!(_current?.isClosed ?? false))
+            const Text(
+              'Créneau d’immobilisation de l’appareil. '
+              'Temps de vol : 60 min, à ajuster à la clôture.',
+            ),
           DropdownButtonFormField<String>(
             key: const Key('f-aircraft'),
             value: _aircraft.any((a) => a.id == _aircraftId) ? _aircraftId : null,
