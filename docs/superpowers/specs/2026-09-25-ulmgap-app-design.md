@@ -832,7 +832,7 @@ les opérations se sérialisent.
 |---|---|
 | `kind` | §11.1 |
 | `amount` | int signé : positif pour une entrée, négatif pour une sortie |
-| `date` | Date de l'opération, saisie : aujourd'hui par défaut, jamais dans le futur (jour du club, Africa/Libreville) |
+| `date` | Jour de l'opération, chaîne « AAAA-MM-JJ » (jour du club, Africa/Libreville) : aujourd'hui par défaut, jamais dans le futur |
 | `userUid` | Adhérent d'un `fuel_credit` ; `null` pour une ligne importée |
 | `transactionId` | Ligne `transactions` jumelle d'un `fuel_credit` (ou de sa correction) |
 | `note` | Texte : objet de la dépense, motif, ou libellé d'origine de l'Excel |
@@ -870,14 +870,17 @@ Montants entiers en FCFA, sans plafond (comme les crédits, §4.4).
   corrections (relues dans la transaction) ; on peut donc corriger
   plusieurs fois. Refus si le montant saisi est déjà le montant juste.
 - La correction est une **nouvelle ligne** du même `kind`, `correctsId` =
-  ligne d'origine, `amount` = écart, note « Correction » + motif facultatif.
-  On ne corrige qu'une ligne d'origine, jamais une ligne de correction.
+  ligne d'origine, `amount` = écart, **même `date` que la ligne d'origine**
+  (elle reste dans la même période), note « Correction » ou « Correction :
+  motif ». On ne corrige qu'une ligne d'origine, jamais une ligne de
+  correction. Corriger un Écart de caisse ou le Fond initial : admins
+  seulement.
 - Le signe reste celui du `kind` : le montant juste d'une entrée est ≥ 0,
   celui d'une sortie ≤ 0 (saisi en positif dans l'app) ; un `cash_gap`
   accepte les deux signes.
 - **Crédit carburant** : l'écart est porté aussi sur le compte de
   l'adhérent, transaction `credit`, motif « Correction crédit carburant du
-  12 oct. », dans la même transaction, avec la notification habituelle.
+  12/10/2026 », dans la même transaction, avec la notification habituelle.
   L'équilibre caisse / comptes est préservé par construction.
 - **Ligne importée** : corrigeable (caisse seulement, aucun adhérent).
 - Les autres erreurs ont déjà leur circuit : la facturation d'un vol par la
@@ -926,8 +929,9 @@ Montants entiers en FCFA, sans plafond (comme les crédits, §4.4).
 - **Pilotes** (§5) : « Créditer » devient « Crédit carburant » (même
   Function, avec la date). « Corriger » disparaît une fois la reprise
   terminée.
-- **Administration** : bouton « Reprise terminée » avec confirmation, tant
-  que la reprise est en cours ; ensuite « Reprise terminée le 20/10/2026 ».
+- **Reprise** : sur l'écran Caisse, pour les admins, bouton « Reprise
+  terminée » avec confirmation, tant que la reprise est en cours ; ensuite
+  « Reprise terminée le 20/10/2026 ».
 
 ### 11.7 Import de l'Excel
 
