@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/money.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/app_user.dart';
+import 'package:ulmgap/data/cash_movement.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/instructors/instructors_screen.dart';
@@ -23,10 +24,11 @@ AppUser _account(String uid, String name, {required int balance}) => AppUser(
       balance: balance,
     );
 
-Widget host(FakeFinanceApi finance) => AppServices(
+Widget host(FakeFinanceApi finance, {FakeCashApi? cash}) => AppServices(
       auth: FakeAuthService(),
       users: FakeUserRepository(),
       finance: finance,
+      cash: cash ?? FakeCashApi(),
       child: const MaterialApp(home: InstructorsScreen()),
     );
 
@@ -51,7 +53,7 @@ void main() {
     expect(find.text('Aucun compte.'), findsOneWidget);
   });
 
-  testWidgets('appui sur un compte : historique et bouton Créditer / corriger',
+  testWidgets('appui sur un compte : historique et bouton Crédit carburant / corriger',
       (tester) async {
     final finance = FakeFinanceApi()..accounts = [_account('u1', 'Jean Dupont', balance: 0)];
     await tester.pumpWidget(host(finance));
@@ -59,7 +61,7 @@ void main() {
     await tester.tap(find.text('Jean Dupont'));
     await tester.pumpAndSettle();
     expect(find.text('Aucun mouvement.'), findsOneWidget); // MovementsList vide
-    expect(find.text('Créditer / corriger'), findsOneWidget);
+    expect(find.text('Crédit carburant / corriger'), findsOneWidget);
   });
 
   testWidgets('crédit : appel avec le bon montant et SnackBar', (tester) async {
@@ -70,7 +72,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Jean Dupont'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Créditer / corriger'));
+    await tester.tap(find.text('Crédit carburant / corriger'));
     await tester.pumpAndSettle();
 
     // Mode « Créditer » est le mode par défaut.
@@ -78,7 +80,10 @@ void main() {
     await tester.tap(find.text('Valider'));
     await tester.pumpAndSettle();
 
-    expect(finance.credited.single, {'uid': 'u1', 'amount': 12000, 'reason': null, 'date': null});
+    final today = DateTime.now();
+    expect(finance.credited.single,
+        {'uid': 'u1', 'amount': 12000, 'reason': null,
+         'date': DateTime(today.year, today.month, today.day)});
     expect(find.text('Nouveau solde : ${formatFcfa(12000)}'), findsOneWidget);
   });
 
@@ -88,7 +93,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Jean Dupont'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Créditer / corriger'));
+    await tester.tap(find.text('Crédit carburant / corriger'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Corriger'));
@@ -111,7 +116,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Jean Dupont'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Créditer / corriger'));
+    await tester.tap(find.text('Crédit carburant / corriger'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('credit-amount')), '1000000');
@@ -131,7 +136,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Jean Dupont'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Créditer / corriger'));
+    await tester.tap(find.text('Crédit carburant / corriger'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Corriger'));
@@ -176,7 +181,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Jean Dupont'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Créditer / corriger'));
+    await tester.tap(find.text('Crédit carburant / corriger'));
     await tester.pumpAndSettle();
   }
 
@@ -221,10 +226,10 @@ void main() {
     await tester.pumpWidget(host(finance));
     await tester.pump();
     expect(find.text('Pilotes'), findsOneWidget);
-    expect(find.byTooltip('Créditer'), findsNWidgets(2));
+    expect(find.byTooltip('Crédit carburant'), findsNWidgets(2));
     await tester.tap(find.byKey(const Key('credit-u2')));
     await tester.pumpAndSettle();
-    expect(find.text('Créditer / corriger'), findsOneWidget); // dialogue ouvert
+    expect(find.text('Crédit carburant / corriger'), findsOneWidget); // dialogue ouvert
     expect(find.text('Alice Martin'), findsWidgets); // toujours sur la liste
   });
 
@@ -259,6 +264,32 @@ void main() {
     double y(String t) => tester.getTopLeft(find.text(t)).dy;
     expect(y('Zed Instructeur'), lessThan(y('Ann Solo')));
     expect(y('Ann Solo'), lessThan(y('Bob Élève')));
+  });
+
+  testWidgets('reprise terminée : plus de puce « Corriger »', (tester) async {
+    final finance = FakeFinanceApi()..accounts = [_account('u1', 'Jean Dupont', balance: 0)];
+    final cash = FakeCashApi()
+      ..cashbox = Cashbox(balance: 0, migrationClosedAt: DateTime(2026, 10, 20));
+    await tester.pumpWidget(host(finance, cash: cash));
+    await tester.pump();
+    await tester.tap(find.text('Jean Dupont'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Crédit carburant / corriger'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ChoiceChip, 'Corriger'), findsNothing);
+    expect(find.widgetWithText(ChoiceChip, 'Crédit carburant'), findsOneWidget);
+    expect(find.byKey(const Key('credit-date')), findsOneWidget);
+  });
+
+  testWidgets('reprise en cours : puce « Corriger » présente', (tester) async {
+    final finance = FakeFinanceApi()..accounts = [_account('u1', 'Jean Dupont', balance: 0)];
+    await tester.pumpWidget(host(finance));
+    await tester.pump();
+    await tester.tap(find.text('Jean Dupont'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Crédit carburant / corriger'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ChoiceChip, 'Corriger'), findsOneWidget);
   });
 }
 
