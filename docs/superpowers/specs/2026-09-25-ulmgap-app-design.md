@@ -24,7 +24,8 @@ avec :
 - un **carnet de vol** avec le temps de vol total par pilote (révision du
   2026-09-30 : plus de compteur par appareil) ;
 - un relevé admin de tout ce qui a été facturé ;
-- un **suivi carburant** par appareil (révision du 2026-10-02, §9).
+- un **suivi carburant** par appareil (révision du 2026-10-02, §9) ;
+- un **suivi de caisse** de l'association (révision du 2026-10-14, §11).
 
 ## Décisions structurantes
 
@@ -786,3 +787,198 @@ Functions se déploient ensemble.
 - Ni règle Firestore, ni index, ni champ du contrat du pont ne changent.
 - Les Functions de vol, de clôture, de correction et de tarifs se déploient
   avec l'app.
+
+## 11. Suivi de caisse (révision du 2026-10-14)
+
+But : tenir dans l'app la caisse unique de l'association, reprise du
+fichier Excel « caisse Ulmgap » (deux tableaux, « COMPTE ULM » et « COMPTE
+COURANT JOURNALIER », **fusionnés**), sans double comptage avec les comptes
+des adhérents. Gérée par les admins et les instructeurs.
+
+Ce chantier est le premier de trois : **caisse** (ce §), puis **vol
+technique** et **suivi de cuve** (révisions à venir). Principe commun :
+**la caisse suit l'argent, la cuve suit les litres**. Un vol technique ne
+touche jamais la caisse : le carburant, déjà payé à l'achat, sort de la
+cuve.
+
+### 11.1 Libellés normalisés
+
+Une même réalité, un seul libellé. Acompte, crédit de vol, crédit
+carburant, « CREDIT VOLS ULM » : c'est toujours un adhérent qui apporte de
+l'argent, mis en caisse, et dont le compte est alimenté d'autant.
+
+| `kind` | Libellé | Sens | Effet |
+|---|---|---|---|
+| `fuel_credit` | **Crédit carburant XXX** (`shortName` de l'adhérent) | Entrée | Caisse + **et** compte de l'adhérent + |
+| `fuel_purchase` | **Achat carburant** | Sortie | Caisse − |
+| `maintenance` | **Maintenance** (pièces, réparations, nettoyage, équipement, citerne…) | Sortie | Caisse − |
+| `off_app_income` | **Recette hors app** (baptême, vol au montant différent payé en espèces) | Entrée | Caisse + |
+| `cash_gap` | **Écart de caisse** (motif obligatoire) | ± | Caisse ± |
+| `opening` | **Fond initial** (import seulement, jamais saisi) | Entrée | Caisse + |
+
+Chaque libellé a une icône. Dans l'historique d'un compte d'adhérent, le
+type `credit` s'affiche désormais « Crédit carburant ».
+
+### 11.2 Données
+
+**`cashbox/main`** : `balance` (int, FCFA), `migrationClosedAt`
+(timestamp ou `null` tant que la reprise est en cours, §11.5), `updatedAt`.
+Toute opération de caisse lit puis écrit ce document dans sa transaction :
+les opérations se sérialisent.
+
+**`cashMovements/{id}`**, historique non modifiable :
+
+| Champ | Contenu |
+|---|---|
+| `kind` | §11.1 |
+| `amount` | int signé : positif pour une entrée, négatif pour une sortie |
+| `date` | Date de l'opération, saisie : aujourd'hui par défaut, jamais dans le futur (jour du club, Africa/Libreville) |
+| `userUid` | Adhérent d'un `fuel_credit` ; `null` pour une ligne importée |
+| `transactionId` | Ligne `transactions` jumelle d'un `fuel_credit` (ou de sa correction) |
+| `note` | Texte : objet de la dépense, motif, ou libellé d'origine de l'Excel |
+| `correctsId` | Ligne d'origine, pour une correction (§11.4) ; `null` sinon |
+| `imported` | `true` pour une ligne reprise de l'Excel |
+| `by` | uid de l'auteur, ou `import` |
+| `at` | timestamp serveur |
+| `balanceAfter` | Solde de caisse après le mouvement |
+
+Règle absolue, comme pour les comptes : **le solde de caisse n'est jamais
+modifié sans sa ligne d'historique**, dans la même transaction. Un
+`fuel_credit` écrit, dans **une seule** transaction, la ligne de caisse, le
+solde de caisse, la ligne `transactions` et le solde de l'adhérent.
+
+**Règles Firestore** : `cashbox` et `cashMovements` en lecture pour les
+admins et les instructeurs, aucune écriture client. Ni index composite ni
+index nouveau : l'app filtre par `kind`.
+
+### 11.3 Opérations
+
+| Function | Qui | Règle |
+|---|---|---|
+| `creditAccount` (élargie) | Instructeurs et admins | **Crédit carburant** : montant > 0, date, note facultative. Caisse + et compte + (§11.2), notification habituelle à l'adhérent |
+| `addCashMovement` | Instructeurs et admins ; `cash_gap` : **admins seulement** | `fuel_purchase` (montant > 0, débité), `maintenance` et `off_app_income` (montant > 0, note obligatoire), `cash_gap` (montant ≠ 0 signé, note obligatoire). `fuel_credit` et `opening` refusés ici |
+| `correctCashMovement` | Instructeurs et admins ; correction d'un `cash_gap` : **admins seulement** | Voir §11.4 |
+| `closeMigration` | **Admins seulement** | « Reprise terminée » : `migrationClosedAt` = maintenant. Irréversible ; refusée si déjà faite |
+| `correctAccount` (existante) | Instructeurs et admins | Inchangée **tant que la reprise est en cours**. Ensuite refusée : « La reprise est terminée : corrigez le crédit carburant concerné. » |
+
+Montants entiers en FCFA, sans plafond (comme les crédits, §4.4).
+
+### 11.4 Corrections : on corrige une opération, jamais un solde
+
+- On saisit le **montant juste** de l'opération ; 0 l'annule. Le **montant
+  juste actuel** d'une ligne = son montant + celui de toutes ses
+  corrections (relues dans la transaction) ; on peut donc corriger
+  plusieurs fois. Refus si le montant saisi est déjà le montant juste.
+- La correction est une **nouvelle ligne** du même `kind`, `correctsId` =
+  ligne d'origine, `amount` = écart, note « Correction » + motif facultatif.
+  On ne corrige qu'une ligne d'origine, jamais une ligne de correction.
+- Le signe reste celui du `kind` : le montant juste d'une entrée est ≥ 0,
+  celui d'une sortie ≤ 0 (saisi en positif dans l'app) ; un `cash_gap`
+  accepte les deux signes.
+- **Crédit carburant** : l'écart est porté aussi sur le compte de
+  l'adhérent, transaction `credit`, motif « Correction crédit carburant du
+  12 oct. », dans la même transaction, avec la notification habituelle.
+  L'équilibre caisse / comptes est préservé par construction.
+- **Ligne importée** : corrigeable (caisse seulement, aucun adhérent).
+- Les autres erreurs ont déjà leur circuit : la facturation d'un vol par la
+  correction admin (§4.5), le crédit instruction par sa régularisation
+  automatique (§10.1).
+- **Ce qui ne s'explique pas ressort en Écart de caisse** (admin, motif
+  obligatoire) : par exemple l'écart entre le comptage physique et le solde.
+
+### 11.5 Reprise de l'existant
+
+1. **Import** de l'historique de l'Excel, une fois (§11.7).
+2. **Comptage physique** de la caisse ; l'écart éventuel avec le solde
+   importé est saisi en Écart de caisse.
+3. **Reprise des soldes** à la main, avec « Corriger le solde »
+   (`correctAccount`, sans effet sur la caisse) : l'argent est déjà en
+   caisse. Aucun acompte de l'Excel ne crédite automatiquement un compte,
+   certains l'ayant déjà été.
+4. **« Reprise terminée »** (admin) : à partir de là, plus de correction de
+   solde libre ; seules restent les opérations du §11.3 et les corrections
+   du §11.4. Toute divergence entre caisse et comptes a donc une ligne
+   visible qui l'explique.
+
+### 11.6 Écrans
+
+- **Icône « Caisse »** dans la barre de navigation (§5), pour les
+  instructeurs et les admins, entre « Pilotes » et « Administration ».
+- **En-tête** : « Caisse : 3 638 000 FCFA », « Avoirs adhérents : X »
+  (somme nette des soldes de tous les comptes) et « Disponible : caisse −
+  avoirs ».
+- **Filtres** : cinq puces à icône (Crédit carburant, Achat carburant,
+  Maintenance, Recette hors app, Écart de caisse), aucune sélectionnée par
+  défaut (tout s'affiche, Fond initial compris). Une correction suit le
+  filtre de sa ligne d'origine.
+- **Période** : le sélecteur du carnet de vol (mois en cours par défaut),
+  sur `date`.
+- **Liste** : du plus récent au plus ancien (`date`, puis `at`) ; icône,
+  libellé (« Crédit carburant LCM »), note, date, montant en vert (entrée)
+  ou en rouge (sortie), mention « Correction » le cas échéant. Pas de solde
+  progressif par ligne (trompeur pour une opération saisie après coup).
+  Ligne de totaux de la période : entrées, sorties. Sans opération :
+  « Aucune opération sur cette période. »
+- **« + Opération »** : type (Écart de caisse visible des admins seulement),
+  adhérent pour un Crédit carburant, montant (milliers groupés), date, note.
+- **Appui sur une ligne** : détail (auteur, date de saisie, ligne d'origine
+  ou corrections) et bouton « Corriger » selon les droits du §11.3.
+- **Pilotes** (§5) : « Créditer » devient « Crédit carburant » (même
+  Function, avec la date). « Corriger » disparaît une fois la reprise
+  terminée.
+- **Administration** : bouton « Reprise terminée » avec confirmation, tant
+  que la reprise est en cours ; ensuite « Reprise terminée le 20/10/2026 ».
+
+### 11.7 Import de l'Excel
+
+- Script `functions/scripts/import-cashbox.js --project <id> --file
+  <caisse.csv>` (identifiants ADC, comme `bootstrap-admin.js`). Accepte
+  **`ulmgap-dev`** (d'abord, pour la recette) et `ulmgap-prod`. Refuse si
+  `cashMovements` contient déjà une ligne. Écrit les lignes (`imported:
+  true`, `by: import`, `userUid: null`) et `cashbox/main` dans un seul lot,
+  ordonnées par date.
+- CSV normalisé `date;kind;amount;note`, préparé depuis l'Excel et **relu
+  par l'utilisateur avant import**. Le CSV et l'Excel restent **hors du
+  dépôt** (données financières).
+- Normalisation :
+  - fond initial de 10 000 000 : `opening` ;
+  - RESERVOIR, ESSENCE : `fuel_purchase` ;
+  - réparation Rotax, huile, pièces Loravia et St Ex, batterie, roue,
+    lettres d'immatriculation, flexible et filtre citerne, travaux citerne
+    roulante, cadenas et déménagement, nettoyage : `maintenance` ;
+  - CREDIT VOLS ULM, « vol » payés comptant, acomptes LCM et CNL, LCM :
+    `fuel_credit` sans adhérent ;
+  - libellé d'origine en `note`.
+- **« vol ww » (vol Wonga-Wongué) n'est pas importé** : les 24 000 ne sont
+  jamais sortis de la caisse, seul le carburant est sorti de la cuve. Ce vol,
+  pas encore clôturé dans l'app, servira de recette au vol technique.
+- Les trois lignes sans date (fond initial, réservoir, réparation Rotax)
+  prennent la plus ancienne date du fichier, le 05/03/2025.
+- Le solde est recalculé ligne par ligne : **2 290 000** pour l'ancien
+  « COMPTE ULM » (l'Excel affiche 2 376 000 à cause d'une formule qui saute
+  la ligne « roue vis etc st ex », 86 000) et **1 348 000** pour le compte
+  courant sans « vol ww », soit **3 638 000** avant comptage physique.
+
+### 11.8 Recette en dev puis déploiement
+
+- Toute la chaîne se recette d'abord sur **`ulmgap-dev`** : import du CSV,
+  comptage simulé et Écart de caisse, reprises par « Corriger le solde »,
+  « Reprise terminée », puis Crédits carburant, dépenses et corrections. En
+  dev, les comptes de test portent un « Crédit initial (tests) » sans
+  contrepartie en caisse : les avoirs adhérents y sont donc fictifs.
+- En prod, une fois la recette faite (par l'utilisateur) : règles, Functions
+  (`creditAccount`, `correctAccount`, `addCashMovement`,
+  `correctCashMovement`, `closeMigration`) et app ensemble, puis l'import.
+- Ni index, ni champ du contrat du pont ne changent.
+
+### 11.9 Tests
+
+- Unitaires (module pur `rules/`) : montant juste et écart d'une
+  correction, signes autorisés par `kind`, libellés.
+- Intégration (émulateur) : chaque Function ; caisse, compte et deux
+  historiques dans la même transaction ; droits (instructeur refusé sur
+  `cash_gap` et `closeMigration`) ; `correctAccount` refusée après la
+  reprise ; corrections successives ; import refusé sur une caisse non vide.
+- Règles Firestore : lecture staff seulement, aucune écriture client.
+- Widgets : écran Caisse (en-tête, filtres, totaux), dialogues d'opération
+  et de correction, bouton « Reprise terminée ».
