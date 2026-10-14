@@ -4,7 +4,7 @@
 import type { Profile } from "../admin/validation";
 
 export type FlightStatus = "demande" | "valide" | "refuse";
-export type PricingMode = "standard" | "fuel_only" | "custom" | "baptism";
+export type PricingMode = "standard" | "fuel_only" | "custom" | "baptism" | "technical";
 
 export interface Person { uid: string; profile: Profile | null }
 /** Spec §10.1 : exactement un instructeur et un autre membre avec compte. */

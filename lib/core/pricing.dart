@@ -143,6 +143,13 @@ ClosingBill closingBill({
   required bool hasPassenger,
   String? baptismTier,
 }) {
+  // Spec §12.2 : vol technique, à la charge de l'association.
+  if (mode == 'technical') {
+    if (shortFlightAmount != null || customAmount != null) {
+      throw ArgumentError('Aucun montant pour un vol technique.');
+    }
+    return (billedAmount: 0, billedTo: 'association', pricingMode: 'technical');
+  }
   // Baptême de l'air : forfait du tier (local par défaut) hors app, montants saisis ignorés.
   if (mode == 'baptism') {
     return (billedAmount: pricing.baptismFees[baptismTier ?? 'local']!, billedTo: 'off_app', pricingMode: 'baptism');
@@ -165,7 +172,7 @@ ClosingBill closingBill({
 }
 
 /// Une facture (avant ou après correction) telle que stockée sur le vol :
-/// `billedTo` vaut `'account'`, `'off_app'` ou `null` (jamais facturé).
+/// `billedTo` vaut `'account'`, `'off_app'`, `'association'` ou `null` (jamais facturé).
 typedef BillLeg = ({String? billedTo, String? payerUid, int amount});
 
 /// Miroir exact de functions/src/rules/pricing.ts#adjustments : régularisation

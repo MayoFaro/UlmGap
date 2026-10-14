@@ -50,6 +50,8 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       instruction: changes.instruction ?? (f.get("instruction") === true),
       baptism: false,
       baptismTier: null,
+      technical: false,
+      technicalReason: null,
     };
     // Le baptême se lit dans le mode du vol ; sans passager il n'existe pas.
     input.baptism = input.passengers.length > 0 &&

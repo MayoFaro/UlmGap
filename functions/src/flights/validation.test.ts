@@ -17,7 +17,7 @@ const ok = {
 test("validateFlightInput : normalise, passagers par défaut vides", () => {
   assert.deepEqual(validateFlightInput(ok), {
     start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
-    crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null,
+    crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null, technical: false, technicalReason: null,
   });
   assert.equal(validateFlightInput({ ...ok, crew: ["u1"], passengers: [" Paul "], pricingMode: "fuel_only" })
     .passengers[0], "Paul");
@@ -178,7 +178,7 @@ test("validateAdminUpdate : champs du vol, champs de clôture facultatifs (absen
     flightId: "f1",
     input: {
       start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
-      crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null,
+      crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null, technical: false, technicalReason: null,
     },
   });
   assert.deepEqual(
@@ -189,7 +189,7 @@ test("validateAdminUpdate : champs du vol, champs de clôture facultatifs (absen
       flightId: "f1",
       input: {
         start: T0, end: T0 + 60 * MIN, destination: "Lomé", aircraftId: "a1",
-        crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null,
+        crew: ["u1", "u2"], passengers: [], instruction: false, baptism: false, baptismTier: null, technical: false, technicalReason: null,
       },
       pricingMode: "fuel_only", actualMinutes: 30, shortFlightAmount: null,
     },
@@ -354,4 +354,38 @@ test("validateReviewChanges : instruction et baptism facultatifs", () => {
   assert.equal(changes.instruction, true);
   assert.equal(changes.baptism, false);
   assert.equal(validateReviewChanges({ flightId: "f1" }).changes.instruction, undefined);
+});
+
+test("validateFlightInput : vol technique, motif obligatoire et nettoyé", () => {
+  const base = { start: 1_000_000, end: 1_000_000 + 3_600_000, destination: "Lomé", aircraftId: "a1", crew: ["u1"] };
+  const v = validateFlightInput({ ...base, technical: true, technicalReason: " Convoyage Wonga-Wongué " });
+  assert.equal(v.technical, true);
+  assert.equal(v.technicalReason, "Convoyage Wonga-Wongué");
+  const plain = validateFlightInput(base);
+  assert.equal(plain.technical, false);
+  assert.equal(plain.technicalReason, null);
+  // Motif ignoré sans la case.
+  assert.equal(validateFlightInput({ ...base, technicalReason: "x" }).technicalReason, null);
+  assert.throws(() => validateFlightInput({ ...base, technical: true }),
+    (e) => e instanceof ValidationError && e.message === "Motif du vol technique obligatoire.");
+  assert.throws(() => validateFlightInput({ ...base, technical: true, technicalReason: "x".repeat(81) }), ValidationError);
+});
+
+test("validateFlightInput : vol technique incompatible avec instruction et baptême ; passager accepté", () => {
+  const base = {
+    start: 1_000_000, end: 1_000_000 + 3_600_000, destination: "Lomé", aircraftId: "a1", crew: ["u1"],
+    technical: true, technicalReason: "Essai moteur",
+  };
+  assert.throws(() => validateFlightInput({ ...base, instruction: true }),
+    (e) => e instanceof ValidationError && e.message === "Vol technique : incompatible avec un vol d'instruction.");
+  assert.throws(() => validateFlightInput({ ...base, passengers: ["Mécano"], baptism: true, baptismTier: "local" }),
+    (e) => e instanceof ValidationError && e.message === "Vol technique : incompatible avec un baptême de l'air.");
+  assert.equal(validateFlightInput({ ...base, passengers: ["Mécano"] }).passengers.length, 1);
+});
+
+test("validateReviewChanges : technical et technicalReason facultatifs", () => {
+  const r = validateReviewChanges({ flightId: "f1", changes: { technical: true, technicalReason: " Convoyage " } });
+  assert.equal(r.changes.technical, true);
+  assert.equal(r.changes.technicalReason, "Convoyage");
+  assert.equal(validateReviewChanges({ flightId: "f1" }).changes.technical, undefined);
 });

@@ -9,7 +9,7 @@ import { Caller, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
-import { BaptismTier, closingBill, instructionCreditDue, Pricing, pricingWithDefaults, toCategory } from "../rules/pricing";
+import { BaptismTier, BilledTo, closingBill, instructionCreditDue, Pricing, pricingWithDefaults, toCategory } from "../rules/pricing";
 import { notifyMovements, WrittenMovement } from "../notify/movements";
 import { isOnOrBeforeClubToday } from "../rules/club-day";
 import { closingEnd } from "../rules/closing";
@@ -33,7 +33,7 @@ async function loadClosable(tx: Tx, ref: Ref): Promise<Snap> {
   return f;
 }
 
-export interface CloseResult { billedAmount: number; billedTo: "account" | "off_app" }
+export interface CloseResult { billedAmount: number; billedTo: BilledTo }
 
 export async function closeFlight(caller: Caller | undefined, data: unknown): Promise<CloseResult> {
   const db = admin.firestore();

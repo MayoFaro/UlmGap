@@ -18,6 +18,18 @@
     { "name": "fuel_only 1 min (arrondi au franc)", "mode": "fuel_only", "minutes": 1, "category": "GAP", "expected": 200 }
   ],
   "closing": [
+    { "name": "vol technique 90 min : non facturé (association)", "mode": "technical", "actualMinutes": 90,
+      "category": "EXT", "hasPassenger": true,
+      "expected": { "billedAmount": 0, "billedTo": "association", "pricingMode": "technical" } },
+    { "name": "vol technique 30 min : non facturé, aucun montant requis", "mode": "technical", "actualMinutes": 30,
+      "category": "GAP", "hasPassenger": false,
+      "expected": { "billedAmount": 0, "billedTo": "association", "pricingMode": "technical" } },
+    { "name": "vol technique avec montant différent : refus", "mode": "technical", "actualMinutes": 60,
+      "category": "GAP", "hasPassenger": true, "customAmount": 9000,
+      "expectedError": "Aucun montant pour un vol technique." },
+    { "name": "vol technique avec montant à facturer : refus", "mode": "technical", "actualMinutes": 30,
+      "category": "GAP", "hasPassenger": false, "shortFlightAmount": 5000,
+      "expectedError": "Aucun montant pour un vol technique." },
     { "name": "baptême Nyonye 20 min, montants saisis ignorés", "mode": "baptism", "actualMinutes": 20, "category": "EXT",
       "hasPassenger": true, "shortFlightAmount": 5000, "customAmount": 9000, "baptismTier": "nyonye",
       "expected": { "billedAmount": 90000, "billedTo": "off_app", "pricingMode": "baptism" } },
