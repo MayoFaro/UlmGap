@@ -31,6 +31,9 @@ beforeEach(async () => {
     await setDoc(doc(db, "flights/f1"), { status: "valide" });
     await setDoc(doc(db, "transactions/t1"), { userUid: "eleve", amount: 100 });
     await setDoc(doc(db, "transactions/t2"), { userUid: "instr", amount: 100 });
+    await setDoc(doc(db, "users/adm"), { active: true, isAdmin: true, profile: null });
+    await setDoc(doc(db, "cashbox/main"), { balance: 0 });
+    await setDoc(doc(db, "cashMovements/c1"), { kind: "fuel_purchase", amount: -1 });
   });
 });
 
@@ -180,4 +183,16 @@ test("changement d'instructeur : l'ancien destinataire perd l'accès", async () 
   await assertFails(getDoc(doc(as("instr"), "flights/pending")));
   await assertSucceeds(getDoc(doc(as("other"), "flights/pending")));
   await assertSucceeds(getDoc(doc(as("eleve"), "flights/pending")));
+});
+
+test("caisse : lecture réservée aux instructeurs et aux admins, aucune écriture client", async () => {
+  for (const path of ["cashbox/main", "cashMovements/c1"]) {
+    await assertFails(getDoc(doc(as("eleve"), path)));
+    await assertSucceeds(getDoc(doc(as("instr"), path)));
+    await assertSucceeds(getDoc(doc(as("adm"), path)));
+  }
+  await assertSucceeds(getDocs(collection(as("instr"), "cashMovements")));
+  await assertFails(getDocs(collection(as("eleve"), "cashMovements")));
+  await assertFails(setDoc(doc(as("adm"), "cashbox/main"), { balance: 1 }));
+  await assertFails(setDoc(doc(as("adm"), "cashMovements/new"), { amount: 1 }));
 });

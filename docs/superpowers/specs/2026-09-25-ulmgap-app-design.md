@@ -583,6 +583,7 @@ et `users/{uid}.active == true`.
 | `flights`, `aircraft`, `settings/pricing`, `profiles` | Connecté | ✗ |
 | `users/{uid}` | Soi-même ; instructeurs et admins : tous | Uniquement `fcmToken` sur son propre document |
 | `transactions` | Les siennes ; instructeurs et admins : toutes | ✗ |
+| `cashbox`, `cashMovements` | Instructeurs et admins | ✗ |
 
 ### 7.3 Structure du repo `ulmgap`
 
