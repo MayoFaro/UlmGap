@@ -81,8 +81,10 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     const people = crewSnaps.map((s) => ({
       uid: s.id, profile: (s.get("profile") as Profile | undefined) ?? null,
     }));
+    // Spec §12.2 : jamais de crédit d'instruction pour un vol technique.
+    const mode = f.get("pricingMode") as "standard" | "fuel_only" | "baptism" | "technical";
     const credit = instructionCreditDue({
-      instruction: f.get("instruction") === true, actualMinutes, crew: people, pricing,
+      instruction: mode !== "technical" && f.get("instruction") === true, actualMinutes, crew: people, pricing,
     });
     const creditLockRef = credit && credit.uid !== payerUid
       ? db.collection("flightLocks").doc(`user_${credit.uid}`) : null;
@@ -96,7 +98,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     let bill;
     try {
       bill = closingBill({
-        mode: f.get("pricingMode") as "standard" | "fuel_only" | "baptism",
+        mode,
         actualMinutes,
         category: toCategory(payerSnap.get("category")),
         pricing,
@@ -109,7 +111,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
       throw new HttpsError("invalid-argument", (e as Error).message);
     }
 
-    // 3. Débit (aucun mouvement pour un vol facturé hors app).
+    // 3. Débit (aucun mouvement pour un vol facturé hors app ou à l'association).
     let payerBalance = (payerSnap.get("balance") as number | undefined) ?? 0;
     if (bill.billedTo === "account") {
       payerBalance = postMovement(tx, db, {

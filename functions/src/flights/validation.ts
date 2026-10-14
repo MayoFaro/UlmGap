@@ -117,6 +117,13 @@ export function checkHorizon(start: number, now: number): void {
   }
 }
 
+/** Spec §12 : un vol technique n'est ni un vol d'instruction ni un baptême. */
+export function checkTechnical(input: FlightInput): void {
+  if (!input.technical) return;
+  if (input.instruction) throw new ValidationError("Vol technique : incompatible avec un vol d'instruction.");
+  if (input.baptism) throw new ValidationError("Vol technique : incompatible avec un baptême de l'air.");
+}
+
 export function validateFlightInput(data: unknown): FlightInput {
   const d = obj(data);
   const start = time(d.start, "Départ");
@@ -142,11 +149,8 @@ export function validateFlightInput(data: unknown): FlightInput {
     throw new ValidationError("Baptême de l'air réservé à un vol avec un passager sans compte.");
   }
   if (out.baptism) out.baptismTier = baptismTier(d.baptismTier);
-  if (out.technical) {
-    out.technicalReason = technicalReason(d.technicalReason);
-    if (out.instruction) throw new ValidationError("Vol technique : incompatible avec un vol d'instruction.");
-    if (out.baptism) throw new ValidationError("Vol technique : incompatible avec un baptême de l'air.");
-  }
+  if (out.technical) out.technicalReason = technicalReason(d.technicalReason);
+  checkTechnical(out);
   if (d.pricingMode !== undefined) out.pricingMode = mode(d.pricingMode);
   return out;
 }
