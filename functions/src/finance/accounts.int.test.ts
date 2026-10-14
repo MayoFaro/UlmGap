@@ -1,13 +1,14 @@
 // Lancé par `npm run test:int` (émulateurs Auth + Firestore).
 // Crédit et correction de compte par un instructeur ou un admin (task 5) :
 // mouvement, historique, verrou et accès réservé au personnel.
-import { test } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import * as assert from "node:assert/strict";
 import {
-  code, db, FUEL, seedAircraft, seedFlight, seedUser, H,
+  code, db, FUEL, seedAircraft, seedFlight, seedUser, H, resetCashbox,
 } from "../flights/testkit";
 import { creditAccount, correctAccount } from "./accounts";
 import { closeFlight } from "../flights/close";
+import { clubDayString } from "../rules/cash";
 import { formatFcfa } from "../rules/pricing";
 
 const getUser = async (uid: string) => (await db.collection("users").doc(uid).get()).data()!;
@@ -15,6 +16,12 @@ const userTx = async (uid: string) => {
   const snap = await db.collection("transactions").where("userUid", "==", uid).get();
   return snap.docs.map((d) => d.data());
 };
+
+beforeEach(resetCashbox);
+afterEach(resetCashbox); // ne pas laisser la reprise « terminée » aux autres fichiers
+
+const cashbox = async () => (await db.collection("cashbox").doc("main").get()).data();
+const cashLines = async () => (await db.collection("cashMovements").get()).docs.map((d) => ({ id: d.id, ...d.data() }) as Record<string, unknown>);
 
 test("crédit de 50 000 par un instructeur : solde +50 000, transaction credit", async () => {
   const instr = await seedUser({ profile: "instructeur" });
@@ -138,4 +145,59 @@ test("correction : nouveau solde supérieur → écart positif ; égal au solde 
     (e) => code(e) === "failed-precondition" &&
       (e as Error).message === `Le solde est déjà de ${formatFcfa(350_000)}.`,
   );
+});
+
+test("Crédit carburant : caisse + et compte +, lignes jumelles dans la même opération", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  const target = await seedUser({ profile: "eleve", balance: 100_000 });
+
+  await creditAccount(instr, { userUid: target.uid, amount: 50_000, reason: "Espèces", date: "2026-10-12" });
+
+  assert.equal((await cashbox())!.balance, 50_000);
+  const [line] = await cashLines();
+  const [tx] = await userTx(target.uid);
+  assert.equal(line.kind, "fuel_credit");
+  assert.equal(line.amount, 50_000);
+  assert.equal(line.date, "2026-10-12");
+  assert.equal(line.userUid, target.uid);
+  assert.equal(line.note, "Espèces");
+  assert.equal(line.correctsId, null);
+  assert.equal(line.imported, false);
+  assert.equal(line.by, instr.uid);
+  assert.equal(line.balanceAfter, 50_000);
+  assert.equal(line.transactionId, (await db.collection("transactions")
+    .where("userUid", "==", target.uid).get()).docs[0].id);
+  assert.equal(tx.type, "credit");
+  assert.equal(tx.amount, 50_000);
+});
+
+test("Crédit carburant sans date : jour du club", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  const target = await seedUser({ profile: "eleve" });
+  await creditAccount(instr, { userUid: target.uid, amount: 1_000 });
+  const [line] = await cashLines();
+  assert.equal(line.date, clubDayString(Date.now()));
+});
+
+test("Crédit carburant refusé (compte introuvable) : caisse intacte", async () => {
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  await assert.rejects(creditAccount(admin1, { userUid: "inconnu-xyz", amount: 10_000 }),
+    (e) => code(e) === "not-found");
+  assert.equal(await cashbox(), undefined);
+  assert.equal((await cashLines()).length, 0);
+});
+
+test("Corriger le solde : sans effet sur la caisse ; refusé une fois la reprise terminée", async () => {
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  const target = await seedUser({ profile: "eleve", balance: 0 });
+  await correctAccount(admin1, { userUid: target.uid, newBalance: 20_000, reason: "Reprise acompte LCM" });
+  assert.equal(await cashbox(), undefined);
+
+  await db.collection("cashbox").doc("main").set({ balance: 0, migrationClosedAt: new Date() });
+  await assert.rejects(
+    correctAccount(admin1, { userUid: target.uid, newBalance: 30_000, reason: "Autre" }),
+    (e) => code(e) === "failed-precondition" &&
+      (e as Error).message === "La reprise est terminée : corrigez le crédit carburant concerné.",
+  );
+  assert.equal((await getUser(target.uid)).balance, 20_000);
 });
