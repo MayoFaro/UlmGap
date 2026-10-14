@@ -43,6 +43,8 @@ void main() {
       'instruction': false,
       'baptism': false,
       'baptismTier': null,
+      'technical': false,
+      'technicalReason': null,
     });
   });
 
@@ -99,6 +101,31 @@ void main() {
     });
     expect(g.landings, 2);
     expect(g.waterLandings, 1);
+  });
+
+  test('vol technique : champs lus et payload', () {
+    final f = Flight.fromMap('f1', {
+      'start': DateTime(2026, 10, 20, 9), 'end': DateTime(2026, 10, 20, 10),
+      'crew': ['u1'],
+      'pricingMode': 'technical', 'technical': true, 'technicalReason': 'Essai moteur',
+      'billedTo': 'association',
+    });
+    expect(f.isTechnical, isTrue);
+    expect(f.technical, isTrue);
+    expect(f.technicalReason, 'Essai moteur');
+    final p = FlightDraft(
+      start: DateTime(2026, 10, 20, 9), end: DateTime(2026, 10, 20, 10), destination: 'Lomé',
+      aircraftId: 'a1', crew: const ['u1'], passengers: const [],
+      technical: true, technicalReason: ' Convoyage ',
+    ).toPayload();
+    expect(p['technical'], isTrue);
+    expect(p['technicalReason'], 'Convoyage');
+    final q = FlightDraft(
+      start: DateTime(2026, 10, 20, 9), end: DateTime(2026, 10, 20, 10), destination: 'Lomé',
+      aircraftId: 'a1', crew: const ['u1'], passengers: const [], technicalReason: 'x',
+    ).toPayload();
+    expect(q['technical'], isFalse);
+    expect(q['technicalReason'], isNull);
   });
 
   test('plan 4b : Aircraft.amphibious, faux par défaut', () {

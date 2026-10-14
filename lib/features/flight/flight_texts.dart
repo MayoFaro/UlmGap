@@ -24,6 +24,7 @@ String pricingModeLabel(String mode) => switch (mode) {
       'fuel_only' => 'Carburant seulement',
       'custom' => 'Facturé hors app',
       'baptism' => 'Baptême de l\'air',
+      'technical' => 'Vol technique',
       _ => 'Standard',
     };
 
@@ -38,6 +39,11 @@ String baptismTierLabel(String? tier) => switch (tier) {
 const baptismTierMissingMessage = 'Choisissez le forfait du baptême (Local, Nyonye ou Awagne).';
 
 /// Mode de tarification d'un vol, avec le forfait en cas de baptême.
+const technicalUnbilledText = 'Vol technique : non facturé (association)';
+
+String technicalTitle(String? reason) =>
+    reason == null || reason.isEmpty ? 'Vol technique' : 'Vol technique — $reason';
+
 String flightPricingLabel(String mode, String? baptismTier) =>
     mode == 'baptism' ? 'Baptême ${baptismTierLabel(baptismTier)}' : pricingModeLabel(mode);
 

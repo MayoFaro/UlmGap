@@ -76,4 +76,12 @@ void main() {
     expect(fuelSummary(f(30, 40)), 'Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu 30 L)');
     expect(fuelSummary(f(null, 40)), 'Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu inconnu)');
   });
+
+  test('vol technique : libellés', () {
+    expect(pricingModeLabel('technical'), 'Vol technique');
+    expect(flightPricingLabel('technical', null), 'Vol technique');
+    expect(technicalTitle('Essai moteur'), 'Vol technique — Essai moteur');
+    expect(technicalTitle(null), 'Vol technique');
+    expect(technicalUnbilledText, 'Vol technique : non facturé (association)');
+  });
 }
