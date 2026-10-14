@@ -1,5 +1,5 @@
 // Écran « Instructeurs » (instructeurs et admins) : liste des comptes avec
-// leur solde ; un appui ouvre l'historique du compte et « Créditer / corriger ».
+// leur solde ; un appui ouvre l'historique du compte et « Crédit carburant / corriger ».
 import 'package:flutter/material.dart';
 
 import '../../core/profiles.dart';
@@ -52,7 +52,7 @@ class InstructorsScreen extends StatelessWidget {
                     // « Pilotes ») ; le serveur refuse le crédit à tout autre.
                     IconButton(
                       key: Key('credit-${a.uid}'),
-                      tooltip: 'Créditer',
+                      tooltip: 'Crédit carburant',
                       icon: const Icon(Icons.payments),
                       onPressed: () => showDialog<void>(
                         context: context,
@@ -72,7 +72,7 @@ class InstructorsScreen extends StatelessWidget {
   }
 }
 
-/// Historique d'un compte et bouton « Créditer / corriger », ouverts depuis
+/// Historique d'un compte et bouton « Crédit carburant / corriger », ouverts depuis
 /// la liste ci-dessus.
 class _AccountDetailScreen extends StatelessWidget {
   const _AccountDetailScreen({required this.account, this.me});
@@ -121,7 +121,7 @@ class _AccountDetailScreen extends StatelessWidget {
           ),
           floatingActionButton: FloatingActionButton.extended(
             icon: const Icon(Icons.payments),
-            label: const Text('Créditer / corriger'),
+            label: const Text('Crédit carburant / corriger'),
             onPressed: () => showDialog<void>(
               context: context,
               builder: (_) => CreditDialog(uid: current.uid, balance: current.balance),

@@ -90,3 +90,8 @@ functions/.env
 
 # Journal d’exécution des plans (local)
 .superpowers/
+
+# Données financières (caisse) : jamais dans le dépôt (spec §11.7).
+docs/*.xlsx
+docs/*.csv
+docs/.~lock*

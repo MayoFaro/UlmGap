@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../core/cash.dart';
 import '../core/pricing.dart';
 import 'account_movement.dart';
 import 'app_user.dart';
@@ -37,7 +38,7 @@ abstract class FinanceApi {
   Stream<List<AppUser>> watchAccounts();
 
   /// Rend le nouveau solde.
-  Future<int> credit(String uid, int amount, String? reason);
+  Future<int> credit(String uid, int amount, String? reason, {DateTime? date});
 
   /// Correction : [newBalance] est le nouveau solde voulu (l'écart est
   /// calculé par le serveur). Rend le nouveau solde.
@@ -114,11 +115,12 @@ class FirebaseFinanceApi implements FinanceApi {
       .map((q) => q.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList());
 
   @override
-  Future<int> credit(String uid, int amount, String? reason) async {
+  Future<int> credit(String uid, int amount, String? reason, {DateTime? date}) async {
     final data = (await _call('creditAccount', {
       'userUid': uid,
       'amount': amount,
       if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      if (date != null) 'date': cashDayCode(date),
     })) as Map;
     return (data['balance'] as num).toInt();
   }

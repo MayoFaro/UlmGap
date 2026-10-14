@@ -42,7 +42,7 @@ test("crédit : l'intéressé et les autres instructeurs, pas l'auteur", async (
   const m = about("LDX");
   assert.equal(m.length, 1);
   assert.equal(m[0].message.body,
-    `Crédit : +${formatFcfa(50_000)}. Nouveau solde : ${formatFcfa(120_000)}.`);
+    `Crédit carburant : +${formatFcfa(50_000)}. Nouveau solde : ${formatFcfa(120_000)}.`);
   assert.ok(m[0].tokens.includes(tok(ldx)));
   assert.ok(m[0].tokens.includes(tok(b)));
   assert.ok(!m[0].tokens.includes(tok(a)));

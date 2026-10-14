@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ulmgap/core/cash.dart';
 import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/account_movement.dart';
@@ -7,6 +8,8 @@ import 'package:ulmgap/data/admin_api.dart';
 import 'package:ulmgap/data/aircraft.dart';
 import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/auth_service.dart';
+import 'package:ulmgap/data/cash_api.dart';
+import 'package:ulmgap/data/cash_movement.dart';
 import 'package:ulmgap/data/crew_member.dart';
 import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
@@ -399,9 +402,9 @@ class FakeFinanceApi implements FinanceApi {
   }
 
   @override
-  Future<int> credit(String uid, int amount, String? reason) async {
+  Future<int> credit(String uid, int amount, String? reason, {DateTime? date}) async {
     _fail();
-    credited.add({'uid': uid, 'amount': amount, 'reason': reason});
+    credited.add({'uid': uid, 'amount': amount, 'reason': reason, 'date': date});
     return balance;
   }
 
@@ -466,4 +469,43 @@ class FakeFinanceApi implements FinanceApi {
   Stream<List<Flight>> watchValidUnclosedFlights() => Stream.value(
         flights.where((f) => f.status == FlightStatus.valide && !f.isClosed).toList(),
       );
+}
+
+class FakeCashApi implements CashApi {
+  Cashbox cashbox = Cashbox.empty;
+  /// Si renseigné, remplace le flux à un seul élément de watchCashbox.
+  StreamController<Cashbox>? cashboxController;
+  List<CashMovement> movements = [];
+  Object? failWith;
+  final added = <Map<String, dynamic>>[];
+  final corrected = <Map<String, dynamic>>[];
+  int migrationClosings = 0;
+
+  void _fail() {
+    if (failWith != null) throw failWith!;
+  }
+
+  @override
+  Stream<Cashbox> watchCashbox() => cashboxController?.stream ?? Stream.value(cashbox);
+
+  @override
+  Stream<List<CashMovement>> watchMovements() => Stream.value(movements);
+
+  @override
+  Future<void> add({required CashKind kind, required int amount, required DateTime date, String? note}) async {
+    _fail();
+    added.add({'kind': kind, 'amount': amount, 'date': date, 'note': note});
+  }
+
+  @override
+  Future<void> correct(String movementId, {required int amount, String? note}) async {
+    _fail();
+    corrected.add({'id': movementId, 'amount': amount, 'note': note});
+  }
+
+  @override
+  Future<void> closeMigration() async {
+    _fail();
+    migrationClosings++;
+  }
 }

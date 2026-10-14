@@ -42,6 +42,10 @@ service cloud.firestore {
       allow read: if signedIn() && (resource.data.userUid == request.auth.uid || isStaff());
     }
 
+    // Caisse (spec §11) : instructeurs et admins, lecture seule.
+    match /cashbox/{id} { allow read: if isStaff(); }
+    match /cashMovements/{id} { allow read: if isStaff(); }
+
     // Tout le reste : refusé. Les écritures métier passent par les Functions.
     match /{document=**} { allow read, write: if false; }
   }

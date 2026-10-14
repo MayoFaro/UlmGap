@@ -68,7 +68,7 @@ test("mouvement : intéressé et instructeurs, sauf l'auteur ; montants signés"
     to: ["ldx", "ins"],
     message: {
       title: "Compte de LDX",
-      body: `Crédit : +${formatFcfa(50_000)}. Nouveau solde : ${formatFcfa(120_000)}.`,
+      body: `Crédit carburant : +${formatFcfa(50_000)}. Nouveau solde : ${formatFcfa(120_000)}.`,
     },
   });
   const own = movementPush({

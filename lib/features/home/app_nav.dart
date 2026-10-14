@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_user.dart';
 import '../account/account_screen.dart';
+import '../cash/cash_screen.dart';
 import '../admin/aircraft_admin_screen.dart';
 import '../admin/billing_report_screen.dart';
 import '../admin/pricing_admin_screen.dart';
@@ -14,12 +15,13 @@ import '../admin/users_admin_screen.dart';
 import '../instructors/instructors_screen.dart';
 import '../logbook/logbook_screen.dart';
 
-enum AppDestination { logbook, account, instructors, users, aircraft, pricing, billing }
+enum AppDestination { logbook, account, instructors, cash, users, aircraft, pricing, billing }
 
 Widget _screenFor(AppDestination d, AppUser user) => switch (d) {
       AppDestination.logbook => LogbookScreen(me: user),
       AppDestination.account => AccountScreen(me: user),
       AppDestination.instructors => InstructorsScreen(me: user),
+      AppDestination.cash => CashScreen(me: user),
       AppDestination.users => UsersAdminScreen(me: user),
       AppDestination.aircraft => AircraftAdminScreen(me: user),
       AppDestination.pricing => PricingAdminScreen(me: user),
@@ -59,6 +61,12 @@ List<Widget> appNavActions(BuildContext context, AppUser user, {AppDestination? 
         tooltip: 'Pilotes',
         icon: const Icon(Icons.groups),
         onPressed: go(AppDestination.instructors),
+      ),
+    if (user.isInstructor || user.isAdmin)
+      IconButton(
+        tooltip: 'Caisse',
+        icon: const Icon(Icons.point_of_sale),
+        onPressed: go(AppDestination.cash),
       ),
     if (user.isAdmin)
       PopupMenuButton<AppDestination>(

@@ -6,6 +6,7 @@ import 'app.dart';
 import 'core/env.dart';
 import 'data/admin_api.dart';
 import 'data/auth_service.dart';
+import 'data/cash_api.dart';
 import 'data/finance_api.dart';
 import 'data/flight_api.dart';
 import 'data/push_service.dart';
@@ -35,6 +36,7 @@ Future<void> main() async {
     admin: FirebaseAdminApi(),
     flights: FirebaseFlightApi(),
     finance: FirebaseFinanceApi(),
+    cash: FirebaseCashApi(),
     push: FirebasePushService(webVapidKey: webVapidKeyFor(appEnv)),
     child: UlmGapApp(env: appEnv, home: const AppGate()),
   ));

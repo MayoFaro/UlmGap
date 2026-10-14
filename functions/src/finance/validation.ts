@@ -2,6 +2,7 @@
 // corrections de compte (task 5).
 import { obj, ValidationError } from "../admin/validation";
 import { BAPTISM_TIERS, BaptismTier, Category, Pricing } from "../rules/pricing";
+import { cashDay } from "./cash-validation";
 
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
 
@@ -70,16 +71,17 @@ function optionalReason(v: unknown): string | null {
 }
 
 /**
- * Crédit (versement) d'un compte par un instructeur ou un admin. Aucun
- * plafond (décision utilisateur) : un montant entier positif est toujours
- * accepté, y compris 1 000 000.
+ * Crédit carburant d'un compte par un instructeur ou un admin (spec §11.3).
+ * Aucun plafond (décision utilisateur) : un montant entier positif est
+ * toujours accepté, y compris 1 000 000. Date : aujourd'hui par défaut.
  */
-export function validateCredit(data: unknown): { userUid: string; amount: number; reason: string | null } {
+export function validateCredit(data: unknown, nowMs = Date.now()):
+  { userUid: string; amount: number; reason: string | null; date: string } {
   const d = obj(data);
   const userUid = accountUid(d.userUid);
   const amount = amountInt(d.amount);
   if (amount <= 0) throw new ValidationError("Montant invalide.");
-  return { userUid, amount, reason: optionalReason(d.reason) };
+  return { userUid, amount, reason: optionalReason(d.reason), date: cashDay(d.date, nowMs) };
 }
 
 /**

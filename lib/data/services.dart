@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'admin_api.dart';
 import 'auth_service.dart';
+import 'cash_api.dart';
 import 'finance_api.dart';
 import 'flight_api.dart';
 import 'push_service.dart';
@@ -17,6 +18,7 @@ class AppServices extends InheritedWidget {
     this.flights,
     this.finance,
     this.push,
+    this.cash,
     required super.child,
   });
 
@@ -29,6 +31,9 @@ class AppServices extends InheritedWidget {
   /// Plan 5 : notifications push ; null en test (aucune inscription).
   final PushService? push;
 
+  /// Plan 11 : caisse ; null en test si l'écran n'en a pas besoin.
+  final CashApi? cash;
+
   static AppServices of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppServices>()!;
 
@@ -39,5 +44,6 @@ class AppServices extends InheritedWidget {
       admin != old.admin ||
       flights != old.flights ||
       finance != old.finance ||
-      push != old.push;
+      push != old.push ||
+      cash != old.cash;
 }

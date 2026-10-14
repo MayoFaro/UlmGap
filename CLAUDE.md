@@ -28,6 +28,8 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-05-ulmgap-09-tarifs-battement.md`
 - Plan 10, lâché amphibie et icônes de profil (terminé) :
   `docs/superpowers/plans/2026-10-06-ulmgap-10-lache-amphibie.md` (spec §3.6)
+- Plan 11, suivi de caisse (terminé sur `feature/caisse`, non fusionné) :
+  `docs/superpowers/plans/2026-10-14-ulmgap-11-caisse.md` (spec §11)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -40,7 +42,8 @@ doivent jamais accéder à AppGAP.
   7. suivi carburant par appareil ;
   8. crédit instruction et baptême de l'air ;
   9. dépassement dès 60 min, forfaits de baptême, battement de 30 min ;
-  10. lâché amphibie, icônes dans le menu des profils.
+  10. lâché amphibie, icônes dans le menu des profils ;
+  11. suivi de caisse ; 12. vol technique ; 13. suivi de cuve.
 
 ## Règles de travail
 
@@ -73,8 +76,20 @@ d'où le JDK d'Android Studio.
 **Disque presque plein** (environ 6 Go libres) : éviter les builds inutiles.
 `build/` peut être supprimé, il est régénérable.
 
-## État au 2026-10-06
+## État au 2026-10-14
 
+- Plan 11 (suivi de caisse) terminé sur la branche `feature/caisse`, **non
+  fusionné** dans `main`. Tests verts (Flutter, analyse, unitaires, intégration).
+  En dev, **à déployer** : règles Firestore et Functions `creditAccount`,
+  `correctAccount`, `addCashMovement`, `correctCashMovement`, `closeMigration`
+  (`firebase deploy --project dev --only firestore:rules,functions:…`).
+  **L'app installée en dev doit être reconstruite.** Import de la caisse en dev
+  : à faire, après relecture par l'utilisateur de `docs/caisse-import.csv`
+  (ignoré par git, hors dépôt).
+  **L'import doit suivre immédiatement le déploiement des Functions, avant
+  toute opération de caisse ou tout Crédit carburant** : `importCashbox`
+  refuse une caisse non vide (« La caisse contient déjà des opérations :
+  import refusé. »).
 - Plans 1 à 5 et 7 à 10 terminés et **tous fusionnés dans `main`** (2026-10-06).
   Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
   la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
@@ -117,6 +132,20 @@ d'où le JDK d'Android Studio.
   **L'app installée en dev doit être reconstruite.** **Cocher « Lâché
   amphibie » sur les comptes concernés** dans Administration → Utilisateurs :
   sinon seuls les admins peuvent réserver l'appareil amphibie.
+- Plan 11 en prod, à faire après le déploiement du plan 10 ci-dessous :
+  1. déployer les règles et les Functions du plan 11 (`creditAccount`,
+     `correctAccount`, `addCashMovement`, `correctCashMovement`,
+     `closeMigration`) avec l'app web ;
+  2. importer la caisse : `cd functions && npm run build && node
+     scripts/import-cashbox.js --project ulmgap-prod --file ../docs/caisse-import.csv`
+     **immédiatement après le déploiement des Functions, avant toute opération
+     de caisse ou tout Crédit carburant** (l'import refuse une caisse non vide :
+     « La caisse contient déjà des opérations : import refusé. ») ;
+  3. écran Caisse (icône, admin) : saisir le comptage physique et l'« Écart de
+     caisse » ;
+  4. reprendre chaque solde depuis l'écran Pilotes, par la puce « Corriger »
+     du dialogue crédit (« Corriger le solde » dans la spec) ;
+  5. admin, écran Caisse : « Reprise terminée ».
 - En prod : **règles et Functions à déployer par l'utilisateur avant le
   25/10/2026**, date d'expiration des règles du mode test. Déployer
   **toutes les Functions dans leur version du plan 10** (Node 22, dont la
@@ -124,7 +153,7 @@ d'où le JDK d'Android Studio.
   Scheduler), en même temps que l'app web (`closeFlight` exige le nombre
   d'atterrissages et les champs carburant, `correctAccount` le nouveau
   solde, `adminUpdatePricing` les tarifs `instructionCredit`,
-  `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Ni règle ni index nouveau depuis le plan 3. Tout build Android ou
+  `toleranceMinutes` et `baptismFees`, les trois forfaits de baptême). Règles et **index composites** nouveaux depuis la confidentialité des demandes (`docs/operations/confidentialite-demandes.md`) : déployer d'abord `firestore:indexes`, attendre qu'ils soient prêts (sinon le planning affiche « Impossible de charger les données »), puis les règles. Tout build Android ou
   iOS installé antérieur au plan 10 doit être mis à jour : il ne peut plus
   clôturer un vol ni enregistrer les tarifs. Ensuite :
   - premier admin (`cd functions && npm run build && node

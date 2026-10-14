@@ -10,6 +10,11 @@ export { adminCreateUser, adminDeleteUser, adminUpdateUser } from "./admin/users
 export { adminUpsertAircraft } from "./admin/aircraft";
 export { adminUpdatePricing } from "./finance/pricing-store";
 export { creditAccountFn as creditAccount, correctAccountFn as correctAccount } from "./finance/accounts";
+export {
+  addCashMovementFn as addCashMovement,
+  correctCashMovementFn as correctCashMovement,
+  closeMigrationFn as closeMigration,
+} from "./finance/cash";
 export { createFlightFn as createFlight, updateFlightFn as updateFlight } from "./flights/edit";
 export {
   validateFlightFn as validateFlight,

@@ -71,7 +71,7 @@ export function reminderPush(f: FlightInfo, names: Record<string, string>): Push
     `${flightLine(f, names)}. Pensez à le clôturer dans le carnet de vol.`);
 }
 
-const MOVEMENT_LABELS = { credit: "Crédit", correction: "Correction", flight_adjustment: "Régularisation",
+const MOVEMENT_LABELS = { credit: "Crédit carburant", correction: "Correction", flight_adjustment: "Régularisation",
   instruction: "Crédit instruction" };
 
 export function movementPush(a: {

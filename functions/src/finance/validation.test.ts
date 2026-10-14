@@ -79,22 +79,25 @@ test("validatePricing : message d'erreur au format attendu", () => {
   );
 });
 
-test("validateCredit : cas nominal, avec et sans motif", () => {
+const NOW = Date.UTC(2026, 9, 14, 12);
+
+test("validateCredit : cas nominal, avec et sans motif, date par défaut", () => {
   assert.deepEqual(
-    validateCredit({ userUid: "u1", amount: 50_000 }),
-    { userUid: "u1", amount: 50_000, reason: null },
+    validateCredit({ userUid: "u1", amount: 50_000 }, NOW),
+    { userUid: "u1", amount: 50_000, reason: null, date: "2026-10-14" },
   );
   assert.deepEqual(
-    validateCredit({ userUid: "u1", amount: 50_000, reason: " Versement caisse " }),
-    { userUid: "u1", amount: 50_000, reason: "Versement caisse" },
+    validateCredit({ userUid: "u1", amount: 50_000, reason: " Versement caisse ", date: "2026-10-12" }, NOW),
+    { userUid: "u1", amount: 50_000, reason: "Versement caisse", date: "2026-10-12" },
   );
 });
 
-test("validateCredit : aucun plafond, 1 000 000 accepté", () => {
+test("validateCredit : aucun plafond, 1 000 000 accepté ; date future refusée", () => {
   assert.deepEqual(
-    validateCredit({ userUid: "u1", amount: 1_000_000 }),
-    { userUid: "u1", amount: 1_000_000, reason: null },
+    validateCredit({ userUid: "u1", amount: 1_000_000 }, NOW),
+    { userUid: "u1", amount: 1_000_000, reason: null, date: "2026-10-14" },
   );
+  assert.throws(() => validateCredit({ userUid: "u1", amount: 1_000, date: "2026-10-15" }, NOW), ValidationError);
 });
 
 test("validateCredit : montant invalide (zéro, négatif, décimal, manquant)", () => {

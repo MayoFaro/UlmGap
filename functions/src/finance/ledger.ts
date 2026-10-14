@@ -24,13 +24,15 @@ export function postMovement(tx: Tx, db: Db, a: {
   flightId: string | null;
   by: string;
   currentBalance: number;
+  id?: string;
 }): number {
   const balanceAfter = a.currentBalance + a.amount;
   tx.update(db.collection("users").doc(a.uid), {
     balance: balanceAfter,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  tx.create(db.collection("transactions").doc(), {
+  const ref = a.id ? db.collection("transactions").doc(a.id) : db.collection("transactions").doc();
+  tx.create(ref, {
     userUid: a.uid,
     amount: a.amount,
     type: a.type,

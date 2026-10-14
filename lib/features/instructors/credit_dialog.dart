@@ -1,12 +1,15 @@
-// Dialogue « Créditer / corriger » (écran Pilotes) : crédit (montant
-// positif, motif facultatif) ou correction (nouveau solde, pré-rempli avec
+// Dialogue « Crédit carburant / corriger » (écran Pilotes) : crédit carburant
+// (montant positif, date de versement, motif facultatif) ou correction (nouveau solde, pré-rempli avec
 // le solde actuel, motif obligatoire ; révision du 2026-10-01), sans plafond (décision utilisateur : pas de plafond sur les
 // versements, ni sur les corrections pour pouvoir annuler un versement
-// erroné en une seule fois). Appelle l'API lui-même et affiche le nouveau
+// erroné en une seule fois). La puce « Corriger » n'existe que pendant la
+// reprise de la caisse (masquée une fois la reprise clôturée). Appelle l'API lui-même et affiche le nouveau
 // solde par SnackBar une fois le dialogue refermé.
 import 'package:flutter/material.dart';
 
+import '../../core/formats.dart';
 import '../../core/money.dart';
+import '../../data/cash_movement.dart';
 import '../../data/flight_api.dart' show FlightFailure;
 import '../../data/services.dart';
 
@@ -29,6 +32,8 @@ class _CreditDialogState extends State<CreditDialog> {
   final _reason = TextEditingController();
   String? _error;
   bool _submitting = false;
+  bool _migrationClosed = false;
+  DateTime _date = dayOf(DateTime.now());
 
   @override
   void dispose() {
@@ -37,10 +42,21 @@ class _CreditDialogState extends State<CreditDialog> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+        context: context,
+        initialDate: _date,
+        firstDate: DateTime(2020),
+        lastDate: dayOf(DateTime.now()));
+    if (picked != null) setState(() => _date = picked);
+  }
+
   Future<void> _submit() async {
+    if (_migrationClosed && _mode == _Mode.correction) return; // reset en attente
+    final mode = _migrationClosed ? _Mode.credit : _mode;
     final amount = parseAmount(_amount.text);
     final reason = _reason.text.trim();
-    if (_mode == _Mode.credit) {
+    if (mode == _Mode.credit) {
       if (amount == null || amount <= 0) {
         setState(() => _error = 'Montant invalide (positif).');
         return;
@@ -66,8 +82,9 @@ class _CreditDialogState extends State<CreditDialog> {
       _submitting = true;
     });
     try {
-      final balance = _mode == _Mode.credit
-          ? await finance.credit(widget.uid, amount, reason.isEmpty ? null : reason)
+      final balance = mode == _Mode.credit
+          ? await finance.credit(widget.uid, amount, reason.isEmpty ? null : reason,
+              date: _date)
           : await finance.correct(widget.uid, amount, reason);
       if (!mounted) return;
       Navigator.pop(context);
@@ -88,8 +105,32 @@ class _CreditDialogState extends State<CreditDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cashbox =
+        AppServices.of(context).cash?.watchCashbox() ?? Stream.value(Cashbox.empty);
+    return StreamBuilder<Cashbox>(
+      stream: cashbox,
+      builder: (context, snap) {
+        _migrationClosed = snap.data?.migrationClosed ?? false;
+        if (_migrationClosed && _mode == _Mode.correction) {
+          // La reprise vient d'être clôturée : retour au crédit, sans le
+          // solde pré-rempli pour la correction (hors build).
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _mode != _Mode.correction) return;
+            setState(() {
+              _mode = _Mode.credit;
+              _amount.clear();
+            });
+          });
+        }
+        return _dialog(context);
+      },
+    );
+  }
+
+  Widget _dialog(BuildContext context) {
+    final mode = _migrationClosed ? _Mode.credit : _mode;
     return AlertDialog(
-      title: const Text('Créditer / corriger'),
+      title: const Text('Crédit carburant / corriger'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -97,16 +138,17 @@ class _CreditDialogState extends State<CreditDialog> {
           children: [
             Wrap(spacing: 8, children: [
               ChoiceChip(
-                label: const Text('Créditer'),
-                selected: _mode == _Mode.credit,
+                label: const Text('Crédit carburant'),
+                selected: mode == _Mode.credit,
                 onSelected: (_) => setState(() {
                   _mode = _Mode.credit;
                   _amount.clear();
                 }),
               ),
-              ChoiceChip(
+              if (!_migrationClosed)
+                ChoiceChip(
                 label: const Text('Corriger'),
-                selected: _mode == _Mode.correction,
+                selected: mode == _Mode.correction,
                 onSelected: (_) => setState(() {
                   _mode = _Mode.correction;
                   _amount.text = formatAmountInput(widget.balance);
@@ -114,7 +156,7 @@ class _CreditDialogState extends State<CreditDialog> {
               ),
             ]),
             const SizedBox(height: 12),
-            if (_mode == _Mode.correction)
+            if (mode == _Mode.correction)
               Text('Solde actuel : ${formatFcfa(widget.balance)}'),
             TextField(
               key: const Key('credit-amount'),
@@ -122,9 +164,16 @@ class _CreditDialogState extends State<CreditDialog> {
               keyboardType: const TextInputType.numberWithOptions(signed: true),
               inputFormatters: const [AmountInputFormatter()],
               decoration: InputDecoration(
-                labelText: _mode == _Mode.credit ? 'Montant' : 'Nouveau solde',
+                labelText: mode == _Mode.credit ? 'Montant' : 'Nouveau solde',
               ),
             ),
+            if (mode == _Mode.credit)
+              TextButton.icon(
+                key: const Key('credit-date'),
+                icon: const Icon(Icons.event),
+                label: Text('Date : ${formatShortDate(_date)}'),
+                onPressed: _pickDate,
+              ),
             const SizedBox(height: 8),
             TextField(
               key: const Key('credit-reason'),
@@ -132,7 +181,7 @@ class _CreditDialogState extends State<CreditDialog> {
               maxLength: 200,
               decoration: InputDecoration(
                 labelText:
-                    _mode == _Mode.correction ? 'Motif (obligatoire)' : 'Motif (facultatif)',
+                    mode == _Mode.correction ? 'Motif (obligatoire)' : 'Motif (facultatif)',
               ),
             ),
             if (_error != null)
