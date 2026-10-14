@@ -38,12 +38,14 @@ String baptismTierLabel(String? tier) => switch (tier) {
 /// Message de refus d'un baptême sans forfait (identique au serveur).
 const baptismTierMissingMessage = 'Choisissez le forfait du baptême (Local, Nyonye ou Awagne).';
 
-/// Mode de tarification d'un vol, avec le forfait en cas de baptême.
+/// Spec §12.2 : aperçu et résumé de clôture d'un vol technique.
 const technicalUnbilledText = 'Vol technique : non facturé (association)';
 
+/// Spec §12.3 : fiche d'un vol technique, avec son motif.
 String technicalTitle(String? reason) =>
     reason == null || reason.isEmpty ? 'Vol technique' : 'Vol technique — $reason';
 
+/// Mode de tarification d'un vol, avec le forfait en cas de baptême.
 String flightPricingLabel(String mode, String? baptismTier) =>
     mode == 'baptism' ? 'Baptême ${baptismTierLabel(baptismTier)}' : pricingModeLabel(mode);
 
