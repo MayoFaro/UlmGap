@@ -126,6 +126,18 @@ void main() {
     expect(cash.corrected.single, {'id': 'b', 'amount': 68000, 'note': null});
   });
 
+  testWidgets('écart de caisse (admin) : montant juste gardant le signe', (tester) async {
+    final cash = FakeCashApi()..movements = [line('g', 'cash_gap', -2000, '2026-10-12', note: 'Comptage')];
+    await tester.pumpWidget(host(adm, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.textContaining('Comptage').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Montant juste : \u22122\u00A0000\u00A0FCFA'), findsOneWidget);
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(find.text('Le montant est déjà de \u22122\u00A0000\u00A0FCFA.'), findsOneWidget);
+  });
+
   testWidgets('écart de caisse : pas de correction pour un instructeur', (tester) async {
     final cash = FakeCashApi()..movements = [line('g', 'cash_gap', -2000, '2026-10-12', note: 'Comptage')];
     await tester.pumpWidget(host(instr, cash, accounts()));

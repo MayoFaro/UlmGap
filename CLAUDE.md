@@ -86,6 +86,10 @@ d'où le JDK d'Android Studio.
   **L'app installée en dev doit être reconstruite.** Import de la caisse en dev
   : à faire, après relecture par l'utilisateur de `docs/caisse-import.csv`
   (ignoré par git, hors dépôt).
+  **L'import doit suivre immédiatement le déploiement des Functions, avant
+  toute opération de caisse ou tout Crédit carburant** : `importCashbox`
+  refuse une caisse non vide (« La caisse contient déjà des opérations :
+  import refusé. »).
 - Plans 1 à 5 et 7 à 10 terminés et **tous fusionnés dans `main`** (2026-10-06).
   Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
   la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
@@ -133,7 +137,10 @@ d'où le JDK d'Android Studio.
      `correctAccount`, `addCashMovement`, `correctCashMovement`,
      `closeMigration`) avec l'app web ;
   2. importer la caisse : `cd functions && npm run build && node
-     scripts/import-cashbox.js --project ulmgap-prod --file ../docs/caisse-import.csv` ;
+     scripts/import-cashbox.js --project ulmgap-prod --file ../docs/caisse-import.csv`
+     **immédiatement après le déploiement des Functions, avant toute opération
+     de caisse ou tout Crédit carburant** (l'import refuse une caisse non vide :
+     « La caisse contient déjà des opérations : import refusé. ») ;
   3. écran Caisse (icône, admin) : saisir le comptage physique et l'« Écart de
      caisse » ;
   4. reprendre chaque solde depuis l'écran Pilotes, par la puce « Corriger »

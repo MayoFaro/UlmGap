@@ -291,5 +291,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ChoiceChip, 'Corriger'), findsOneWidget);
   });
-}
 
+  testWidgets('reprise clôturée pendant « Corriger » : montant vidé, puce retirée',
+      (tester) async {
+    final finance = FakeFinanceApi()..accounts = [_account('u1', 'Jean Dupont', balance: 120000)];
+    final controller = StreamController<Cashbox>();
+    addTearDown(controller.close);
+    final cash = FakeCashApi()..cashboxController = controller;
+    await tester.pumpWidget(host(finance, cash: cash));
+    controller.add(Cashbox.empty);
+    await tester.pump();
+    await tester.tap(find.text('Jean Dupont'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Crédit carburant / corriger'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Corriger'));
+    await tester.pump();
+    String amount() =>
+        tester.widget<TextField>(find.byKey(const Key('credit-amount'))).controller!.text;
+    expect(amount(), isNotEmpty);
+
+    controller.add(Cashbox(balance: 0, migrationClosedAt: DateTime(2026, 10, 20)));
+    await tester.pumpAndSettle();
+
+    expect(amount(), isEmpty);
+    expect(find.widgetWithText(ChoiceChip, 'Corriger'), findsNothing);
+    await tester.tap(find.text('Valider'));
+    await tester.pump();
+    expect(finance.credited, isEmpty);
+  });
+}

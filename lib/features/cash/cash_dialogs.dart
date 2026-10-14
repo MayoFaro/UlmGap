@@ -219,7 +219,7 @@ class _CashMovementDialogState extends State<CashMovementDialog> {
       return;
     }
     if ((_isGap ? amount : amount * (m.kind!.sign)) == _current) {
-      setState(() => _error = 'Le montant est déjà de ${formatFcfa(_current.abs())}.');
+      setState(() => _error = 'Le montant est déjà de ${formatFcfa(_isGap ? _current : _current.abs())}.');
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
@@ -254,7 +254,7 @@ class _CashMovementDialogState extends State<CashMovementDialog> {
           if (m.note != null && m.note!.isNotEmpty) Text('Note : ${m.note}'),
           Text('Saisie : $by, le ${formatShortDate(m.at)}'),
           if (m.isCorrection) const Text('Correction d\'une opération.'),
-          if (!m.isCorrection) Text('Montant juste : ${formatFcfa(_current.abs())}'),
+          if (!m.isCorrection) Text('Montant juste : ${formatFcfa(_isGap ? _current : _current.abs())}'),
           if (_canCorrect) ...[
             const SizedBox(height: 12),
             TextField(

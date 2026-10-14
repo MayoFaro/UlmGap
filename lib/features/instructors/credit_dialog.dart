@@ -52,6 +52,7 @@ class _CreditDialogState extends State<CreditDialog> {
   }
 
   Future<void> _submit() async {
+    if (_migrationClosed && _mode == _Mode.correction) return; // reset en attente
     final mode = _migrationClosed ? _Mode.credit : _mode;
     final amount = parseAmount(_amount.text);
     final reason = _reason.text.trim();
@@ -110,6 +111,17 @@ class _CreditDialogState extends State<CreditDialog> {
       stream: cashbox,
       builder: (context, snap) {
         _migrationClosed = snap.data?.migrationClosed ?? false;
+        if (_migrationClosed && _mode == _Mode.correction) {
+          // La reprise vient d'être clôturée : retour au crédit, sans le
+          // solde pré-rempli pour la correction (hors build).
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _mode != _Mode.correction) return;
+            setState(() {
+              _mode = _Mode.credit;
+              _amount.clear();
+            });
+          });
+        }
         return _dialog(context);
       },
     );

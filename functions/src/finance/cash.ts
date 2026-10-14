@@ -54,7 +54,7 @@ export async function correctCashMovement(caller: Caller | undefined, data: unkn
       corrections.docs.reduce((s, d) => s + (d.get("amount") as number), 0);
     const delta = target - current;
     if (delta === 0) {
-      throw new HttpsError("failed-precondition", `Le montant est déjà de ${formatFcfa(Math.abs(current))}.`);
+      throw new HttpsError("failed-precondition", `Le montant est déjà de ${formatFcfa(kind === "cash_gap" ? current : Math.abs(current))}.`);
     }
     const cash = await readCashbox(tx, db);
     const date = orig.get("date") as string;

@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { code, db, resetCashbox, seedUser } from "../flights/testkit";
+import { formatFcfa } from "../rules/pricing";
 import { creditAccount } from "./accounts";
 import { addCashMovement, closeMigration, correctCashMovement } from "./cash";
 
@@ -110,6 +111,14 @@ test("Fond initial et écart : correction réservée aux admins", async () => {
   await assert.rejects(correctCashMovement(instr, { movementId: opening.id, amount: 2_000 }),
     (e) => code(e) === "permission-denied");
   await correctCashMovement(admin1, { movementId: opening.id, amount: 2_000 });
+});
+
+test("Écart de caisse : message de montant inchangé gardant le signe", async () => {
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  const gap = await addCashMovement(admin1, { kind: "cash_gap", amount: -2_000, note: "Comptage" });
+  await assert.rejects(correctCashMovement(admin1, { movementId: gap.id, amount: -2_000 }),
+    (e) => code(e) === "failed-precondition" &&
+      (e as Error).message === `Le montant est déjà de ${formatFcfa(-2_000)}.`);
 });
 
 test("opération introuvable : not-found", async () => {

@@ -473,6 +473,8 @@ class FakeFinanceApi implements FinanceApi {
 
 class FakeCashApi implements CashApi {
   Cashbox cashbox = Cashbox.empty;
+  /// Si renseigné, remplace le flux à un seul élément de watchCashbox.
+  StreamController<Cashbox>? cashboxController;
   List<CashMovement> movements = [];
   Object? failWith;
   final added = <Map<String, dynamic>>[];
@@ -484,7 +486,7 @@ class FakeCashApi implements CashApi {
   }
 
   @override
-  Stream<Cashbox> watchCashbox() => Stream.value(cashbox);
+  Stream<Cashbox> watchCashbox() => cashboxController?.stream ?? Stream.value(cashbox);
 
   @override
   Stream<List<CashMovement>> watchMovements() => Stream.value(movements);
