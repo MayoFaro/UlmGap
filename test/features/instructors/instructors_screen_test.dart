@@ -78,7 +78,7 @@ void main() {
     await tester.tap(find.text('Valider'));
     await tester.pumpAndSettle();
 
-    expect(finance.credited.single, {'uid': 'u1', 'amount': 12000, 'reason': null});
+    expect(finance.credited.single, {'uid': 'u1', 'amount': 12000, 'reason': null, 'date': null});
     expect(find.text('Nouveau solde : ${formatFcfa(12000)}'), findsOneWidget);
   });
 

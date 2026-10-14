@@ -80,7 +80,7 @@ void main() {
     // Sans FlightApi, le vol n'est pas identifié ; la raison « Vol » égale
     // au libellé n'est pas répétée.
     expect(find.text('Vol'), findsOneWidget);
-    expect(find.text('Crédit — Versement caisse'), findsOneWidget);
+    expect(find.text('Crédit carburant — Versement caisse'), findsOneWidget);
     expect(find.text(formatFcfa(-15000)), findsOneWidget);
     expect(find.text('+${formatFcfa(12000)}'), findsOneWidget);
     expect(find.textContaining('Solde : ${formatFcfa(-3000)}'), findsWidgets);

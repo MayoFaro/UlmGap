@@ -11,7 +11,7 @@ import '../../data/services.dart';
 /// Libellé du type de mouvement (règle absolue : toute écriture de
 /// `users.balance` a une ligne `transactions`, cf. account_movement.dart).
 String movementTypeLabel(String type) => switch (type) {
-      'credit' => 'Crédit',
+      'credit' => 'Crédit carburant',
       'correction' => 'Correction',
       'flight' => 'Vol',
       'flight_adjustment' => 'Régularisation',
