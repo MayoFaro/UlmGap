@@ -72,3 +72,10 @@ export async function resetCashbox(): Promise<void> {
   await Promise.all(lines.docs.map((d) => d.ref.delete()));
   await db.collection("cashbox").doc("main").delete();
 }
+
+/** Cuve vide : `tank/main` est un document global (plan 13). */
+export async function resetTank(): Promise<void> {
+  const lines = await db.collection("tankMovements").get();
+  await Promise.all(lines.docs.map((d) => d.ref.delete()));
+  await db.collection("tank").doc("main").delete();
+}

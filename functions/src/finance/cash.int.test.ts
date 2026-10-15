@@ -2,13 +2,13 @@
 // Caisse (spec §11) : opérations, corrections, écart, reprise.
 import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { code, db, resetCashbox, seedUser } from "../flights/testkit";
+import { code, db, resetCashbox, resetTank, seedUser } from "../flights/testkit";
 import { formatFcfa } from "../rules/pricing";
 import { creditAccount } from "./accounts";
 import { addCashMovement, closeMigration, correctCashMovement } from "./cash";
 
-beforeEach(resetCashbox);
-afterEach(resetCashbox);
+beforeEach(async () => { await resetCashbox(); await resetTank(); });
+afterEach(async () => { await resetCashbox(); await resetTank(); });
 
 const balance = async () => ((await db.collection("cashbox").doc("main").get()).get("balance") as number) ?? 0;
 const line = async (id: string) => (await db.collection("cashMovements").doc(id).get()).data()!;
@@ -138,4 +138,31 @@ test("Reprise terminée : admin seulement, une seule fois, solde conservé", asy
   assert.equal(box.balance, 70_000);
   await assert.rejects(closeMigration(admin1),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "La reprise est déjà terminée.");
+});
+
+test("achat carburant avec 500 L : caisse -montant, cuve +500, lignes jumelles", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  await addCashMovement(instr, { kind: "off_app_income", amount: 400_000, note: "Baptême" });
+  const r = await addCashMovement(instr, {
+    kind: "fuel_purchase", amount: 300_000, liters: 500, date: "2026-10-12", note: "Total",
+  });
+  assert.equal(await balance(), 100_000);
+  const tank = await db.collection("tank").doc("main").get();
+  assert.equal(tank.get("liters"), 500);
+  const m = (await db.collection("tankMovements").get()).docs;
+  assert.equal(m.length, 1);
+  assert.equal(m[0].get("kind"), "refill");
+  assert.equal(m[0].get("liters"), 500);
+  assert.equal(m[0].get("litersAfter"), 500);
+  assert.equal(m[0].get("cashMovementId"), r.id);
+  assert.equal(m[0].get("date"), "2026-10-12");
+  assert.equal(m[0].get("note"), "Total");
+  assert.equal(m[0].get("by"), instr.uid);
+});
+
+test("achat carburant sans litres : cuve inchangée", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000 });
+  assert.equal((await db.collection("tankMovements").get()).size, 0);
+  assert.equal((await db.collection("tank").doc("main").get()).exists, false);
 });
