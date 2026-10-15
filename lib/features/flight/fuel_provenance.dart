@@ -33,13 +33,13 @@ String? defaultFuelSupplier(List<String> crew, String? me) =>
 /// [source] null : aucun choix fait (correction d'un vol clôturé avant le
 /// plan 13) ; rien n'est alors envoyé.
 class FuelProvenanceInput {
-  FuelProvenanceInput({this.source, this.supplierUid});
+  FuelProvenanceInput({this.source, this.supplierUid, this.legacy = false});
 
   /// Pré-remplie depuis un vol clôturé ; sans provenance enregistrée (vol
   /// d'avant le plan 13), aucun choix n'est fait.
   factory FuelProvenanceInput.fromFlight(Flight f, {String? defaultSupplier}) {
     final tank = f.fuelFromTankLiters;
-    if (tank == null) return FuelProvenanceInput(supplierUid: defaultSupplier);
+    if (tank == null) return FuelProvenanceInput(supplierUid: defaultSupplier, legacy: true);
     final personal = f.fuelFromPersonalLiters ?? 0;
     final source = tank > 0 && personal > 0
         ? FuelSource.both
@@ -52,6 +52,10 @@ class FuelProvenanceInput {
       ..tank.text = tank > 0 ? '$tank' : ''
       ..personal.text = personal > 0 ? '$personal' : '';
   }
+
+  /// Vol clôturé avant le plan 13 : « Aucun » revient à l'absence de choix
+  /// (mode historique), sans quoi un 0 L écraserait l'ajouté enregistré.
+  final bool legacy;
 
   FuelSource? source;
   final tank = TextEditingController();
@@ -129,7 +133,7 @@ class FuelProvenanceFields extends StatelessWidget {
               label: Text(s.label),
               selected: source == s,
               onSelected: (_) {
-                input.source = s;
+                input.source = s == FuelSource.none && input.legacy ? null : s;
                 onChanged();
               },
             ),

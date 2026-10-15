@@ -88,12 +88,15 @@ d'où le JDK d'Android Studio.
   intégration). En dev, **à déployer** :
   `firebase deploy --project dev --only firestore:rules,functions:closeFlight,functions:adminUpdateFlight,functions:adminDeleteFlight,functions:adminUpdatePricing,functions:addCashMovement,functions:addAircraftFill,functions:addGaugeReading`.
   **L'app installée en dev doit être reconstruite** : un ancien build ne peut
-  plus clôturer un vol. Ensuite, dans Administration → Tarifs, régler « Prix du
-  litre (bidon perso) » à 600, puis faire un **relevé de jauge initial**
-  (Administration, cuve) : sans lui, la jauge n'a pas de point de départ.
+  plus clôturer un vol ni enregistrer les tarifs (`adminUpdatePricing` exige
+  désormais le prix du litre). Ensuite, dans Administration → Tarifs, régler
+  « Prix du litre (bidon perso) » à 600, puis faire un **relevé de jauge
+  initial** depuis l'écran « Suivi cuve » (Caisse, ligne « Cuve : X L ») :
+  sans lui, la jauge n'a pas de point de départ.
 - Plan 12 (vol technique) fusionné dans `main` et déployé en dev, avec la
   règle du pilote payeur (un instructeur doit payer le vol technique). Recette
-  « vol ww » (Wonga-Wongué, spec §12.4) : à faire en dev.
+  « vol ww » (Wonga-Wongué, spec §12.4) : validée par l'utilisateur le
+  2026-10-15.
 - Les vols clôturés ne figurent plus dans le planning (fusionné dans `main`).
 - Plan 11 (suivi de caisse) fusionné dans `main` et déployé en dev : règles
   Firestore, index et Functions de la caisse. **L'app installée en dev doit
@@ -191,9 +194,10 @@ d'où le JDK d'Android Studio.
   les règles et les Functions `closeFlight`, `adminUpdateFlight`,
   `adminDeleteFlight`, `adminUpdatePricing`, `addCashMovement`,
   `addAircraftFill` et `addGaugeReading`. **Tout build installé antérieur au
-  plan 13 ne peut plus clôturer un vol.** Ensuite, comme en dev : régler « Prix
-  du litre (bidon perso) » à 600 dans Administration → Tarifs, et faire un
-  relevé de jauge initial.
+  plan 13 ne peut plus clôturer un vol ni enregistrer les tarifs.** Ensuite,
+  comme en dev : régler « Prix du litre (bidon perso) » à 600 dans
+  Administration → Tarifs, et faire un relevé de jauge initial depuis l'écran
+  « Suivi cuve » (Caisse, ligne « Cuve : X L »).
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :
   la 14 supprime l'API `admin.firestore()` utilisée partout). Le Node local
   reste en 20 : accepté par les tests et l'émulateur.

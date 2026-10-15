@@ -1491,6 +1491,24 @@ void main() {
     expect(p.containsKey('fuelAdded'), isFalse);
   });
 
+  testWidgets('correction admin d\'un vol d\'avant le plan 13 : choix puis « Aucun » → retour au mode '
+      'historique', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel(start: 40, added: 20, end: 35));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Depuis la cuve'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Aucun'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-fuel-added'))).controller!.text, '20');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect(p['fuelAdded'], 20);
+    expect(p.containsKey('fuelFromTank'), isFalse);
+    expect(p.containsKey('fuelFromPersonal'), isFalse);
+    expect(p.containsKey('fuelSupplierUid'), isFalse);
+  });
+
   testWidgets('correction admin : total de plus de 100 L refusé', (tester) async {
     _useTallView(tester);
     final a = api()..categories = {'u1': UserCategory.gap, 'ins': UserCategory.gap};

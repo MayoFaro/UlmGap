@@ -76,7 +76,7 @@ class _FlightScreenState extends State<FlightScreen> {
   final _correctFuelAdded = TextEditingController();
   final _correctFuelEnd = TextEditingController();
   // Plan 13 : provenance de l'ajouté (sans choix pour un vol d'avant le plan).
-  FuelProvenanceInput _correctProvenance = FuelProvenanceInput();
+  late FuelProvenanceInput _correctProvenance;
 
   final _subs = <StreamSubscription<Object?>>[];
   /// Version « live » d'un vol existant (Task 3, retours de recette) : mise à
@@ -173,6 +173,7 @@ class _FlightScreenState extends State<FlightScreen> {
       _start = DateTime(n.year, n.month, n.day, n.hour + 1);
       _end = _start.add(const Duration(hours: 1));
       _crew = [_me.uid];
+      _correctProvenance = FuelProvenanceInput();
     }
   }
 

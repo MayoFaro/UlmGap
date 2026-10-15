@@ -10,7 +10,11 @@ import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { addAircraftFill } from "../finance/tank";
 import { clubDayString } from "../rules/cash";
 
-beforeEach(async () => { await resetTank(); await resetCashbox(); });
+beforeEach(async () => {
+  await resetTank();
+  await resetCashbox();
+  await db.doc("settings/pricing").delete();
+});
 afterEach(async () => { await resetTank(); await resetCashbox(); });
 
 const SUPPLIER_OUT = "Le pilote qui a fourni le carburant doit faire partie de l'équipage.";
