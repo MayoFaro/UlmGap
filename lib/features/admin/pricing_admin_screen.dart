@@ -29,6 +29,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
   final _minPlannedMinutes = TextEditingController();
   final _fuelHourlyRate = TextEditingController();
   final _instructionCredit = TextEditingController();
+  final _fuelLiterPrice = TextEditingController();
   final _baptismFee = {for (final t in baptismTiers) t: TextEditingController()};
 
   // Préremplissage une seule fois (au premier tarif reçu), pour ne pas
@@ -49,6 +50,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _minPlannedMinutes.dispose();
     _fuelHourlyRate.dispose();
     _instructionCredit.dispose();
+    _fuelLiterPrice.dispose();
     for (final c in _baptismFee.values) {
       c.dispose();
     }
@@ -65,6 +67,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     _minPlannedMinutes.text = p.minPlannedMinutes.toString();
     _fuelHourlyRate.text = formatAmountInput(p.fuelHourlyRate);
     _instructionCredit.text = formatAmountInput(p.instructionCredit);
+    _fuelLiterPrice.text = formatAmountInput(p.fuelLiterPrice);
     for (final t in baptismTiers) {
       _baptismFee[t]!.text = formatAmountInput(p.baptismFees[t]!);
     }
@@ -75,6 +78,14 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     final n = parseAmount(v ?? '');
     if (n == null) return 'Nombre entier requis.';
     if (n < 0 || n > 1000000) return 'Entre 0 et ${formatFcfa(1000000)}.';
+    return null;
+  }
+
+  /// Plan 13 : prix du litre du bidon perso, 0 à 10 000.
+  String? _validateLiterPrice(String? v) {
+    final n = parseAmount(v ?? '');
+    if (n == null) return 'Nombre entier requis.';
+    if (n < 0 || n > 10000) return 'Entre 0 et ${formatFcfa(10000)}.';
     return null;
   }
 
@@ -108,6 +119,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
       fuelHourlyRate: parseAmount(_fuelHourlyRate.text)!,
       instructionCredit: parseAmount(_instructionCredit.text)!,
       baptismFees: {for (final t in baptismTiers) t: parseAmount(_baptismFee[t]!.text)!},
+      fuelLiterPrice: parseAmount(_fuelLiterPrice.text)!,
     );
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _saving = true);
@@ -212,6 +224,15 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   inputFormatters: const [AmountInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Crédit instruction (FCFA)'),
                   validator: _validateAmount,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const Key('fuelLiterPrice'),
+                  controller: _fuelLiterPrice,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: const [AmountInputFormatter()],
+                  decoration: const InputDecoration(labelText: 'Prix du litre (bidon perso)'),
+                  validator: _validateLiterPrice,
                 ),
                 for (final t in baptismTiers) ...[
                   const SizedBox(height: 8),

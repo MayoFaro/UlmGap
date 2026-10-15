@@ -127,9 +127,23 @@ String describeConflict(ConflictInfo c, Map<String, CrewMember> dir) {
   return 'Conflit : ${c.aircraft} est déjà réservé sur le vol du $when ($crew) (30 min d\'écart minimum).';
 }
 
-/// Plan 7 (spec §9.4) : carburant déclaré à la clôture.
-String fuelSummary(Flight f) {
+/// Plan 7 (spec §9.4) : carburant déclaré à la clôture. Plan 13 (spec
+/// §13.6) : provenance de l'ajouté entre parenthèses, si elle est connue et
+/// qu'il y a eu un ajout ; [supplierName] donne le nom court du pilote.
+String fuelSummary(Flight f, {String Function(String uid)? supplierName}) {
+  final tank = f.fuelFromTankLiters;
+  final personal = f.fuelFromPersonalLiters ?? 0;
+  var added = 'ajouté ${fuelText(f.fuelAddedLiters)}';
+  if (tank != null && (tank > 0 || personal > 0)) {
+    final supplier = f.fuelSupplierUid;
+    final who = supplier == null ? '?' : (supplierName?.call(supplier) ?? '?');
+    final parts = [
+      if (tank > 0) 'cuve $tank L',
+      if (personal > 0) 'bidon $personal L — $who',
+    ];
+    added = '$added (${parts.join(', ')})';
+  }
   final base = 'Carburant : départ ${fuelText(f.fuelStartLiters)} · '
-      'ajouté ${fuelText(f.fuelAddedLiters)} · rangé ${fuelText(f.fuelEndLiters)}';
+      '$added · rangé ${fuelText(f.fuelEndLiters)}';
   return fuelGap(f) ? '$base (prévu ${fuelText(f.fuelStartExpectedLiters)})' : base;
 }

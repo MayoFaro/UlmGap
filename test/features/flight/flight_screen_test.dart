@@ -24,7 +24,12 @@ final now = DateTime(2026, 10, 12, 8, 20);
 Future<void> fillFuel(WidgetTester tester, {String added = '0', String end = '25'}) async {
   final start = find.byKey(const Key('closing-fuel-start'));
   if (start.evaluate().isNotEmpty) await tester.enterText(start, '40');
-  await tester.enterText(find.byKey(const Key('closing-fuel-added')), added);
+  if (added != '0') {
+    // Plan 13 : carburant ajouté pris à la cuve.
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Depuis la cuve'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('fuel-tank')), added);
+  }
   await tester.enterText(find.byKey(const Key('closing-fuel-end')), end);
 }
 
@@ -1370,6 +1375,129 @@ void main() {
     await tester.enterText(find.byKey(const Key('correct-fuel-end')), '150');
     await saveCorrection(tester);
     expect(find.text('Carburant au départ invalide (0 à 100 L).'), findsOneWidget);
+    expect(finance.adminUpdated, isEmpty);
+  });
+
+  // --- plan 13 : provenance du carburant ---
+
+  Flight closedProvenance({int tank = 10, int personal = 10, String? supplier = 'ins'}) {
+    final s = DateTime(2026, 10, 12, 5);
+    return testFlight(
+        id: 'pv1', start: s, end: s.add(const Duration(minutes: 90)), crew: ['u1', 'ins'],
+        createdBy: 'u1', status: 'valide', isClosed: true, actualFlightMinutes: 90,
+        billedAmount: 15000, billedTo: 'account', fuelStartExpected: 40,
+        fuelStart: 40, fuelAdded: tank + personal, fuelEnd: 35,
+        fuelFromTank: tank, fuelFromPersonal: personal, fuelSupplierUid: supplier,
+        fuelSupplyCredit: personal * 600);
+  }
+
+  testWidgets('clôture « Bidon perso » : pilote par défaut, crédit au prix courant, payload',
+      (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'pb1', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['ins', 'u1'], createdBy: 'u1', status: 'valide',
+        pricingSnapshot: defaultPricing.toMap());
+    final finance = FakeFinanceApi()
+      ..pricing = Pricing.fromMap({...defaultPricing.toMap(), 'fuelLiterPrice': 650});
+    await tester.pumpWidget(
+        pushHost(api(), testUser(uid: 'u1', category: 'GAP'), flight: f, finance: finance));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clôturer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Bidon perso'));
+    await tester.pumpAndSettle();
+    await fillFuel(tester, end: '35');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '10');
+    await tester.pump();
+    expect(find.text('Crédit : 10 L × 650 = 6 500 FCFA pour JDU'), findsOneWidget);
+    await tester.tap(find.text('Clôturer').last);
+    await tester.pumpAndSettle();
+    final c = finance.closed.single;
+    expect([c['fuelFromTank'], c['fuelFromPersonal'], c['fuelSupplierUid']], [0, 10, 'u1']);
+  });
+
+  testWidgets('fiche d\'un vol clôturé : provenance du carburant ajouté', (tester) async {
+    _useTallView(tester);
+    await tester.pumpWidget(host(api(), testUser(uid: 'u1'), flight: closedProvenance()));
+    await tester.pumpAndSettle();
+    expect(find.text('Carburant : départ 40 L · ajouté 20 L (cuve 10 L, bidon 10 L — INS) · rangé 35 L'),
+        findsOneWidget);
+  });
+
+  testWidgets('correction admin d\'un vol du plan 13 : provenance pré-remplie et envoyée',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap, 'ins': UserCategory.gap};
+    final finance = await correct(tester, a, closedProvenance());
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Les deux')).selected, isTrue);
+    expect(find.byKey(const Key('correct-fuel-added')), findsNothing);
+    expect(tester.widget<TextField>(find.byKey(const Key('fuel-tank'))).controller!.text, '10');
+    expect(tester.widget<TextField>(find.byKey(const Key('fuel-personal'))).controller!.text, '10');
+    expect(tester.widget<DropdownButtonFormField<String>>(find.byKey(const Key('fuel-supplier')))
+        .initialValue, 'ins');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '5');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect([p['fuelStart'], p['fuelFromTank'], p['fuelFromPersonal'], p['fuelSupplierUid'], p['fuelEnd']],
+        [40, 10, 5, 'ins', 35]);
+    expect(p.containsKey('fuelAdded'), isFalse);
+  });
+
+  testWidgets('correction admin d\'un vol du plan 13 sans ajout : « Aucun », zéros envoyés',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap, 'ins': UserCategory.gap};
+    final finance = await correct(tester, a, closedProvenance(tank: 0, personal: 0, supplier: null));
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Aucun')).selected, isTrue);
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect([p['fuelFromTank'], p['fuelFromPersonal'], p['fuelSupplierUid']], [0, 0, null]);
+    expect(p.containsKey('fuelAdded'), isFalse);
+  });
+
+  testWidgets('correction admin d\'un vol d\'avant le plan 13 : aucun choix imposé, ajouté envoyé '
+      'tel quel, sans provenance', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel(start: 40, added: 20, end: 35));
+    for (final label in ['Aucun', 'Depuis la cuve', 'Bidon perso', 'Les deux']) {
+      expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label)).selected, isFalse);
+    }
+    expect(tester.widget<TextField>(find.byKey(const Key('correct-fuel-added'))).controller!.text, '20');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect(p['fuelAdded'], 20);
+    expect(p.containsKey('fuelFromTank'), isFalse);
+    expect(p.containsKey('fuelFromPersonal'), isFalse);
+    expect(p.containsKey('fuelSupplierUid'), isFalse);
+  });
+
+  testWidgets('correction admin d\'un vol d\'avant le plan 13 : provenance choisie → envoyée',
+      (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap};
+    final finance = await correct(tester, a, closedFuel(start: 40, added: 20, end: 35));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Depuis la cuve'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('correct-fuel-added')), findsNothing);
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '20');
+    await saveCorrection(tester);
+    final p = finance.adminUpdated.values.single;
+    expect([p['fuelFromTank'], p['fuelFromPersonal'], p['fuelSupplierUid']], [20, 0, null]);
+    expect(p.containsKey('fuelAdded'), isFalse);
+  });
+
+  testWidgets('correction admin : total de plus de 100 L refusé', (tester) async {
+    _useTallView(tester);
+    final a = api()..categories = {'u1': UserCategory.gap, 'ins': UserCategory.gap};
+    final finance = await correct(tester, a, closedProvenance());
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '95');
+    await saveCorrection(tester);
+    expect(find.text('Carburant ajouté : 100 L au maximum au total.'), findsOneWidget);
     expect(finance.adminUpdated, isEmpty);
   });
 

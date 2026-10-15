@@ -19,11 +19,14 @@ CashMovement line(String id, String kind, int amount, String date,
       'correctsId': correctsId, 'note': note, 'by': 'ins', 'at': DateTime(2026, 10, 14),
     });
 
-Widget host(AppUser me, FakeCashApi cash, FakeFinanceApi finance) => AppServices(
+Widget host(AppUser me, FakeCashApi cash, FakeFinanceApi finance, {FakeTankApi? tank}) =>
+    AppServices(
       auth: FakeAuthService(),
       users: FakeUserRepository(),
       finance: finance,
       cash: cash,
+      tank: tank,
+      flights: FakeFlightApi(),
       child: MaterialApp(home: CashScreen(me: me, now: () => now)),
     );
 
@@ -167,5 +170,78 @@ void main() {
     await tester.pumpWidget(host(instr, FakeCashApi(), accounts()));
     await tester.pump();
     expect(find.text('Reprise terminée'), findsNothing);
+  });
+
+  testWidgets('Achat carburant : « Litres (facultatif) » visible pour ce type seul, envoyé si rempli',
+      (tester) async {
+    final cash = FakeCashApi();
+    await tester.pumpWidget(host(instr, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.text('Opération'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cash-liters')), findsNothing); // Crédit carburant par défaut
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Achat carburant'));
+    await tester.pump();
+    expect(find.widgetWithText(TextField, 'Litres (facultatif)'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '220000');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '200');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(cash.added.single['kind'], CashKind.fuelPurchase);
+    expect(cash.added.single['liters'], 200);
+  });
+
+  testWidgets('Achat carburant sans litres : liters null ; litres invalides refusés', (tester) async {
+    final cash = FakeCashApi();
+    await tester.pumpWidget(host(instr, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.text('Opération'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Achat carburant'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('cash-amount')), '220000');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '0');
+    await tester.tap(find.text('Valider'));
+    await tester.pump();
+    expect(find.text('Litres invalides (1 à 100 000).'), findsOneWidget);
+    expect(cash.added, isEmpty);
+    await tester.enterText(find.byKey(const Key('cash-liters')), '');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(cash.added.single['liters'], isNull);
+  });
+
+  testWidgets('litres saisis puis type changé : non envoyés', (tester) async {
+    final cash = FakeCashApi();
+    await tester.pumpWidget(host(instr, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.text('Opération'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Achat carburant'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('cash-liters')), '200');
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Maintenance'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('cash-amount')), '10000');
+    await tester.enterText(find.byKey(const Key('cash-note')), 'Roue');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(cash.added.single['liters'], isNull);
+  });
+
+  testWidgets('ligne « Cuve : 180 L » ; appui → Suivi cuve', (tester) async {
+    await tester.pumpWidget(host(instr, FakeCashApi(), accounts(), tank: FakeTankApi()..level = 180));
+    await tester.pump();
+    expect(find.text('Cuve : 180 L'), findsOneWidget);
+    await tester.tap(find.text('Cuve : 180 L'));
+    await tester.pumpAndSettle();
+    expect(find.text('Suivi cuve'), findsOneWidget);
+  });
+
+  testWidgets('niveau de cuve négatif : affiché en orange', (tester) async {
+    await tester.pumpWidget(host(instr, FakeCashApi(), accounts(), tank: FakeTankApi()..level = -12));
+    await tester.pump();
+    final t = tester.widget<Text>(find.text('Cuve : \u221212 L'));
+    expect(t.style?.color, Colors.orange.shade800);
   });
 }

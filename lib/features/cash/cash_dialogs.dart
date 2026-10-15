@@ -36,6 +36,7 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
   late DateTime _date = dayOf(widget.now());
   final _amount = TextEditingController();
   final _note = TextEditingController();
+  final _liters = TextEditingController(); // plan 13 : Achat carburant seulement
   String? _error;
   bool _submitting = false;
 
@@ -43,8 +44,15 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
   void dispose() {
     _amount.dispose();
     _note.dispose();
+    _liters.dispose();
     super.dispose();
   }
+
+  /// Litres de l'Achat carburant : null si non proposés ou vides.
+  int? get _litersValue =>
+      _kind == CashKind.fuelPurchase ? int.tryParse(_liters.text.trim()) : null;
+
+  bool get _litersFilled => _kind == CashKind.fuelPurchase && _liters.text.trim().isNotEmpty;
 
   String get _noteLabel => switch (_kind) {
         CashKind.cashGap => 'Motif (obligatoire)',
@@ -60,6 +68,10 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
     if (_kind == CashKind.cashGap && note.isEmpty) return 'Motif obligatoire pour un écart de caisse.';
     if ((_kind == CashKind.maintenance || _kind == CashKind.offAppIncome) && note.isEmpty) {
       return 'Objet obligatoire.';
+    }
+    final liters = _litersValue;
+    if (_litersFilled && (liters == null || liters < 1 || liters > 100000)) {
+      return 'Litres invalides (1 à 100 000).'; // message du serveur
     }
     return null;
   }
@@ -82,7 +94,12 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
       if (_kind == CashKind.fuelCredit) {
         await services.finance!.credit(_account!, amount!, note.isEmpty ? null : note, date: _date);
       } else {
-        await services.cash!.add(kind: _kind, amount: amount!, date: _date, note: note.isEmpty ? null : note);
+        await services.cash!.add(
+            kind: _kind,
+            amount: amount!,
+            date: _date,
+            note: note.isEmpty ? null : note,
+            liters: _litersFilled ? _litersValue : null);
       }
       if (!mounted) return;
       Navigator.pop(context);
@@ -142,6 +159,13 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
             decoration: InputDecoration(
                 labelText: _kind == CashKind.cashGap ? 'Montant (signé)' : 'Montant'),
           ),
+          if (_kind == CashKind.fuelPurchase)
+            TextField(
+              key: const Key('cash-liters'),
+              controller: _liters,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Litres (facultatif)'),
+            ),
           TextButton.icon(
             key: const Key('cash-date'),
             icon: const Icon(Icons.event),

@@ -8,6 +8,7 @@ import '../../core/money.dart';
 import '../../core/pricing.dart';
 import '../../core/profiles.dart';
 import 'flight_texts.dart' show technicalUnbilledText;
+import 'fuel_provenance.dart';
 
 /// Saisie validée du dialogue de clôture, prête pour FinanceApi.closeFlight.
 class ClosingResult {
@@ -16,7 +17,9 @@ class ClosingResult {
       this.waterLandings = 0,
       this.fuelStartExpected,
       this.fuelStart = 0,
-      this.fuelAdded = 0,
+      this.fuelFromTank = 0,
+      this.fuelFromPersonal = 0,
+      this.fuelSupplierUid,
       this.fuelEnd = 0});
   final int actualMinutes;
   final int? shortFlightAmount;
@@ -25,11 +28,16 @@ class ClosingResult {
   final int waterLandings;
 
   /// Plan 7 : carburant prévu au départ (null si inconnu), réel au départ,
-  /// ajouté et à bord appareil rangé, en litres.
+  /// ajouté et à bord appareil rangé, en litres. Plan 13 : l'ajouté se
+  /// répartit entre la cuve et le bidon perso du pilote [fuelSupplierUid].
   final int? fuelStartExpected;
   final int fuelStart;
-  final int fuelAdded;
+  final int fuelFromTank;
+  final int fuelFromPersonal;
+  final String? fuelSupplierUid;
   final int fuelEnd;
+
+  int get fuelAdded => fuelFromTank + fuelFromPersonal;
 }
 
 /// Plan 4b, décision 3 : contrôle des nombres saisis à la clôture (et à la
@@ -50,6 +58,7 @@ String? landingsError(int? landings, int? waterLandings) {
 /// local de 200 000 FCFA sur les montants saisis (décision 5). Plan 7 : bloc
 /// carburant (spec §9.1) : prévu au départ = carburant actuel de l'appareil,
 /// case « non conforme » pour corriger le départ, ajouté et rangé obligatoires.
+/// Plan 13 : provenance de l'ajouté (cuve, bidon perso, spec §13.2).
 ///
 /// [category] peut être `null` (fix round 1, décision utilisateur 2) : un
 /// membre d'équipage non-staff qui n'est pas le compte débité ne connaît pas
@@ -68,6 +77,9 @@ class ClosingDialog extends StatefulWidget {
     this.amphibious = false,
     this.fuelExpected,
     this.baptismTier,
+    this.crewNames = const {},
+    this.closerUid,
+    this.fuelLiterPrice = 600,
   });
 
   final int plannedMinutes;
@@ -85,6 +97,13 @@ class ClosingDialog extends StatefulWidget {
   /// Plan 7 : carburant actuel de l'appareil, null si inconnu.
   final int? fuelExpected;
 
+  /// Plan 13 : équipiers avec compte (uid → nom court), dans l'ordre ;
+  /// [closerUid] : celui qui clôture (pilote du bidon perso par défaut s'il
+  /// est dans l'équipage) ; [fuelLiterPrice] : prix du litre courant.
+  final Map<String, String> crewNames;
+  final String? closerUid;
+  final int fuelLiterPrice;
+
   @override
   State<ClosingDialog> createState() => _ClosingDialogState();
 }
@@ -96,7 +115,9 @@ class _ClosingDialogState extends State<ClosingDialog> {
   final _landings = TextEditingController(text: '1');
   final _waterLandings = TextEditingController(text: '0');
   final _fuelStart = TextEditingController();
-  final _fuelAdded = TextEditingController(text: '0'); // 0 par défaut : rien d'ajouté
+  late final _provenance = FuelProvenanceInput(
+      source: FuelSource.none,
+      supplierUid: defaultFuelSupplier(widget.crewNames.keys.toList(), widget.closerUid));
   final _fuelEnd = TextEditingController();
   bool _customChecked = false;
   bool _fuelGap = false;
@@ -110,7 +131,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
     _landings.dispose();
     _waterLandings.dispose();
     _fuelStart.dispose();
-    _fuelAdded.dispose();
+    _provenance.dispose();
     _fuelEnd.dispose();
     super.dispose();
   }
@@ -227,16 +248,17 @@ class _ClosingDialogState extends State<ClosingDialog> {
     }
     final unknown = widget.fuelExpected == null;
     final fuelStart = unknown || _fuelGap ? int.tryParse(_fuelStart.text.trim()) : widget.fuelExpected;
-    final fuelAdded = int.tryParse(_fuelAdded.text.trim());
     final fuelEnd = int.tryParse(_fuelEnd.text.trim());
-    final fuelErr = fuelError(start: fuelStart, added: fuelAdded, end: fuelEnd);
+    final fuelErr = fuelError(start: fuelStart, added: 0, end: fuelEnd) ??
+        _provenance.error(widget.crewNames.keys.toList());
     if (fuelErr != null) {
       setState(() => _error = fuelErr);
       return;
     }
     // Alerte de consommation (non bloquante) : l'équipage corrige ou confirme.
+    final fuelAdded = _provenance.total!;
     final rate = flightLitersPerHour(
-        start: fuelStart!, added: fuelAdded!, end: fuelEnd!, minutes: m);
+        start: fuelStart!, added: fuelAdded, end: fuelEnd!, minutes: m);
     if (isUnusualConsumption(rate) && !await _confirmConsumption(rate)) return;
     if (!mounted) return;
     Navigator.pop(
@@ -246,7 +268,9 @@ class _ClosingDialogState extends State<ClosingDialog> {
             waterLandings: waterLandings!,
             fuelStartExpected: widget.fuelExpected,
             fuelStart: fuelStart,
-            fuelAdded: fuelAdded,
+            fuelFromTank: _provenance.tankLiters!,
+            fuelFromPersonal: _provenance.personalLiters!,
+            fuelSupplierUid: _provenance.sentSupplier,
             fuelEnd: fuelEnd));
   }
 
@@ -302,11 +326,11 @@ class _ClosingDialogState extends State<ClosingDialog> {
                         ? 'Carburant au départ (L)'
                         : 'Carburant réel au départ (L)'),
               ),
-            TextField(
-              key: const Key('closing-fuel-added'),
-              controller: _fuelAdded,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Carburant ajouté (L)'),
+            FuelProvenanceFields(
+              input: _provenance,
+              crewNames: widget.crewNames,
+              literPrice: widget.fuelLiterPrice,
+              onChanged: () => setState(() {}),
             ),
             TextField(
               key: const Key('closing-fuel-end'),
