@@ -731,7 +731,8 @@ void main() {
     await tester.tap(find.text('Clôturer').last);
     await tester.pumpAndSettle();
     final c = finance.closed.single;
-    expect([c['fuelStartExpected'], c['fuelStart'], c['fuelAdded'], c['fuelEnd']], [40, 40, 10, 35]);
+    expect([c['fuelStartExpected'], c['fuelStart'], c['fuelFromTank'], c['fuelEnd']], [40, 40, 10, 35]);
+    expect([c['fuelFromPersonal'], c['fuelSupplierUid']], [0, null]);
   });
 
   testWidgets(

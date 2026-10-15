@@ -10,6 +10,8 @@ import 'package:ulmgap/data/app_user.dart';
 import 'package:ulmgap/data/auth_service.dart';
 import 'package:ulmgap/data/cash_api.dart';
 import 'package:ulmgap/data/cash_movement.dart';
+import 'package:ulmgap/data/tank_api.dart';
+import 'package:ulmgap/data/tank_movement.dart';
 import 'package:ulmgap/data/crew_member.dart';
 import 'package:ulmgap/data/finance_api.dart';
 import 'package:ulmgap/data/flight.dart';
@@ -212,6 +214,10 @@ Flight testFlight({
   int? fuelStartExpected,
   int? fuelStart,
   int? fuelAdded,
+  int? fuelFromTank,
+  int? fuelFromPersonal,
+  String? fuelSupplierUid,
+  int? fuelSupplyCredit,
   int? fuelEnd,
   int? landings,
   int? waterLandings,
@@ -245,6 +251,10 @@ Flight testFlight({
     'fuelStartExpectedLiters': fuelStartExpected,
     'fuelStartLiters': fuelStart,
     'fuelAddedLiters': fuelAdded,
+    'fuelFromTankLiters': fuelFromTank,
+    'fuelFromPersonalLiters': fuelFromPersonal,
+    'fuelSupplierUid': fuelSupplierUid,
+    'fuelSupplyCredit': fuelSupplyCredit,
     'fuelEndLiters': fuelEnd,
     'landings': landings,
     'waterLandings': waterLandings,
@@ -427,7 +437,9 @@ class FakeFinanceApi implements FinanceApi {
     int waterLandings = 0,
     required int? fuelStartExpected,
     required int fuelStart,
-    required int fuelAdded,
+    required int fuelFromTank,
+    required int fuelFromPersonal,
+    required String? fuelSupplierUid,
     required int fuelEnd,
   }) async {
     _fail();
@@ -438,7 +450,9 @@ class FakeFinanceApi implements FinanceApi {
       'waterLandings': waterLandings,
       'fuelStartExpected': fuelStartExpected,
       'fuelStart': fuelStart,
-      'fuelAdded': fuelAdded,
+      'fuelFromTank': fuelFromTank,
+      'fuelFromPersonal': fuelFromPersonal,
+      'fuelSupplierUid': fuelSupplierUid,
       'fuelEnd': fuelEnd,
       'shortFlightAmount': shortFlightAmount,
       'customAmount': customAmount,
@@ -494,9 +508,10 @@ class FakeCashApi implements CashApi {
   Stream<List<CashMovement>> watchMovements() => Stream.value(movements);
 
   @override
-  Future<void> add({required CashKind kind, required int amount, required DateTime date, String? note}) async {
+  Future<void> add(
+      {required CashKind kind, required int amount, required DateTime date, String? note, int? liters}) async {
     _fail();
-    added.add({'kind': kind, 'amount': amount, 'date': date, 'note': note});
+    added.add({'kind': kind, 'amount': amount, 'date': date, 'note': note, 'liters': liters});
   }
 
   @override
@@ -509,5 +524,36 @@ class FakeCashApi implements CashApi {
   Future<void> closeMigration() async {
     _fail();
     migrationClosings++;
+  }
+}
+
+class FakeTankApi implements TankApi {
+  int level = 0;
+  List<TankMovement> movements = [];
+  Object? failWith;
+  final fills = <Map<String, dynamic>>[];
+  final gauges = <Map<String, dynamic>>[];
+
+  void _fail() {
+    if (failWith != null) throw failWith!;
+  }
+
+  @override
+  Stream<int> watchTank() => Stream.value(level);
+
+  @override
+  Stream<List<TankMovement>> watchMovements() => Stream.value(movements);
+
+  @override
+  Future<void> aircraftFill(
+      {required String aircraftId, required int liters, required DateTime date, String? note}) async {
+    _fail();
+    fills.add({'aircraftId': aircraftId, 'liters': liters, 'date': date, 'note': note});
+  }
+
+  @override
+  Future<void> gaugeReading({required int measuredLiters, required DateTime date, String? note}) async {
+    _fail();
+    gauges.add({'measuredLiters': measuredLiters, 'date': date, 'note': note});
   }
 }

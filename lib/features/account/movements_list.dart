@@ -16,6 +16,7 @@ String movementTypeLabel(String type) => switch (type) {
       'flight' => 'Vol',
       'flight_adjustment' => 'Régularisation',
       'instruction' => 'Crédit instruction',
+      'fuel_supply' => 'Carburant fourni (bidon perso)',
       _ => type,
     };
 
@@ -24,7 +25,7 @@ String movementTypeLabel(String type) => switch (type) {
 /// n'est pas redondante avec le type.
 String movementTitle(AccountMovement m, {DateTime? flightStart}) {
   final type = movementTypeLabel(m.type);
-  if (m.type == 'instruction') {
+  if (m.type == 'instruction' || m.type == 'fuel_supply') {
     // Le motif distingue le crédit de sa régularisation.
     final label = (m.reason == null || m.reason!.isEmpty) ? type : m.reason!;
     return flightStart == null ? label : '$label — vol du ${formatDay(flightStart)}';

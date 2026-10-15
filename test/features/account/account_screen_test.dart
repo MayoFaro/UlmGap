@@ -123,6 +123,9 @@ void main() {
 
   testWidgets('mouvements liés à un vol : date du vol, raison égale au libellé omise',
       (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final me = _user(balance: 0);
     AccountMovement move(String id, String type, String reason, int amount) => AccountMovement(
           id: id,
@@ -142,6 +145,8 @@ void main() {
         move('m3', 'flight_adjustment', 'Annulation du vol', 21000),
         move('m4', 'instruction', 'Crédit instruction', 20000),
         move('m5', 'instruction', 'Régularisation crédit instruction', -20000),
+        move('m6', 'fuel_supply', 'Carburant fourni (bidon perso)', 12000),
+        move('m7', 'fuel_supply', 'Régularisation carburant fourni', -6000),
       ];
     final flights = FakeFlightApi()..flights = [testFlight(id: 'f1', start: DateTime(2026, 10, 12, 9))];
     await tester.pumpWidget(host(finance, me, flights: flights));
@@ -152,6 +157,8 @@ void main() {
     expect(find.text('Régularisation — vol du lundi 12 octobre — Annulation du vol'), findsOneWidget);
     expect(find.text('Crédit instruction — vol du lundi 12 octobre'), findsOneWidget);
     expect(find.text('Régularisation crédit instruction — vol du lundi 12 octobre'), findsOneWidget);
+    expect(find.text('Carburant fourni (bidon perso) — vol du lundi 12 octobre'), findsOneWidget);
+    expect(find.text('Régularisation carburant fourni — vol du lundi 12 octobre'), findsOneWidget);
   });
 
   testWidgets('Se déconnecter : revient à la racine puis déconnecte', (tester) async {

@@ -53,7 +53,9 @@ abstract class FinanceApi {
     int waterLandings = 0,
     required int? fuelStartExpected,
     required int fuelStart,
-    required int fuelAdded,
+    required int fuelFromTank,
+    required int fuelFromPersonal,
+    required String? fuelSupplierUid,
     required int fuelEnd,
   });
 
@@ -145,7 +147,9 @@ class FirebaseFinanceApi implements FinanceApi {
     int waterLandings = 0,
     required int? fuelStartExpected,
     required int fuelStart,
-    required int fuelAdded,
+    required int fuelFromTank,
+    required int fuelFromPersonal,
+    required String? fuelSupplierUid,
     required int fuelEnd,
   }) =>
       _call('closeFlight', {
@@ -155,7 +159,9 @@ class FirebaseFinanceApi implements FinanceApi {
         'waterLandings': waterLandings,
         'fuelStartExpected': fuelStartExpected,
         'fuelStart': fuelStart,
-        'fuelAdded': fuelAdded,
+        'fuelFromTank': fuelFromTank,
+        'fuelFromPersonal': fuelFromPersonal,
+        'fuelSupplierUid': fuelSupplierUid,
         'fuelEnd': fuelEnd,
         if (shortFlightAmount != null) 'shortFlightAmount': shortFlightAmount,
         if (customAmount != null) 'customAmount': customAmount,

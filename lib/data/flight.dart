@@ -56,6 +56,10 @@ class Flight {
     this.fuelStartLiters,
     this.fuelAddedLiters,
     this.fuelEndLiters,
+    this.fuelFromTankLiters,
+    this.fuelFromPersonalLiters,
+    this.fuelSupplierUid,
+    this.fuelSupplyCredit,
   });
 
   final String id;
@@ -115,6 +119,12 @@ class Flight {
   final int? fuelAddedLiters;
   final int? fuelEndLiters;
 
+  /// Plan 13 : provenance du carburant ajouté (spec §13) ; null avant.
+  final int? fuelFromTankLiters;
+  final int? fuelFromPersonalLiters;
+  final String? fuelSupplierUid;
+  final int? fuelSupplyCredit;
+
   bool get hasFuel =>
       fuelStartLiters != null && fuelAddedLiters != null && fuelEndLiters != null;
 
@@ -159,6 +169,10 @@ class Flight {
         fuelStartLiters: (m['fuelStartLiters'] as num?)?.toInt(),
         fuelAddedLiters: (m['fuelAddedLiters'] as num?)?.toInt(),
         fuelEndLiters: (m['fuelEndLiters'] as num?)?.toInt(),
+        fuelFromTankLiters: (m['fuelFromTankLiters'] as num?)?.toInt(),
+        fuelFromPersonalLiters: (m['fuelFromPersonalLiters'] as num?)?.toInt(),
+        fuelSupplierUid: m['fuelSupplierUid'] as String?,
+        fuelSupplyCredit: (m['fuelSupplyCredit'] as num?)?.toInt(),
       );
 
   /// Une demande reste privée même après refus ou expiration.

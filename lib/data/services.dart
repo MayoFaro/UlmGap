@@ -6,6 +6,7 @@ import 'cash_api.dart';
 import 'finance_api.dart';
 import 'flight_api.dart';
 import 'push_service.dart';
+import 'tank_api.dart';
 import 'user_repository.dart';
 
 /// Services de l'app, injectés à la racine (doublures en test).
@@ -19,6 +20,7 @@ class AppServices extends InheritedWidget {
     this.finance,
     this.push,
     this.cash,
+    this.tank,
     required super.child,
   });
 
@@ -34,6 +36,9 @@ class AppServices extends InheritedWidget {
   /// Plan 11 : caisse ; null en test si l'écran n'en a pas besoin.
   final CashApi? cash;
 
+  /// Plan 13 : cuve ; null en test si l'écran n'en a pas besoin.
+  final TankApi? tank;
+
   static AppServices of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppServices>()!;
 
@@ -45,5 +50,6 @@ class AppServices extends InheritedWidget {
       flights != old.flights ||
       finance != old.finance ||
       push != old.push ||
-      cash != old.cash;
+      cash != old.cash ||
+      tank != old.tank;
 }

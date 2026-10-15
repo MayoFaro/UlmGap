@@ -945,7 +945,9 @@ class _FlightScreenState extends State<FlightScreen> {
           waterLandings: result.waterLandings,
           fuelStartExpected: result.fuelStartExpected,
           fuelStart: result.fuelStart,
-          fuelAdded: result.fuelAdded,
+          fuelFromTank: result.fuelAdded, // Task 5 : provenance saisie
+          fuelFromPersonal: 0,
+          fuelSupplierUid: null,
           fuelEnd: result.fuelEnd,
         );
       return 'Vol clôturé.';
