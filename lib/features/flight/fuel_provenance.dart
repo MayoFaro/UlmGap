@@ -100,7 +100,7 @@ class FuelProvenanceInput {
 }
 
 /// Champs de la provenance. [crewNames] : équipiers avec compte (uid → nom
-/// court), dans l'ordre ; [literPrice] : prix du litre du bidon perso.
+/// court), dans l'ordre ; [literPrice] : prix du litre de carburant.
 class FuelProvenanceFields extends StatelessWidget {
   const FuelProvenanceFields({
     super.key,

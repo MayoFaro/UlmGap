@@ -60,7 +60,7 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
         _literPrice = p.fuelLiterPrice;
         _autoLiters();
       });
-    });
+    }, onError: (_) {}); // erreur de flux : le prix par défaut est conservé
   }
 
   @override

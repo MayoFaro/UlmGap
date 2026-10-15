@@ -80,7 +80,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     await tx.get(lockRef);
     const snapshot = (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null;
     // Plan 8 : un snapshot d'avant le plan 8 n'a pas les nouveaux tarifs.
-    // Plan 13 : le prix du litre (bidon perso) est toujours le tarif courant.
+    // Plan 13 : le prix du litre de carburant est toujours le tarif courant.
     const current = snapshot === null || fuelFromPersonal > 0 ? await readPricing(tx, db) : null;
     const pricing = pricingWithDefaults(snapshot ?? current!);
 
