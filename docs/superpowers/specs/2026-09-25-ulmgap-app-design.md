@@ -475,7 +475,7 @@ effectués » et « Compteurs »)
   les atterrissages n'en dépendent pas. Choisir un segment ou une période
   quitte l'affichage « à clôturer », qui s'arrête aussi de lui-même quand il
   ne reste plus aucun vol à clôturer.
-- Le planning (accueil) reste limité aux vols à venir.
+- Le planning (accueil) reste limité aux vols à venir, **non clôturés** (révision du 2026-10-15) : un vol clôturé n'apparaît plus que dans le carnet de vol et les récapitulatifs.
 - **Rappel au lancement** (révision du 2026-10-02) : au démarrage de l'app,
   si un vol validé, non clôturé, dont l'utilisateur est membre de `crew` a
   son heure de fin passée, la fiche du plus ancien s'ouvre au-dessus de
