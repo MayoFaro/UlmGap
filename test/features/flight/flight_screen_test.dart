@@ -2071,6 +2071,24 @@ void main() {
     expect(find.byKey(const Key('technical')), findsNothing);
   });
 
+  testWidgets('vol technique existant sans instructeur en tête : case visible et cochée, '
+      'décochable', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    final f = testFlight(
+        id: 't1', start: DateTime(2026, 10, 13, 9), crew: ['lac'], createdBy: 'lac',
+        pricingMode: 'technical', technicalReason: 'Essai moteur');
+    await tester.pumpWidget(
+        host(a, testUser(uid: 'lac', profile: 'lache_toute_mission'), flight: f));
+    await tester.pumpAndSettle();
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('technical'))).value, true);
+    await checkTechnical(tester);
+    // Décochée : la case disparaît (payeur non instructeur).
+    expect(find.byKey(const Key('technical')), findsNothing);
+    await save(tester);
+    expect(a.updated['t1']!['technical'], false);
+  });
+
   testWidgets('vue admin : lâché en tête, pas de case Vol technique ; '
       'instructeur mis en tête, la case apparaît', (tester) async {
     _useTallView(tester);

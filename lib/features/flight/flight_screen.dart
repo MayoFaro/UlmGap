@@ -286,10 +286,11 @@ class _FlightScreenState extends State<FlightScreen> {
 
   /// Plan 12 (spec §12.1) : case « Vol technique » réservée aux instructeurs
   /// et aux admins (ou vol déjà technique), et seulement si le payeur (premier
-  /// de l'équipage) est un instructeur.
+  /// de l'équipage) est un instructeur. Cochée, elle reste visible pour
+  /// pouvoir être décochée (vol technique ancien sans instructeur en tête).
   bool get _technicalVisible =>
-      (_isStaff || (widget.flight?.isTechnical ?? false)) &&
-      technicalPayerError(_rulePersons(_crew)) == null;
+      (_isStaff || (widget.flight?.isTechnical ?? false) || _technical) &&
+      (_technical || technicalPayerError(_rulePersons(_crew)) == null);
 
   /// Cocher « Vol technique » retire l'instruction, le carburant seulement et
   /// le baptême (incompatibles, refusés par le serveur).
