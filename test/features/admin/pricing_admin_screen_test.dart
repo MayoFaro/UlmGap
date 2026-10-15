@@ -189,4 +189,37 @@ void main() {
     expect(api.updatedPricing!.baptismFees,
         {'local': 65000, 'nyonye': 91000, 'awagne': 112000});
   });
+
+  testWidgets('prix du litre de carburant : prérempli, modifié, borné et enregistré',
+      (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()
+      ..pricing = Pricing.fromMap({...defaultPricing.toMap(), 'fuelLiterPrice': 650});
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    expect(find.widgetWithText(TextFormField, 'Prix du litre de carburant'), findsOneWidget);
+    expect(fieldText(tester, 'fuelLiterPrice'), '650');
+
+    await tester.enterText(find.byKey(const Key('fuelLiterPrice')), '10001');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+    expect(api.updatedPricing, isNull);
+
+    await tester.enterText(find.byKey(const Key('fuelLiterPrice')), '700');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+    expect(api.updatedPricing!.fuelLiterPrice, 700);
+  });
+
+  testWidgets('prix du litre conservé en modifiant un autre champ', (tester) async {
+    _useTallView(tester);
+    final api = FakeFinanceApi()
+      ..pricing = Pricing.fromMap({...defaultPricing.toMap(), 'fuelLiterPrice': 650});
+    await tester.pumpWidget(host(api));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('fuelHourlyRate')), '15000');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pump();
+    expect(api.updatedPricing!.fuelLiterPrice, 650);
+  });
 }

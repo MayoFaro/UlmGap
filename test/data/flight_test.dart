@@ -142,6 +142,16 @@ void main() {
     expect(testFlight().hasFuel, isFalse);
   });
 
+  test('plan 13 : provenance du carburant lue ; absente avant le plan', () {
+    final f = testFlight(
+        fuelAdded: 30, fuelFromTank: 10, fuelFromPersonal: 20, fuelSupplierUid: 'u2', fuelSupplyCredit: 12000);
+    expect([f.fuelFromTankLiters, f.fuelFromPersonalLiters], [10, 20]);
+    expect([f.fuelSupplierUid, f.fuelSupplyCredit], ['u2', 12000]);
+    final old = testFlight(fuelAdded: 5);
+    expect([old.fuelFromTankLiters, old.fuelFromPersonalLiters, old.fuelSupplierUid, old.fuelSupplyCredit],
+        [null, null, null, null]);
+  });
+
   test('appareil : carburant actuel', () {
     final a = Aircraft.fromMap('a1', {'registration': 'F-X', 'label': 'ULM', 'active': true,
         'fuelLiters': 41, 'fuelFlightId': 'f1'});

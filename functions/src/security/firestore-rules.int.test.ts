@@ -34,6 +34,8 @@ beforeEach(async () => {
     await setDoc(doc(db, "users/adm"), { active: true, isAdmin: true, profile: null });
     await setDoc(doc(db, "cashbox/main"), { balance: 0 });
     await setDoc(doc(db, "cashMovements/c1"), { kind: "fuel_purchase", amount: -1 });
+    await setDoc(doc(db, "tank/main"), { liters: 0 });
+    await setDoc(doc(db, "tankMovements/t1"), { kind: "refill", liters: 1 });
   });
 });
 
@@ -195,4 +197,16 @@ test("caisse : lecture réservée aux instructeurs et aux admins, aucune écritu
   await assertFails(getDocs(collection(as("eleve"), "cashMovements")));
   await assertFails(setDoc(doc(as("adm"), "cashbox/main"), { balance: 1 }));
   await assertFails(setDoc(doc(as("adm"), "cashMovements/new"), { amount: 1 }));
+});
+
+test("cuve : lecture réservée aux instructeurs et aux admins, aucune écriture client", async () => {
+  for (const path of ["tank/main", "tankMovements/t1"]) {
+    await assertFails(getDoc(doc(as("eleve"), path)));
+    await assertSucceeds(getDoc(doc(as("instr"), path)));
+    await assertSucceeds(getDoc(doc(as("adm"), path)));
+  }
+  await assertSucceeds(getDocs(collection(as("instr"), "tankMovements")));
+  await assertFails(getDocs(collection(as("eleve"), "tankMovements")));
+  await assertFails(setDoc(doc(as("adm"), "tank/main"), { liters: 1 }));
+  await assertFails(setDoc(doc(as("adm"), "tankMovements/new"), { liters: 1 }));
 });

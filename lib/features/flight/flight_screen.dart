@@ -19,6 +19,7 @@ import '../../data/services.dart';
 import 'closing_dialog.dart';
 import 'flight_actions.dart';
 import 'flight_texts.dart';
+import 'fuel_provenance.dart';
 import '../fuel/fuel_log_screen.dart';
 import '../home/app_nav.dart';
 
@@ -74,6 +75,8 @@ class _FlightScreenState extends State<FlightScreen> {
   final _correctFuelStart = TextEditingController();
   final _correctFuelAdded = TextEditingController();
   final _correctFuelEnd = TextEditingController();
+  // Plan 13 : provenance de l'ajouté (sans choix pour un vol d'avant le plan).
+  late FuelProvenanceInput _correctProvenance;
 
   final _subs = <StreamSubscription<Object?>>[];
   /// Version « live » d'un vol existant (Task 3, retours de recette) : mise à
@@ -163,11 +166,14 @@ class _FlightScreenState extends State<FlightScreen> {
       _correctFuelStart.text = f.fuelStartLiters?.toString() ?? '';
       _correctFuelAdded.text = f.fuelAddedLiters?.toString() ?? '';
       _correctFuelEnd.text = f.fuelEndLiters?.toString() ?? '';
+      _correctProvenance = FuelProvenanceInput.fromFlight(f,
+          defaultSupplier: defaultFuelSupplier(f.crew, _me.uid));
     } else {
       final n = widget.now();
       _start = DateTime(n.year, n.month, n.day, n.hour + 1);
       _end = _start.add(const Duration(hours: 1));
       _crew = [_me.uid];
+      _correctProvenance = FuelProvenanceInput();
     }
   }
 
@@ -229,6 +235,7 @@ class _FlightScreenState extends State<FlightScreen> {
     _correctFuelStart.dispose();
     _correctFuelAdded.dispose();
     _correctFuelEnd.dispose();
+    _correctProvenance.dispose();
     _correctShortAmount.dispose();
     _correctCustomAmount.dispose();
     super.dispose();
@@ -514,12 +521,26 @@ class _FlightScreenState extends State<FlightScreen> {
   // --- Task 10 (finances) : correction admin, régularisation d'un vol clôturé ---
 
   int? get _correctActualMinutes => int.tryParse(_correctMinutes.text.trim());
-  /// Au moins un des trois champs carburant est rempli : alors les trois
-  /// sont exigés et envoyés.
+  /// Au moins un des champs carburant est rempli (ou une provenance
+  /// choisie) : alors tous sont exigés et envoyés.
   bool get _correctFuelFilled =>
       _correctFuelStart.text.trim().isNotEmpty ||
+      _correctProvenance.source != null ||
       _correctFuelAdded.text.trim().isNotEmpty ||
       _correctFuelEnd.text.trim().isNotEmpty;
+
+  /// Plan 13 : carburant ajouté saisi en une valeur, sans provenance (vol
+  /// clôturé avant le plan 13, tant qu'aucune provenance n'est choisie).
+  bool get _correctLegacyAdded => _correctProvenance.source == null;
+
+  /// Prix du litre d'une correction : celui figé sur le vol (crédit ÷
+  /// litres), sinon le prix courant (miroir d'adminUpdateFlight).
+  num get _correctLiterPrice {
+    final f = _current;
+    final personal = f?.fuelFromPersonalLiters ?? 0;
+    final credit = f?.fuelSupplyCredit;
+    return personal > 0 && credit != null ? credit / personal : _pricing.fuelLiterPrice;
+  }
 
   int? get _correctLandingsValue => int.tryParse(_correctLandings.text.trim());
 
@@ -931,6 +952,9 @@ class _FlightScreenState extends State<FlightScreen> {
         amphibious: _isAmphibious(f.aircraftId),
         fuelExpected: _aircraftOf(f.aircraftId)?.fuelLiters,
         baptismTier: f.baptismTier,
+        crewNames: {for (final u in f.crew) u: _short(u)},
+        closerUid: _me.uid,
+        fuelLiterPrice: _pricing.fuelLiterPrice, // tarifs courants (spec §13.3)
       ),
     );
     if (result == null || !mounted) return;
@@ -945,7 +969,9 @@ class _FlightScreenState extends State<FlightScreen> {
           waterLandings: result.waterLandings,
           fuelStartExpected: result.fuelStartExpected,
           fuelStart: result.fuelStart,
-          fuelAdded: result.fuelAdded,
+          fuelFromTank: result.fuelFromTank,
+          fuelFromPersonal: result.fuelFromPersonal,
+          fuelSupplierUid: result.fuelSupplierUid,
           fuelEnd: result.fuelEnd,
         );
       return 'Vol clôturé.';
@@ -972,10 +998,11 @@ class _FlightScreenState extends State<FlightScreen> {
       if (countError != null) return countError;
       if (_correctFuelFilled) {
         final err = fuelError(
-          start: int.tryParse(_correctFuelStart.text.trim()),
-          added: int.tryParse(_correctFuelAdded.text.trim()),
-          end: int.tryParse(_correctFuelEnd.text.trim()),
-        );
+              start: int.tryParse(_correctFuelStart.text.trim()),
+              added: _correctLegacyAdded ? int.tryParse(_correctFuelAdded.text.trim()) : 0,
+              end: int.tryParse(_correctFuelEnd.text.trim()),
+            ) ??
+            _correctProvenance.error(_crew);
         if (err != null) return err;
       }
       if (_correctNeedsShortAmount) {
@@ -1018,7 +1045,14 @@ class _FlightScreenState extends State<FlightScreen> {
     if (_showCorrectWaterLandings) payload['waterLandings'] = _correctWaterLandingsValue;
     if (_correctFuelFilled) {
       payload['fuelStart'] = int.parse(_correctFuelStart.text.trim());
-      payload['fuelAdded'] = int.parse(_correctFuelAdded.text.trim());
+      if (_correctLegacyAdded) {
+        payload['fuelAdded'] = int.parse(_correctFuelAdded.text.trim());
+      } else {
+        // Plan 13 : le serveur calcule l'ajouté (cuve + bidon perso).
+        payload['fuelFromTank'] = _correctProvenance.tankLiters;
+        payload['fuelFromPersonal'] = _correctProvenance.personalLiters;
+        payload['fuelSupplierUid'] = _correctProvenance.sentSupplier;
+      }
       payload['fuelEnd'] = int.parse(_correctFuelEnd.text.trim());
     }
     if (_correctNeedsShortAmount) {
@@ -1157,7 +1191,9 @@ class _FlightScreenState extends State<FlightScreen> {
                 )),
               ),
             if (f.isClosed && f.hasFuel)
-              ListTile(key: const Key('closed-fuel'), title: Text(fuelSummary(f))),
+              ListTile(
+                  key: const Key('closed-fuel'),
+                  title: Text(fuelSummary(f, supplierName: _short))),
             ListTile(
               title: const Text('Statut'),
               subtitle: Text(
@@ -1404,11 +1440,18 @@ class _FlightScreenState extends State<FlightScreen> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Carburant au départ (L)'),
             ),
-            TextField(
-              key: const Key('correct-fuel-added'),
-              controller: _correctFuelAdded,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Carburant ajouté (L)'),
+            if (_correctLegacyAdded)
+              TextField(
+                key: const Key('correct-fuel-added'),
+                controller: _correctFuelAdded,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Carburant ajouté (L)'),
+              ),
+            FuelProvenanceFields(
+              input: _correctProvenance,
+              crewNames: {for (final u in _crew) u: _short(u)},
+              literPrice: _correctLiterPrice,
+              onChanged: () => setState(() {}),
             ),
             TextField(
               key: const Key('correct-fuel-end'),

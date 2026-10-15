@@ -19,11 +19,14 @@ CashMovement line(String id, String kind, int amount, String date,
       'correctsId': correctsId, 'note': note, 'by': 'ins', 'at': DateTime(2026, 10, 14),
     });
 
-Widget host(AppUser me, FakeCashApi cash, FakeFinanceApi finance) => AppServices(
+Widget host(AppUser me, FakeCashApi cash, FakeFinanceApi finance, {FakeTankApi? tank}) =>
+    AppServices(
       auth: FakeAuthService(),
       users: FakeUserRepository(),
       finance: finance,
       cash: cash,
+      tank: tank,
+      flights: FakeFlightApi(),
       child: MaterialApp(home: CashScreen(me: me, now: () => now)),
     );
 
@@ -167,5 +170,172 @@ void main() {
     await tester.pumpWidget(host(instr, FakeCashApi(), accounts()));
     await tester.pump();
     expect(find.text('Reprise terminée'), findsNothing);
+  });
+
+  Future<void> openFuelPurchase(WidgetTester tester, FakeCashApi cash) async {
+    await tester.pumpWidget(host(instr, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.text('Opération'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Achat carburant'));
+    await tester.pump();
+  }
+
+  String litersText(WidgetTester tester) =>
+      tester.widget<TextField>(find.byKey(const Key('cash-liters'))).controller!.text;
+
+  testWidgets('Achat carburant : « Litres » obligatoire visible pour ce type seul, envoyé',
+      (tester) async {
+    final cash = FakeCashApi();
+    await tester.pumpWidget(host(instr, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.text('Opération'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cash-liters')), findsNothing); // Crédit carburant par défaut
+    expect(find.byKey(const Key('cash-outside-tank')), findsNothing);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Achat carburant'));
+    await tester.pump();
+    expect(find.widgetWithText(TextField, 'Litres'), findsOneWidget);
+    expect(find.byKey(const Key('cash-outside-tank')), findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('cash-outside-tank'))).value, false);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '220000');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '370');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(cash.added.single['kind'], CashKind.fuelPurchase);
+    expect(cash.added.single['liters'], 370);
+    expect(cash.added.single['outsideTank'], false);
+  });
+
+  testWidgets('Achat carburant : litres invalides ou vides refusés, rien envoyé', (tester) async {
+    final cash = FakeCashApi();
+    await openFuelPurchase(tester, cash);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '220000');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '0');
+    await tester.tap(find.text('Valider'));
+    await tester.pump();
+    expect(find.text('Litres invalides (1 à 100 000).'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('cash-liters')), '');
+    await tester.tap(find.text('Valider'));
+    await tester.pump();
+    expect(find.text('Litres obligatoires pour un achat de carburant (ou cochez « Hors cuve »).'),
+        findsOneWidget);
+    expect(cash.added, isEmpty);
+  });
+
+  testWidgets('montant 595 000 : litres calculés 1000 et prix au litre affiché', (tester) async {
+    await openFuelPurchase(tester, FakeCashApi());
+    await tester.enterText(find.byKey(const Key('cash-amount')), '595000');
+    await tester.pump();
+    expect(litersText(tester), '1000');
+    expect(find.text('Prix au litre : 595 FCFA/L'), findsOneWidget);
+  });
+
+  testWidgets('litres modifiés par l\'utilisateur : le calcul automatique s\'arrête', (tester) async {
+    await openFuelPurchase(tester, FakeCashApi());
+    await tester.enterText(find.byKey(const Key('cash-amount')), '595000');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '900');
+    await tester.enterText(find.byKey(const Key('cash-amount')), '600000');
+    await tester.pump();
+    expect(litersText(tester), '900');
+  });
+
+  testWidgets('1000 L pour 595 000 : aucune fenêtre, envoyé', (tester) async {
+    final cash = FakeCashApi();
+    await openFuelPurchase(tester, cash);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '595000');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Prix au litre inhabituel'), findsNothing);
+    expect(cash.added.single['liters'], 1000);
+  });
+
+  testWidgets('700 L pour 595 000 : fenêtre ; Corriger n\'envoie rien, Confirmer envoie', (tester) async {
+    final cash = FakeCashApi();
+    await openFuelPurchase(tester, cash);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '595000');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '700');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Prix au litre inhabituel'), findsOneWidget);
+    expect(find.text('Prix au litre : 850 FCFA/L (référence : 595 FCFA/L). Confirmer l\'opération ?'),
+        findsOneWidget);
+    await tester.tap(find.text('Corriger'));
+    await tester.pumpAndSettle();
+    expect(cash.added, isEmpty);
+    expect(find.text('Nouvelle opération'), findsOneWidget);
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmer'));
+    await tester.pumpAndSettle();
+    expect(cash.added.single['liters'], 700);
+  });
+
+  testWidgets('bornes : 5 % pile sans fenêtre, au-delà avec fenêtre', (tester) async {
+    final cash = FakeCashApi();
+    await openFuelPurchase(tester, cash);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '624750'); // 595 × 1,05
+    await tester.enterText(find.byKey(const Key('cash-liters')), '1000');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Prix au litre inhabituel'), findsNothing);
+    expect(cash.added.single['liters'], 1000);
+
+    final cash2 = FakeCashApi();
+    await openFuelPurchase(tester, cash2);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '624751');
+    await tester.enterText(find.byKey(const Key('cash-liters')), '1000');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Prix au litre inhabituel'), findsOneWidget);
+    expect(cash2.added, isEmpty);
+  });
+
+  testWidgets('« Hors cuve » : pas de champ litres, envoi sans litres ni contrôle', (tester) async {
+    final cash = FakeCashApi();
+    await openFuelPurchase(tester, cash);
+    await tester.tap(find.byKey(const Key('cash-outside-tank')));
+    await tester.pump();
+    expect(find.byKey(const Key('cash-liters')), findsNothing);
+    await tester.enterText(find.byKey(const Key('cash-amount')), '12345');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Prix au litre inhabituel'), findsNothing);
+    expect(cash.added.single['liters'], isNull);
+    expect(cash.added.single['outsideTank'], true);
+  });
+
+  testWidgets('litres saisis puis type changé : non envoyés', (tester) async {
+    final cash = FakeCashApi();
+    await tester.pumpWidget(host(instr, cash, accounts()));
+    await tester.pump();
+    await tester.tap(find.text('Opération'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Achat carburant'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('cash-liters')), '200');
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Maintenance'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('cash-amount')), '10000');
+    await tester.enterText(find.byKey(const Key('cash-note')), 'Roue');
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(cash.added.single['liters'], isNull);
+  });
+
+  testWidgets('ligne « Cuve : 180 L » ; appui → Suivi cuve', (tester) async {
+    await tester.pumpWidget(host(instr, FakeCashApi(), accounts(), tank: FakeTankApi()..level = 180));
+    await tester.pump();
+    expect(find.text('Cuve : 180 L'), findsOneWidget);
+    await tester.tap(find.text('Cuve : 180 L'));
+    await tester.pumpAndSettle();
+    expect(find.text('Suivi cuve'), findsOneWidget);
+  });
+
+  testWidgets('niveau de cuve négatif : affiché en orange', (tester) async {
+    await tester.pumpWidget(host(instr, FakeCashApi(), accounts(), tank: FakeTankApi()..level = -12));
+    await tester.pump();
+    final t = tester.widget<Text>(find.text('Cuve : \u221212 L'));
+    expect(t.style?.color, Colors.orange.shade800);
   });
 }

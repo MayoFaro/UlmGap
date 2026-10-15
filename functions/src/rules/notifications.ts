@@ -72,11 +72,11 @@ export function reminderPush(f: FlightInfo, names: Record<string, string>): Push
 }
 
 const MOVEMENT_LABELS = { credit: "Crédit carburant", correction: "Correction", flight_adjustment: "Régularisation",
-  instruction: "Crédit instruction" };
+  instruction: "Crédit instruction", fuel_supply: "Carburant fourni (bidon perso)" };
 
 export function movementPush(a: {
   userUid: string; shortName: string; amount: number; balanceAfter: number;
-  type: "credit" | "correction" | "flight_adjustment" | "instruction"; actor: string; instructors: string[];
+  type: "credit" | "correction" | "flight_adjustment" | "instruction" | "fuel_supply"; actor: string; instructors: string[];
 }): Push {
   const signed = a.amount > 0 ? `+${formatFcfa(a.amount)}` : formatFcfa(a.amount);
   return push([a.userUid, ...a.instructors], a.actor, `Compte de ${a.shortName}`,

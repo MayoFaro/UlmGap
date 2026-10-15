@@ -10,6 +10,7 @@ import { notifyMovements, WrittenMovement } from "../notify/movements";
 import { cashboxRef, postCashMovement, readCashbox } from "./cash-ledger";
 import { validateAddCashMovement, validateCashCorrection } from "./cash-validation";
 import { postMovement } from "./ledger";
+import { postTankMovement, readTank } from "./tank-ledger";
 
 export interface CashResult { id: string; balance: number }
 
@@ -24,9 +25,17 @@ export async function addCashMovement(caller: Caller | undefined, data: unknown)
   }
   return db.runTransaction(async (tx) => {
     const cash = await readCashbox(tx, db);
+    const tank = m.liters != null ? await readTank(tx, db) : null;
+    const { liters, ...cashLine } = m;
     const r = postCashMovement(tx, db, {
-      ...m, userUid: null, transactionId: null, correctsId: null, by: me.uid, currentBalance: cash.balance,
+      ...cashLine, userUid: null, transactionId: null, correctsId: null, by: me.uid, currentBalance: cash.balance,
     });
+    if (liters != null && tank) {
+      postTankMovement(tx, db, {
+        kind: "refill", liters, date: m.date, flightId: null, aircraftId: null, cashMovementId: r.id,
+        measuredLiters: null, technical: false, note: m.note, by: me.uid, currentLiters: tank.liters,
+      });
+    }
     return { id: r.id, balance: r.balanceAfter };
   });
 }

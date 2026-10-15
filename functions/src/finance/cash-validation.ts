@@ -27,18 +27,46 @@ function missingNote(kind: CashKind): string | null {
   return null;
 }
 
+/**
+ * Litres de l'achat de carburant (spec §13.5) : obligatoires (entiers de 1 à
+ * 100 000) sauf « Hors cuve », où ils doivent être absents.
+ */
+function fuelLiters(v: unknown, outsideTank: unknown, kind: CashKind): number | null {
+  if (outsideTank !== undefined && outsideTank !== null && typeof outsideTank !== "boolean") {
+    throw new ValidationError("Hors cuve invalide.");
+  }
+  if (kind !== "fuel_purchase") {
+    if (outsideTank === true) throw new ValidationError("Hors cuve réservé à un achat de carburant.");
+    if (v === undefined || v === null) return null;
+    throw new ValidationError("Litres réservés à un achat de carburant.");
+  }
+  if (outsideTank === true) {
+    if (v !== undefined && v !== null) throw new ValidationError("Litres inutiles pour un achat hors cuve.");
+    return null;
+  }
+  if (v === undefined || v === null) {
+    throw new ValidationError("Litres obligatoires pour un achat de carburant (ou cochez « Hors cuve »).");
+  }
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 100_000) {
+    throw new ValidationError("Litres invalides (1 à 100 000).");
+  }
+  return v;
+}
+
 /** Achat carburant, maintenance, recette hors app, écart de caisse (montant signé en sortie). */
 export function validateAddCashMovement(data: unknown, nowMs: number):
-  { kind: CashKind; amount: number; date: string; note: string | null } {
+  { kind: CashKind; amount: number; date: string; note: string | null; liters: number | null } {
   const d = obj(data);
   const kind = d.kind as CashKind;
   if (!ADDABLE.includes(kind)) throw new ValidationError("Type d'opération invalide.");
   if (typeof d.amount !== "number") throw new ValidationError("Montant invalide.");
+  const liters = fuelLiters(d.liters, d.outsideTank, kind);
   return {
     kind,
     amount: signedCashAmount(kind, d.amount, false),
     date: cashDay(d.date, nowMs),
     note: note(d.note, missingNote(kind)),
+    liters,
   };
 }
 

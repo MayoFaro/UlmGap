@@ -62,11 +62,20 @@ export const draft = (aircraftId: string, crew: string[], o: Record<string, unkn
 });
 
 /** Carburant valide pour les clôtures de test (plan 7, champs obligatoires). */
-export const FUEL = { fuelStartExpected: null, fuelStart: 40, fuelAdded: 0, fuelEnd: 30 };
+export const FUEL = {
+  fuelStartExpected: null, fuelStart: 40, fuelFromTank: 0, fuelFromPersonal: 0, fuelSupplierUid: null, fuelEnd: 30,
+};
 
 /** Caisse vide, reprise en cours : `cashbox/main` est un document global (plan 11). */
 export async function resetCashbox(): Promise<void> {
   const lines = await db.collection("cashMovements").get();
   await Promise.all(lines.docs.map((d) => d.ref.delete()));
   await db.collection("cashbox").doc("main").delete();
+}
+
+/** Cuve vide : `tank/main` est un document global (plan 13). */
+export async function resetTank(): Promise<void> {
+  const lines = await db.collection("tankMovements").get();
+  await Promise.all(lines.docs.map((d) => d.ref.delete()));
+  await db.collection("tank").doc("main").delete();
 }

@@ -1,6 +1,6 @@
 // Clôture d'un vol (spec §4.3) : bilan facturé sur tarifs figés, débit du
 // compte débité et historique dans la même transaction (règle absolue),
-// et carburant (spec §9).
+// et carburant (spec §9) : cuve et crédit « bidon perso » (spec §13.2).
 // N'utilise pas `loadFlight` (core.ts) : celui-ci refuse un vol déjà clôturé
 // avec un autre message, et ne vérifie pas le statut `valide`.
 import * as admin from "firebase-admin";
@@ -9,14 +9,17 @@ import { Caller, requireActiveUser } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
+import { postTankMovement, readTank } from "../finance/tank-ledger";
 import { BaptismTier, BilledTo, closingBill, instructionCreditDue, Pricing, pricingWithDefaults, toCategory } from "../rules/pricing";
 import { notifyMovements, WrittenMovement } from "../notify/movements";
 import { isOnOrBeforeClubToday } from "../rules/club-day";
 import { closingEnd } from "../rules/closing";
 import { becomesFuelSource } from "../rules/fuel";
+import { clubDayString } from "../rules/cash";
+import { supplyCredit } from "../rules/tank";
 import type { Profile } from "../admin/validation";
 import { touchLocks } from "./core";
-import { validateClosing } from "./validation";
+import { SUPPLIER_NOT_IN_CREW, validateClosing } from "./validation";
 
 type Tx = FirebaseFirestore.Transaction;
 type Ref = FirebaseFirestore.DocumentReference;
@@ -39,7 +42,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
   const db = admin.firestore();
   const me = await requireActiveUser(db, caller);
   const { flightId, actualMinutes, shortFlightAmount, customAmount, landings, waterLandings,
-    fuelStartExpected, fuelStart, fuelAdded, fuelEnd } =
+    fuelStartExpected, fuelStart, fuelFromTank, fuelFromPersonal, fuelSupplierUid, fuelAdded, fuelEnd } =
     asInvalid(() => validateClosing(data));
   const now = Date.now();
   const ref = db.collection("flights").doc(flightId);
@@ -49,6 +52,10 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     const crew = (f.get("crew") as string[] | undefined) ?? [];
     if (!me.isAdmin && !crew.includes(me.uid)) {
       throw new HttpsError("permission-denied", "Réservé à l'équipage ou à un admin.");
+    }
+    // Spec §13.2 : le pilote qui a fourni le carburant est dans l'équipage.
+    if (fuelSupplierUid !== null && !crew.includes(fuelSupplierUid)) {
+      throw new HttpsError("invalid-argument", SUPPLIER_NOT_IN_CREW);
     }
     const startMs = (f.get("start") as FirebaseFirestore.Timestamp).toMillis();
     if (!isOnOrBeforeClubToday(startMs, now)) {
@@ -73,7 +80,9 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     await tx.get(lockRef);
     const snapshot = (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null;
     // Plan 8 : un snapshot d'avant le plan 8 n'a pas les nouveaux tarifs.
-    const pricing = pricingWithDefaults(snapshot ?? await readPricing(tx, db));
+    // Plan 13 : le prix du litre de carburant est toujours le tarif courant.
+    const current = snapshot === null || fuelFromPersonal > 0 ? await readPricing(tx, db) : null;
+    const pricing = pricingWithDefaults(snapshot ?? current!);
 
     // Plan 8 (spec §10.1) : équipage lu avant toute écriture, pour le crédit
     // d'instruction ; le verrou de l'instructeur, s'il n'est pas le payeur.
@@ -86,12 +95,18 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     const credit = instructionCreditDue({
       instruction: mode !== "technical" && f.get("instruction") === true, actualMinutes, crew: people, pricing,
     });
-    const creditLockRef = credit && credit.uid !== payerUid
-      ? db.collection("flightLocks").doc(`user_${credit.uid}`) : null;
-    if (creditLockRef) await tx.get(creditLockRef);
-    const instructorBalance = credit
-      ? (crewSnaps.find((s) => s.id === credit.uid)?.get("balance") as number | undefined) ?? 0
-      : 0;
+    // Plan 13 (spec §13.2) : crédit « carburant fourni » au tarif courant.
+    const supply = fuelSupplierUid !== null
+      ? { uid: fuelSupplierUid, amount: supplyCredit(fuelFromPersonal, current!.fuelLiterPrice) } : null;
+    // Un verrou par compte crédité autre que le payeur (lu avant toute écriture).
+    const extraLocks = [...new Set([credit?.uid, supply?.uid])]
+      .filter((u): u is string => !!u && u !== payerUid)
+      .map((u) => db.collection("flightLocks").doc(`user_${u}`));
+    if (extraLocks.length > 0) await tx.getAll(...extraLocks);
+    const tank = fuelFromTank > 0 ? await readTank(tx, db) : null;
+    // Soldes enchaînés : un même compte peut être débité puis crédité.
+    const balances = new Map<string, number>(
+      crewSnaps.map((s) => [s.id, (s.get("balance") as number | undefined) ?? 0]));
 
     // 2. Facturation (tarifs figés si pricingSnapshot, courants sinon, décision 3).
     const passengers = (f.get("passengers") as string[] | undefined) ?? [];
@@ -112,34 +127,57 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
     }
 
     // 3. Débit (aucun mouvement pour un vol facturé hors app ou à l'association).
-    let payerBalance = (payerSnap.get("balance") as number | undefined) ?? 0;
+    balances.set(payerUid, (payerSnap.get("balance") as number | undefined) ?? 0);
     if (bill.billedTo === "account") {
-      payerBalance = postMovement(tx, db, {
+      balances.set(payerUid, postMovement(tx, db, {
         uid: payerUid,
         amount: -bill.billedAmount,
         type: "flight",
         reason: "Vol",
         flightId: ref.id,
         by: me.uid,
-        currentBalance: payerBalance,
-      });
+        currentBalance: balances.get(payerUid)!,
+      }));
     }
-    touchLocks(tx, creditLockRef ? [lockRef, creditLockRef] : [lockRef]);
+    touchLocks(tx, [lockRef, ...extraLocks]);
 
-    // 3 bis. Crédit d'instruction, enchaîné après le débit si l'instructeur
-    // est aussi le payeur.
-    let written: WrittenMovement | null = null;
-    if (credit) {
+    // 3 bis. Crédits d'instruction puis de carburant fourni, enchaînés après
+    // le débit (un même pilote peut être payeur, instructeur et fournisseur).
+    const written: WrittenMovement[] = [];
+    const credits = [
+      ...(credit ? [{ ...credit, type: "instruction" as const, reason: "Crédit instruction" }] : []),
+      ...(supply && supply.amount > 0
+        ? [{ ...supply, type: "fuel_supply" as const, reason: "Carburant fourni (bidon perso)" }] : []),
+    ];
+    for (const c of credits) {
       const balanceAfter = postMovement(tx, db, {
-        uid: credit.uid,
-        amount: credit.amount,
-        type: "instruction",
-        reason: "Crédit instruction",
+        uid: c.uid,
+        amount: c.amount,
+        type: c.type,
+        reason: c.reason,
         flightId: ref.id,
         by: me.uid,
-        currentBalance: credit.uid === payerUid ? payerBalance : instructorBalance,
+        currentBalance: balances.get(c.uid) ?? 0,
       });
-      written = { uid: credit.uid, amount: credit.amount, balanceAfter, type: "instruction" };
+      balances.set(c.uid, balanceAfter);
+      written.push({ uid: c.uid, amount: c.amount, balanceAfter, type: c.type });
+    }
+
+    // 3 ter. Carburant pris à la cuve (spec §13.2), daté du jour du vol.
+    if (tank) {
+      postTankMovement(tx, db, {
+        kind: "flight",
+        liters: -fuelFromTank,
+        date: clubDayString(startMs),
+        flightId: ref.id,
+        aircraftId: aircraftRef.id,
+        cashMovementId: null,
+        measuredLiters: null,
+        technical: mode === "technical",
+        note: null,
+        by: me.uid,
+        currentLiters: tank.liters,
+      });
     }
 
     // 4. Clôture du vol.
@@ -163,6 +201,10 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
       fuelStartExpectedLiters: fuelStartExpected,
       fuelStartLiters: fuelStart,
       fuelAddedLiters: fuelAdded,
+      fuelFromTankLiters: fuelFromTank,
+      fuelFromPersonalLiters: fuelFromPersonal,
+      fuelSupplierUid,
+      fuelSupplyCredit: supply?.amount ?? 0,
       fuelEndLiters: fuelEnd,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -181,7 +223,7 @@ export async function closeFlight(caller: Caller | undefined, data: unknown): Pr
 
     return { result: { billedAmount: bill.billedAmount, billedTo: bill.billedTo }, written };
   });
-  if (written) await notifyMovements(db, me.uid, [written]);
+  await notifyMovements(db, me.uid, written);
   return result;
 }
 

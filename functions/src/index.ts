@@ -15,6 +15,7 @@ export {
   correctCashMovementFn as correctCashMovement,
   closeMigrationFn as closeMigration,
 } from "./finance/cash";
+export { addAircraftFillFn as addAircraftFill, addGaugeReadingFn as addGaugeReading } from "./finance/tank";
 export { createFlightFn as createFlight, updateFlightFn as updateFlight } from "./flights/edit";
 export {
   validateFlightFn as validateFlight,

@@ -46,6 +46,10 @@ service cloud.firestore {
     match /cashbox/{id} { allow read: if isStaff(); }
     match /cashMovements/{id} { allow read: if isStaff(); }
 
+    // Cuve (spec §13) : instructeurs et admins, lecture seule.
+    match /tank/{id} { allow read: if isStaff(); }
+    match /tankMovements/{id} { allow read: if isStaff(); }
+
     // Tout le reste : refusé. Les écritures métier passent par les Functions.
     match /{document=**} { allow read, write: if false; }
   }

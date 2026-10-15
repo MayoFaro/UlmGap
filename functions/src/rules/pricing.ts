@@ -26,6 +26,8 @@ export interface Pricing {
   overtimeHourly: Record<Category, number>;
   fuelHourlyRate: number;
   instructionCredit: number;
+  /** Spec §13 : prix du litre de carburant (FCFA) : crédit du bidon perso et estimation des litres d'un achat. */
+  fuelLiterPrice: number;
   /** Forfait du baptême de l'air selon le tier choisi. */
   baptismFees: Record<BaptismTier, number>;
 }
@@ -38,6 +40,7 @@ export const DEFAULT_PRICING: Pricing = {
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
   instructionCredit: 20_000,
+  fuelLiterPrice: 595,
   baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
 };
 
@@ -54,6 +57,7 @@ export function pricingWithDefaults(p: Partial<Pricing> | null | undefined): Pri
     overtimeHourly: { ...DEFAULT_PRICING.overtimeHourly, ...p?.overtimeHourly },
     fuelHourlyRate: p?.fuelHourlyRate ?? DEFAULT_PRICING.fuelHourlyRate,
     instructionCredit: p?.instructionCredit ?? DEFAULT_PRICING.instructionCredit,
+    fuelLiterPrice: p?.fuelLiterPrice ?? DEFAULT_PRICING.fuelLiterPrice,
     baptismFees: { ...DEFAULT_PRICING.baptismFees, ...p?.baptismFees },
   };
 }
@@ -165,11 +169,12 @@ export function instructionCreditDue(a: {
 }
 
 /**
- * Régularisation du crédit d'instruction : retire l'ancien crédit
- * (−amount) et ajoute le nouveau (+amount), regroupés par uid selon l'ordre
- * de première apparition, totaux nuls omis.
+ * Régularisation d'un crédit versé à un compte (instruction, carburant
+ * fourni) : retire l'ancien crédit (−amount) et ajoute le nouveau
+ * (+amount), regroupés par uid selon l'ordre de première apparition,
+ * totaux nuls omis.
  */
-export function instructionAdjustments(
+export function creditAdjustments(
   before: { uid: string | null; amount: number },
   after: { uid: string | null; amount: number },
 ): { uid: string; amount: number }[] {
@@ -189,6 +194,9 @@ export function instructionAdjustments(
     .map((uid) => ({ uid, amount: totals.get(uid) as number }))
     .filter((r) => r.amount !== 0);
 }
+
+/** Régularisation du crédit d'instruction (alias de [creditAdjustments]). */
+export const instructionAdjustments = creditAdjustments;
 
 /** Code d'appartenance ; toute valeur inconnue est traitée comme "EXT". */
 export function toCategory(v: unknown): Category {

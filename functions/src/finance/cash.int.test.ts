@@ -2,13 +2,13 @@
 // Caisse (spec §11) : opérations, corrections, écart, reprise.
 import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { code, db, resetCashbox, seedUser } from "../flights/testkit";
+import { code, db, resetCashbox, resetTank, seedUser } from "../flights/testkit";
 import { formatFcfa } from "../rules/pricing";
 import { creditAccount } from "./accounts";
 import { addCashMovement, closeMigration, correctCashMovement } from "./cash";
 
-beforeEach(resetCashbox);
-afterEach(resetCashbox);
+beforeEach(async () => { await resetCashbox(); await resetTank(); });
+afterEach(async () => { await resetCashbox(); await resetTank(); });
 
 const balance = async () => ((await db.collection("cashbox").doc("main").get()).get("balance") as number) ?? 0;
 const line = async (id: string) => (await db.collection("cashMovements").doc(id).get()).data()!;
@@ -19,7 +19,7 @@ const fuelCreditLine = async (uid: string) =>
 test("achat carburant par un instructeur : sortie de caisse, ligne non modifiable", async () => {
   const instr = await seedUser({ profile: "instructeur" });
   await addCashMovement(instr, { kind: "off_app_income", amount: 100_000, note: "Baptême" });
-  const r = await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, date: "2026-10-12" });
+  const r = await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, date: "2026-10-12", outsideTank: true });
   assert.equal(r.balance, 70_000);
   assert.equal(await balance(), 70_000);
   const l = await line(r.id);
@@ -86,7 +86,7 @@ test("correction d'un Crédit carburant : caisse et compte régularisés, sur le
   const instr = await seedUser({ profile: "instructeur" });
   const pilot = await seedUser({ profile: "eleve", balance: 0 });
   await creditAccount(instr, { userUid: pilot.uid, amount: 50_000, date: "2026-10-12" });
-  await addCashMovement(instr, { kind: "fuel_purchase", amount: 10_000 });
+  await addCashMovement(instr, { kind: "fuel_purchase", amount: 10_000, outsideTank: true });
   await db.collection("users").doc(pilot.uid).update({ balance: 38_000 }); // un vol entre-temps
   const original = await fuelCreditLine(pilot.uid);
 
@@ -138,4 +138,42 @@ test("Reprise terminée : admin seulement, une seule fois, solde conservé", asy
   assert.equal(box.balance, 70_000);
   await assert.rejects(closeMigration(admin1),
     (e) => code(e) === "failed-precondition" && (e as Error).message === "La reprise est déjà terminée.");
+});
+
+test("achat carburant avec 500 L : caisse -montant, cuve +500, lignes jumelles", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  await addCashMovement(instr, { kind: "off_app_income", amount: 400_000, note: "Baptême" });
+  const r = await addCashMovement(instr, {
+    kind: "fuel_purchase", amount: 300_000, liters: 500, date: "2026-10-12", note: "Total",
+  });
+  assert.equal(await balance(), 100_000);
+  const tank = await db.collection("tank").doc("main").get();
+  assert.equal(tank.get("liters"), 500);
+  const m = (await db.collection("tankMovements").get()).docs;
+  assert.equal(m.length, 1);
+  assert.equal(m[0].get("kind"), "refill");
+  assert.equal(m[0].get("liters"), 500);
+  assert.equal(m[0].get("litersAfter"), 500);
+  assert.equal(m[0].get("cashMovementId"), r.id);
+  assert.equal(m[0].get("date"), "2026-10-12");
+  assert.equal(m[0].get("note"), "Total");
+  assert.equal(m[0].get("by"), instr.uid);
+});
+
+test("achat carburant sans litres ni « Hors cuve » : refusé, rien d'écrit", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  await assert.rejects(addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000 }),
+    (e) => code(e) === "invalid-argument");
+  assert.equal(await balance(), 0);
+  assert.equal((await db.collection("tankMovements").get()).size, 0);
+});
+
+test("achat carburant hors cuve : caisse seulement, cuve inchangée ; litres + hors cuve refusé", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  await assert.rejects(addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, liters: 50, outsideTank: true }),
+    (e) => code(e) === "invalid-argument");
+  await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, outsideTank: true });
+  assert.equal(await balance(), -30_000);
+  assert.equal((await db.collection("tankMovements").get()).size, 0);
+  assert.equal((await db.collection("tank").doc("main").get()).exists, false);
 });

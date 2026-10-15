@@ -84,6 +84,22 @@ void main() {
     expect(fuelSummary(f(null, 40)), 'Carburant : départ 40 L · ajouté 20 L · rangé 35 L (prévu inconnu)');
   });
 
+  test('fuelSummary : provenance (plan 13)', () {
+    Flight f(int tank, int personal, {String? supplier}) => testFlight(
+        isClosed: true, actualFlightMinutes: 60, fuelStartExpected: 40, fuelStart: 40,
+        fuelAdded: tank + personal, fuelEnd: 35, fuelFromTank: tank, fuelFromPersonal: personal,
+        fuelSupplierUid: supplier);
+    String name(String uid) => uid == 'ins' ? 'INS' : '?';
+    expect(fuelSummary(f(10, 10, supplier: 'ins'), supplierName: name),
+        'Carburant : départ 40 L · ajouté 20 L (cuve 10 L, bidon 10 L — INS) · rangé 35 L');
+    expect(fuelSummary(f(20, 0), supplierName: name),
+        'Carburant : départ 40 L · ajouté 20 L (cuve 20 L) · rangé 35 L');
+    expect(fuelSummary(f(0, 20, supplier: 'ins'), supplierName: name),
+        'Carburant : départ 40 L · ajouté 20 L (bidon 20 L — INS) · rangé 35 L');
+    expect(fuelSummary(f(0, 0), supplierName: name),
+        'Carburant : départ 40 L · ajouté 0 L · rangé 35 L');
+  });
+
   test('vol technique : libellés', () {
     expect(pricingModeLabel('technical'), 'Vol technique');
     expect(flightPricingLabel('technical', null), 'Vol technique');

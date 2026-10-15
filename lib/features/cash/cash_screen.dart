@@ -13,6 +13,7 @@ import '../../data/services.dart';
 import '../account/movements_list.dart' show signedFcfa;
 import '../home/app_nav.dart';
 import '../logbook/period_selector.dart';
+import '../tank/tank_screen.dart';
 import 'cash_dialogs.dart';
 
 class CashScreen extends StatefulWidget {
@@ -119,6 +120,7 @@ class _CashScreenState extends State<CashScreen> {
                                 : Text('Reprise terminée le ${formatShortDate(closedAt)}'),
                         ]),
                       ),
+                      if (services.tank != null) _TankLine(me: me, now: widget.now),
                       PeriodSelector(
                         now: widget.now,
                         onChanged: (from, to) => setState(() {
@@ -159,6 +161,30 @@ class _CashScreenState extends State<CashScreen> {
       },
     );
   }
+}
+
+/// Plan 13 : « Cuve : 180 L » (orange si négatif) ; appui → Suivi cuve.
+class _TankLine extends StatelessWidget {
+  const _TankLine({required this.me, required this.now});
+  final AppUser me;
+  final DateTime Function() now;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<int>(
+        stream: AppServices.of(context).tank!.watchTank(),
+        builder: (context, snap) {
+          final liters = snap.data ?? 0;
+          return ListTile(
+            key: const Key('cash-tank'),
+            leading: const Icon(Icons.propane_tank),
+            title: Text('Cuve : ${litersText(liters)}',
+                style: TextStyle(color: tankLevelColor(liters))),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => TankScreen(me: me, now: now))),
+          );
+        },
+      );
 }
 
 class _CashTile extends StatelessWidget {

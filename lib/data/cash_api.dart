@@ -15,7 +15,15 @@ abstract class CashApi {
   Stream<List<CashMovement>> watchMovements();
 
   /// [amount] positif pour une entrée ou une sortie, signé pour un écart.
-  Future<void> add({required CashKind kind, required int amount, required DateTime date, String? note});
+  /// [liters] : litres achetés (Achat carburant, obligatoires sauf
+  /// [outsideTank], « Hors cuve » : achat sans entrée en cuve).
+  Future<void> add(
+      {required CashKind kind,
+      required int amount,
+      required DateTime date,
+      String? note,
+      int? liters,
+      bool outsideTank = false});
 
   /// [amount] : montant juste (positif, signé pour un écart ; 0 annule).
   Future<void> correct(String movementId, {required int amount, String? note});
@@ -50,11 +58,19 @@ class FirebaseCashApi implements CashApi {
       .map((q) => q.docs.map((d) => CashMovement.fromMap(d.id, d.data())).toList());
 
   @override
-  Future<void> add({required CashKind kind, required int amount, required DateTime date, String? note}) =>
+  Future<void> add(
+          {required CashKind kind,
+          required int amount,
+          required DateTime date,
+          String? note,
+          int? liters,
+          bool outsideTank = false}) =>
       _call('addCashMovement', {
         'kind': kind.code,
         'amount': amount,
         'date': cashDayCode(date),
+        if (liters != null) 'liters': liters,
+        if (outsideTank) 'outsideTank': true,
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       });
 

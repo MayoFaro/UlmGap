@@ -30,8 +30,11 @@ doivent jamais accéder à AppGAP.
   `docs/superpowers/plans/2026-10-06-ulmgap-10-lache-amphibie.md` (spec §3.6)
 - Plan 11, suivi de caisse (terminé, fusionné dans `main`) :
   `docs/superpowers/plans/2026-10-14-ulmgap-11-caisse.md` (spec §11)
-- Plan 12, vol technique (terminé sur `feature/vol-technique`, non fusionné) :
+- Plan 12, vol technique (terminé, fusionné dans `main`) :
   `docs/superpowers/plans/2026-10-14-ulmgap-12-vol-technique.md` (spec §12)
+- Plan 13, suivi de cuve et carburant « bidon perso » (terminé sur
+  `feature/cuve`, non fusionné) :
+  `docs/superpowers/plans/2026-10-15-ulmgap-13-cuve.md` (spec §13)
 - Plan 4, carnet de vol (terminé) : `docs/superpowers/plans/2026-09-30-ulmgap-04-compteurs.md`
   (les écrans « Vols effectués » et « Compteurs » du plan y sont remplacés
   par un seul « Carnet de vol », voir la révision en fin de plan et spec §5)
@@ -78,8 +81,26 @@ d'où le JDK d'Android Studio.
 **Disque presque plein** (environ 6 Go libres) : éviter les builds inutiles.
 `build/` peut être supprimé, il est régénérable.
 
-## État au 2026-10-14
+## État au 2026-10-15
 
+- Plan 13 (suivi de cuve) terminé sur la branche `feature/cuve`, **non
+  fusionné** dans `main`. Tests verts (Flutter, analyse, unitaires,
+  intégration). En dev, **à déployer** :
+  `firebase deploy --project dev --only firestore:rules,functions:closeFlight,functions:adminUpdateFlight,functions:adminDeleteFlight,functions:adminUpdatePricing,functions:addCashMovement,functions:addAircraftFill,functions:addGaugeReading`.
+  **L'app installée en dev doit être reconstruite** : un ancien build ne peut
+  plus clôturer un vol ni enregistrer les tarifs (`adminUpdatePricing` exige
+  désormais le prix du litre). Ensuite, dans Administration → Tarifs, régler
+  « Prix du litre de carburant » à 595, puis faire un **relevé de jauge
+  initial** depuis l'écran « Suivi cuve » (Caisse, ligne « Cuve : X L ») :
+  sans lui, la jauge n'a pas de point de départ. Achat carburant : litres
+  obligatoires sauf « Hors cuve », litres calculés d'après le prix du litre
+  (595) et confirmation au-delà de ±5 % ; **`addCashMovement` est à
+  redéployer** (en dev comme en prod, avec l'app).
+- Plan 12 (vol technique) fusionné dans `main` et déployé en dev, avec la
+  règle du pilote payeur (un instructeur doit payer le vol technique). Recette
+  « vol ww » (Wonga-Wongué, spec §12.4) : validée par l'utilisateur le
+  2026-10-15.
+- Les vols clôturés ne figurent plus dans le planning (fusionné dans `main`).
 - Plan 11 (suivi de caisse) fusionné dans `main` et déployé en dev : règles
   Firestore, index et Functions de la caisse. **L'app installée en dev doit
   être reconstruite.** Import de la caisse en dev : à faire, après relecture
@@ -88,13 +109,6 @@ d'où le JDK d'Android Studio.
   toute opération de caisse ou tout Crédit carburant** : `importCashbox`
   refuse une caisse non vide (« La caisse contient déjà des opérations :
   import refusé. »).
-- Plan 12 (vol technique) terminé sur la branche `feature/vol-technique`, **non
-  fusionné** dans `main`. Tests verts (Flutter, analyse, unitaires, intégration).
-  En dev, **à redéployer** : Functions `createFlight`, `updateFlight`,
-  `validateFlight`, `closeFlight`, `adminUpdateFlight`
-  (`firebase deploy --project dev --only functions:createFlight,functions:updateFlight,functions:validateFlight,functions:closeFlight,functions:adminUpdateFlight`).
-  **L'app installée en dev doit être reconstruite.** Recette « vol ww »
-  (Wonga-Wongué, spec §12.4) : à faire en dev avant la fusion.
 - Plans 1 à 5 et 7 à 10 terminés et **tous fusionnés dans `main`** (2026-10-06).
   Le plan 7 (suivi carburant) inclut l'alerte de consommation inhabituelle à
   la clôture (hors 8 à 30 L/h, non bloquante) et le rappel de clôture au
@@ -174,11 +188,19 @@ d'où le JDK d'Android Studio.
     déjà été enregistré, il peut garder 75 pour « Temps couvert » et donc
     l'ancienne règle de dépassement ;
   - clé VAPID web du projet prod : faite (2026-10-06, `lib/core/env.dart`).
-- Plan 12 en prod, avec le déploiement du plan 10 ci-dessus et après
-  fusion de `feature/vol-technique` : déployer les Functions `createFlight`,
-  `updateFlight`, `validateFlight`, `closeFlight` et `adminUpdateFlight` en
-  même temps que l'app web. Tout build installé antérieur au plan 12 ne sait
-  ni afficher ni clôturer un vol technique.
+- Plan 12 en prod, avec le déploiement du plan 10 ci-dessus (fusionné dans
+  `main`) : déployer les Functions `createFlight`, `updateFlight`,
+  `validateFlight`, `closeFlight` et `adminUpdateFlight` en même temps que
+  l'app web. Tout build installé antérieur au plan 12 ne sait ni afficher ni
+  clôturer un vol technique.
+- Plan 13 en prod, après fusion de `feature/cuve` et avec l'app web : déployer
+  les règles et les Functions `closeFlight`, `adminUpdateFlight`,
+  `adminDeleteFlight`, `adminUpdatePricing`, `addCashMovement`,
+  `addAircraftFill` et `addGaugeReading`. **Tout build installé antérieur au
+  plan 13 ne peut plus clôturer un vol ni enregistrer les tarifs.** Ensuite,
+  comme en dev : régler « Prix du litre de carburant » à 595 dans
+  Administration → Tarifs, et faire un relevé de jauge initial depuis l'écran
+  « Suivi cuve » (Caisse, ligne « Cuve : X L »).
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :
   la 14 supprime l'API `admin.firestore()` utilisée partout). Le Node local
   reste en 20 : accepté par les tests et l'émulateur.

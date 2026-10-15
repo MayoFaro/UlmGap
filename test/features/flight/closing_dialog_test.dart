@@ -12,7 +12,10 @@ Future<void> open(WidgetTester tester, List<ClosingResult?> out,
     int plannedMinutes = 60,
     UserCategory? category = UserCategory.gap,
     String? baptismTier,
-    bool hasPassenger = false}) async {
+    bool hasPassenger = false,
+    Map<String, String> crewNames = const {'u1': 'JDU', 'ins': 'INS'},
+    String closerUid = 'ins',
+    int fuelLiterPrice = 595}) async {
   await tester.pumpWidget(MaterialApp(
     home: Builder(
       builder: (context) => TextButton(
@@ -27,6 +30,9 @@ Future<void> open(WidgetTester tester, List<ClosingResult?> out,
             hasPassenger: hasPassenger,
             amphibious: amphibious,
             fuelExpected: fuelExpected,
+            crewNames: crewNames,
+            closerUid: closerUid,
+            fuelLiterPrice: fuelLiterPrice,
           ),
         )),
         child: const Text('ouvrir'),
@@ -37,12 +43,24 @@ Future<void> open(WidgetTester tester, List<ClosingResult?> out,
   await tester.pumpAndSettle();
 }
 
-/// Remplit les champs carburant obligatoires (et le départ s'il est affiché).
+/// Remplit les champs carburant obligatoires (et le départ s'il est affiché) ;
+/// [added] non nul : pris à la cuve.
 Future<void> fillFuel(WidgetTester tester, {String added = '0', String end = '30'}) async {
   final start = find.byKey(const Key('closing-fuel-start'));
   if (start.evaluate().isNotEmpty) await tester.enterText(start, '40');
-  await tester.enterText(find.byKey(const Key('closing-fuel-added')), added);
+  if (added != '0') {
+    await chooseSource(tester, 'Depuis la cuve');
+    await tester.enterText(find.byKey(const Key('fuel-tank')), added);
+  }
   await tester.enterText(find.byKey(const Key('closing-fuel-end')), end);
+}
+
+Future<void> chooseSource(WidgetTester tester, String label) async {
+  final chip = find.widgetWithText(ChoiceChip, label);
+  await tester.ensureVisible(chip);
+  await tester.pumpAndSettle();
+  await tester.tap(chip);
+  await tester.pumpAndSettle();
 }
 
 Future<void> submit(WidgetTester tester) async {
@@ -142,7 +160,6 @@ void main() {
     await open(tester, out, fuelExpected: null);
     expect(find.text('Carburant prévu au départ : inconnu'), findsOneWidget);
     expect(find.byKey(const Key('closing-fuel-gap')), findsNothing);
-    await tester.enterText(find.byKey(const Key('closing-fuel-added')), '0');
     await tester.enterText(find.byKey(const Key('closing-fuel-end')), '30');
     await submit(tester);
     expect(find.text('Carburant au départ invalide (0 à 100 L).'), findsOneWidget);
@@ -153,20 +170,157 @@ void main() {
     expect(out.single!.fuelStart, 42);
   });
 
-  testWidgets('ajouté pré-rempli à 0 ; rangé vide refusé ; plus de 100 L : refusé', (tester) async {
+  testWidgets('rangé vide refusé ; plus de 100 L : refusé', (tester) async {
     final out = <ClosingResult?>[];
     await open(tester, out);
-    expect(tester.widget<TextField>(find.byKey(const Key('closing-fuel-added'))).controller!.text, '0');
     await submit(tester);
     expect(find.text('Carburant rangé invalide (0 à 100 L).'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('closing-fuel-added')), '');
-    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '30');
-    await submit(tester);
-    expect(find.text('Carburant ajouté invalide (0 à 100 L).'), findsOneWidget);
     await fillFuel(tester, end: '101');
     await submit(tester);
     expect(find.text('Carburant rangé invalide (0 à 100 L).'), findsOneWidget);
     expect(out, isEmpty);
+  });
+
+  // --- plan 13 : provenance du carburant ajouté ---
+
+  testWidgets('« Aucun » par défaut : aucun champ de litres, rien d\'ajouté', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    expect(find.text('Carburant ajouté'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Aucun')).selected, isTrue);
+    expect(find.byKey(const Key('fuel-tank')), findsNothing);
+    expect(find.byKey(const Key('fuel-personal')), findsNothing);
+    expect(find.byKey(const Key('fuel-supplier')), findsNothing);
+    await fillFuel(tester);
+    await submit(tester);
+    final r = out.single!;
+    expect([r.fuelFromTank, r.fuelFromPersonal, r.fuelSupplierUid, r.fuelAdded], [0, 0, null, 0]);
+  });
+
+  testWidgets('« Depuis la cuve » : litres pris à la cuve seulement', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await chooseSource(tester, 'Depuis la cuve');
+    expect(find.widgetWithText(TextField, 'Litres pris à la cuve'), findsOneWidget);
+    expect(find.byKey(const Key('fuel-personal')), findsNothing);
+    expect(find.byKey(const Key('fuel-supplier')), findsNothing);
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '20');
+    await tester.pump();
+    expect(find.text('Carburant ajouté : 20 L'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '45');
+    await submit(tester);
+    final r = out.single!;
+    expect([r.fuelFromTank, r.fuelFromPersonal, r.fuelSupplierUid, r.fuelAdded], [20, 0, null, 20]);
+  });
+
+  testWidgets('« Bidon perso » : pilote par défaut = celui qui clôture, ligne de crédit',
+      (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await chooseSource(tester, 'Bidon perso');
+    expect(find.byKey(const Key('fuel-tank')), findsNothing);
+    expect(find.widgetWithText(TextField, 'Litres du bidon perso'), findsOneWidget);
+    expect(find.text('Pilote ayant fourni le carburant'), findsOneWidget);
+    expect(tester.widget<DropdownButtonFormField<String>>(find.byKey(const Key('fuel-supplier')))
+        .initialValue, 'ins');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '20');
+    await tester.pump();
+    expect(find.text('Crédit : 20 L × 595 = 11\u00a0900\u00a0FCFA pour INS'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '45');
+    await submit(tester);
+    final r = out.single!;
+    expect([r.fuelFromTank, r.fuelFromPersonal, r.fuelSupplierUid, r.fuelAdded], [0, 20, 'ins', 20]);
+  });
+
+  testWidgets('« Bidon perso » : celui qui clôture hors équipage → premier équipier ; '
+      'autre pilote choisi ; prix du litre courant', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out, closerUid: 'adm', fuelLiterPrice: 650);
+    await chooseSource(tester, 'Bidon perso');
+    expect(tester.widget<DropdownButtonFormField<String>>(find.byKey(const Key('fuel-supplier')))
+        .initialValue, 'u1');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '10');
+    await tester.pump();
+    expect(find.text('Crédit : 10 L × 650 = 6\u00a0500\u00a0FCFA pour JDU'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('fuel-supplier')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('INS').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Crédit : 10 L × 650 = 6\u00a0500\u00a0FCFA pour INS'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '40');
+    await submit(tester);
+    expect(out.single!.fuelSupplierUid, 'ins');
+  });
+
+  testWidgets('« Bidon perso » sans équipier connu : pilote exigé', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out, crewNames: const {});
+    await chooseSource(tester, 'Bidon perso');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '10');
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '40');
+    await submit(tester);
+    expect(find.text('Choisissez le pilote qui a fourni le carburant.'), findsOneWidget);
+    expect(out, isEmpty);
+  });
+
+  testWidgets('« Les deux » : total affiché, plus de 100 L au total refusé, payload',
+      (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await chooseSource(tester, 'Les deux');
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '60');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '50');
+    await tester.pump();
+    expect(find.text('Carburant ajouté : 110 L'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '45');
+    await submit(tester);
+    expect(find.text('Carburant ajouté : 100 L au maximum au total.'), findsOneWidget);
+    expect(out, isEmpty);
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '10');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '10');
+    await submit(tester);
+    final r = out.single!;
+    expect([r.fuelFromTank, r.fuelFromPersonal, r.fuelSupplierUid, r.fuelAdded], [10, 10, 'ins', 20]);
+  });
+
+  testWidgets('litres vides ou nuls refusés (1 à 100)', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await chooseSource(tester, 'Les deux');
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '30');
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '0');
+    await submit(tester);
+    expect(find.text('Litres pris à la cuve invalides (1 à 100 L).'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '5');
+    await submit(tester);
+    expect(find.text('Litres du bidon perso invalides (1 à 100 L).'), findsOneWidget);
+    expect(out, isEmpty);
+  });
+
+  testWidgets('« Les deux » puis « Aucun » : litres saisis ignorés', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    await chooseSource(tester, 'Les deux');
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '10');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '10');
+    await chooseSource(tester, 'Aucun');
+    await fillFuel(tester);
+    await submit(tester);
+    final r = out.single!;
+    expect([r.fuelFromTank, r.fuelFromPersonal, r.fuelSupplierUid], [0, 0, null]);
+  });
+
+  testWidgets('alerte de consommation calculée sur le total ajouté', (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out);
+    // 40 + 10 + 10 − 20 = 40 L en 60 min : 40 L/h.
+    await chooseSource(tester, 'Les deux');
+    await tester.enterText(find.byKey(const Key('fuel-tank')), '10');
+    await tester.enterText(find.byKey(const Key('fuel-personal')), '10');
+    await tester.enterText(find.byKey(const Key('closing-fuel-end')), '20');
+    await submit(tester);
+    expect(find.text('Consommation calculée : 40,0 L/h. Vérifiez les valeurs saisies.'),
+        findsOneWidget);
   });
 
   // 60 min prévues (durée réelle pré-remplie), 40 L prévus au départ.

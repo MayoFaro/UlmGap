@@ -1,12 +1,16 @@
 // Lancé par `npm run test:int` (émulateurs Auth + Firestore).
 // Correction et suppression admin (adminUpdateFlight, adminDeleteFlight),
 // avec régularisation automatique des soldes sur un vol clôturé (spec §4.5).
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { at, code, db, details, FUEL, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, details, FUEL, H, resetCashbox, resetTank, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { closeFlight } from "./close";
+
+// La cuve (plan 13) est un document global : remise à zéro autour de chaque test.
+beforeEach(async () => { await resetTank(); await resetCashbox(); });
+afterEach(async () => { await resetTank(); await resetCashbox(); });
 
 const getFlight = async (id: string) => (await db.collection("flights").doc(id).get()).data()!;
 const balance = async (uid: string) => (await db.collection("users").doc(uid).get()).get("balance") as number;
@@ -417,7 +421,7 @@ test("carburant corrigé sur le vol source : le vol et l'appareil suivent", asyn
   const a = await seedAircraft();
   const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
   assert.equal(await fuelOf(a), 30);
-  await adminUpdateFlight(boss, await correction(id, { fuelStart: 12, fuelAdded: 30, fuelEnd: 22 }));
+  await adminUpdateFlight(boss, await correction(id, { fuelStart: 12, fuelFromTank: 30, fuelFromPersonal: 0, fuelEnd: 22 }));
   const f = await getFlight(id);
   assert.deepEqual([f.fuelStartLiters, f.fuelAddedLiters, f.fuelEndLiters], [12, 30, 22]);
   assert.equal(await fuelOf(a), 22);

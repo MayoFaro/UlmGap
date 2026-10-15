@@ -26,7 +26,8 @@ avec :
 - un relevé admin de tout ce qui a été facturé ;
 - un **suivi carburant** par appareil (révision du 2026-10-02, §9) ;
 - un **suivi de caisse** de l'association (révision du 2026-10-14, §11) ;
-- des **vols techniques** non facturés (révision du 2026-10-14, §12).
+- des **vols techniques** non facturés (révision du 2026-10-14, §12) ;
+- un **suivi de cuve** et le carburant « bidon perso » (révision du 2026-10-15, §13).
 
 ## Décisions structurantes
 
@@ -858,7 +859,7 @@ index nouveau : l'app filtre par `kind`.
 | Function | Qui | Règle |
 |---|---|---|
 | `creditAccount` (élargie) | Instructeurs et admins | **Crédit carburant** : montant > 0, date, note facultative. Caisse + et compte + (§11.2), notification habituelle à l'adhérent |
-| `addCashMovement` | Instructeurs et admins ; `cash_gap` : **admins seulement** | `fuel_purchase` (montant > 0, débité), `maintenance` et `off_app_income` (montant > 0, note obligatoire), `cash_gap` (montant ≠ 0 signé, note obligatoire). `fuel_credit` et `opening` refusés ici |
+| `addCashMovement` | Instructeurs et admins ; `cash_gap` : **admins seulement** | `fuel_purchase` (montant > 0, débité ; **litres obligatoires** (entier 1 à 100 000) sauf case « Hors cuve » (`outsideTank: true`), où ils doivent être absents : voir §13.5), `maintenance` et `off_app_income` (montant > 0, note obligatoire), `cash_gap` (montant ≠ 0 signé, note obligatoire). `fuel_credit` et `opening` refusés ici |
 | `correctCashMovement` | Instructeurs et admins ; correction d'un `cash_gap` : **admins seulement** | Voir §11.4 |
 | `closeMigration` | **Admins seulement** | « Reprise terminée » : `migrationClosedAt` = maintenant. Irréversible ; refusée si déjà faite |
 | `correctAccount` (existante) | Instructeurs et admins | Inchangée **tant que la reprise est en cours**. Ensuite refusée : « La reprise est terminée : corrigez le crédit carburant concerné. » |
@@ -1058,3 +1059,142 @@ en « Vol technique » (motif « Convoyage Wonga-Wongué »), puis on le
 clôture. Son équipage doit commencer par un instructeur (sinon la
 correction est refusée, §12.1). Attendu : aucun compte débité, aucune ligne de caisse,
 `billedTo: "association"`.
+
+## 13. Suivi de cuve et carburant « bidon perso » (révision du 2026-10-15)
+
+But : suivre les litres de la cuve (citerne roulante) pour qu'aucun litre
+ne disparaisse sans explication, sans double comptage avec la caisse
+(§11) : **la caisse suit l'argent, la cuve suit les litres**. Un pilote
+qui apporte son propre carburant (bidon perso) est crédité sur son compte.
+
+### 13.1 Données
+
+**`tank/main`** : `liters` (int, peut devenir négatif : signe d'un oubli de
+saisie, affiché en orange, jamais bloquant), `updatedAt`. Une seule cuve,
+sans capacité maximale.
+
+**`tankMovements/{id}`**, historique non modifiable :
+
+| Champ | Contenu |
+|---|---|
+| `kind` | `refill` (remplissage) / `flight` (avitaillement à la clôture) / `aircraft_fill` (plein hors vol) / `gauge` (relevé de jauge) / `flight_adjustment` (régularisation d'un vol corrigé ou supprimé) |
+| `liters` | int signé : positif = entrée, négatif = sortie ; pour `gauge`, l'écart (mesuré − calculé) |
+| `date` | Jour de l'opération « AAAA-MM-JJ » (jour du club) ; pour un vol, le jour du vol |
+| `flightId`, `aircraftId` | Vol ou appareil concerné, sinon `null` |
+| `cashMovementId` | Ligne d'Achat carburant jumelle d'un `refill`, sinon `null` |
+| `measuredLiters` | Niveau mesuré, pour `gauge` seulement |
+| `technical` | `true` si le vol est un vol technique (consommation de l'association) |
+| `note` | Texte libre facultatif (motif d'un relevé, d'un plein) |
+| `by`, `at`, `litersAfter` | Auteur, horodatage serveur, niveau après le mouvement |
+
+Règle absolue, comme pour la caisse : **le niveau n'est jamais modifié sans
+sa ligne**, dans la même transaction. Règles Firestore : lecture
+instructeurs et admins, aucune écriture client.
+
+### 13.2 Provenance du carburant à la clôture
+
+Le bloc « Carburant » du dialogue de clôture (§9.1) change pour le
+carburant ajouté :
+1. **Première question : « Carburant ajouté »** : « Aucun » (par défaut),
+   « Depuis la cuve », « Bidon perso » ou « Les deux ».
+2. Selon le choix :
+   - **Depuis la cuve** : « Litres pris à la cuve » ;
+   - **Bidon perso** : « Litres du bidon perso » et « Pilote ayant fourni
+     le carburant » (membres de l'équipage avec compte ; par défaut celui
+     qui clôture s'il est dans l'équipage, sinon le premier) ;
+   - **Les deux** : les deux champs de litres et le pilote.
+   Chaque nombre de litres saisi est un entier de 1 à 100.
+3. Le **carburant ajouté total** (`fuelAddedLiters`, §9) = litres cuve +
+   litres bidon, affiché ; total ≤ 100 L. Les autres champs carburant
+   (départ, rangé) et l'alerte de consommation sont inchangés.
+4. Avec un bidon perso, l'app affiche « Crédit : 20 L × 595 = 11 900 FCFA
+   pour XXX ».
+
+`closeFlight` reçoit `fuelFromTank` et `fuelFromPersonal` (entiers ≥ 0,
+somme ≤ 100) et `fuelSupplierUid` (obligatoire si `fuelFromPersonal` > 0,
+membre de `crew`, sinon `null`) à la place de `fuelAdded`, qu'il calcule.
+Le vol enregistre `fuelFromTankLiters`, `fuelFromPersonalLiters`,
+`fuelSupplierUid`, `fuelSupplyCredit` (montant crédité) en plus de
+`fuelAddedLiters`.
+
+Dans la même transaction que la clôture :
+- `fuelFromTank` > 0 : mouvement de cuve `flight` (−litres, `technical`
+  selon le vol) ;
+- `fuelFromPersonal` > 0 : le pilote est crédité de `fuelFromPersonal ×
+  fuelLiterPrice` (arrondi au franc), transaction **`fuel_supply`**
+  rattachée au vol, motif « Carburant fourni (bidon perso) », avec la
+  notification habituelle d'un mouvement. Ni caisse ni cuve ne bougent.
+  Vaut aussi pour un vol technique.
+
+Historique du compte : « Carburant fourni (bidon perso) — vol du 12 oct. ».
+
+### 13.3 Tarif
+
+`settings/pricing.fuelLiterPrice` : « Prix du litre de carburant » dans
+Administration → Tarifs, **595** par défaut, 0 à 10 000. Double usage : le
+crédit du bidon perso (§13.2) et l'estimation des litres d'un achat
+(§13.5). Il est lu au moment de la clôture (tarifs courants, pas
+`pricingSnapshot`) ; le montant crédité est figé sur le vol
+(`fuelSupplyCredit`).
+
+### 13.4 Correction et suppression admin
+
+`adminUpdateFlight` d'un vol clôturé accepte `fuelFromTank`,
+`fuelFromPersonal`, `fuelSupplierUid` (mêmes règles ; absents =
+inchangés). Régularisations dans la même transaction :
+- cuve : mouvement `flight_adjustment` de l'écart entre les anciens et les
+  nouveaux litres pris à la cuve ;
+- compte : transactions `fuel_supply`, motif « Régularisation carburant
+  fourni », pour l'écart de crédit (retrait, ajout, ou les deux en cas de
+  changement de pilote), au prix figé du vol (`fuelSupplyCredit` ÷ litres)
+  ou, s'il n'y en avait pas, au prix courant.
+`adminDeleteFlight` d'un vol clôturé : remet les litres pris à la cuve
+(`flight_adjustment` +litres) et retire le crédit versé.
+
+Un vol clôturé avant cette révision n'a ni provenance ni mouvement de
+cuve : sa correction ne crée de mouvement que pour l'écart avec « 0 L pris
+à la cuve, 0 L de bidon » si l'admin saisit la provenance.
+
+### 13.5 Opérations de cuve
+
+| Opération | Qui | Effet |
+|---|---|---|
+| **Remplissage** | Instructeurs et admins | Champ **« Litres »** de l'Achat carburant (§11.3), obligatoire sauf case **« Hors cuve »** (achat de caisse seul, cuve inchangée, litres refusés) : la même transaction écrit la sortie de caisse et le mouvement `refill` (+litres, `cashMovementId`). La correction de l'achat (§11.4) ne touche pas les litres ; une erreur de litres se corrige par un relevé de jauge |
+| **Plein d'un appareil** (hors vol) | Instructeurs et admins | Appareil, litres (1 à 100), date, note : mouvement `aircraft_fill` (−litres) ; carburant actuel de l'appareil augmenté d'autant, plafonné à 100 L, `fuelFlightStart` = maintenant (un vol plus ancien clôturé ensuite ne l'écrase pas, §9.2) |
+| **Relevé de jauge** | Instructeurs et admins | Niveau mesuré (entier ≥ 0), date, note : mouvement `gauge` de l'écart, `measuredLiters` ; le niveau devient la mesure. Le premier relevé fixe le niveau de départ |
+
+### 13.6 Écrans
+
+- **Clôture** : §13.2.
+- **Caisse** (§11.6) : ligne « Cuve : 180 L » sous l'en-tête ; un appui
+  ouvre **« Suivi cuve »** (instructeurs et admins).
+- **Suivi cuve** : niveau actuel (orange s'il est négatif), boutons « Plein
+  d'un appareil » et « Relevé de jauge », sélecteur de période du carnet,
+  liste des mouvements (date, libellé, appareil ou vol, litres signés,
+  niveau après), totaux de la période : remplissages, sorties vers les vols
+  (dont vols techniques), pleins hors vol, écarts de jauge. Un appui sur une
+  ligne de vol ouvre la fiche du vol.
+- **Achat carburant** (dialogue d'opération de caisse) : case « Hors cuve »
+  (décochée par défaut, masque le champ litres) et champ « Litres »
+  obligatoire. **Calcul automatique** : tant que l'utilisateur n'a pas saisi
+  les litres, chaque changement du montant les recalcule (montant / prix du
+  litre de carburant, arrondi) ; sa saisie arrête le calcul pour ce
+  dialogue. Ligne « Prix au litre : 790 FCFA/L » sous les champs. **Contrôle
+  ±5 %** : si le prix au litre saisi s'écarte de plus de 5 % (strictement)
+  du prix du litre de carburant, fenêtre « Prix au litre inhabituel »
+  (« Corriger » / « Confirmer »). Aucun contrôle en « Hors cuve ».
+- **Fiche d'un vol clôturé** : « Carburant : départ 40 L · ajouté 20 L
+  (cuve 10 L, bidon 10 L — XXX) · rangé 35 L ».
+- **Suivi carburant** (§9.5) : la colonne « Ajouté » reste le total.
+- **Tarifs** : « Prix du litre de carburant ».
+
+### 13.7 Déploiement et recette
+
+- Règles Firestore (`tank`, `tankMovements`) et Functions `closeFlight`,
+  `adminUpdateFlight`, `adminDeleteFlight`, `adminUpdatePricing`,
+  `addCashMovement` et les nouvelles (`addAircraftFill`, `addGaugeReading`)
+  avec l'app : `closeFlight` exige les nouveaux champs, un ancien build ne
+  peut plus clôturer.
+- Recette en dev d'abord : relevé de jauge initial, achat carburant avec
+  litres, clôture « Les deux », plein hors vol, correction admin.
+- Ni index nouveau, ni champ du contrat du pont.

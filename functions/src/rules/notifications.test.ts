@@ -85,6 +85,10 @@ test("mouvement : intéressé et instructeurs, sauf l'auteur ; montants signés"
     userUid: "ins", shortName: "INS", amount: 20_000, balanceAfter: 20_000, type: "instruction",
     actor: "ldx", instructors: [],
   }).message.body.startsWith(`Crédit instruction : +${formatFcfa(20_000)}`), true);
+  assert.equal(movementPush({
+    userUid: "ldx", shortName: "LDX", amount: 12_000, balanceAfter: 12_000, type: "fuel_supply",
+    actor: "dps", instructors: [],
+  }).message.body, `Carburant fourni (bidon perso) : +${formatFcfa(12_000)}. Nouveau solde : ${formatFcfa(12_000)}.`);
 });
 
 test("reminderDue : 24 h après la fin, puis toutes les 48 h", () => {
