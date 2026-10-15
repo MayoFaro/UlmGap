@@ -7,7 +7,7 @@ import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
   Decision, ExistingFlight, amphibiousError, FLIGHT_BUFFER_MINUTES, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
-  isPlanning, payerOf, resolvePricingMode,
+  isPlanning, payerOf, resolvePricingMode, technicalPayerError,
 } from "../rules/flights";
 import {
   availableCredit, DEFAULT_FLIGHT_MINUTES, estimatedCost, formatFcfa, Pricing, pricingWithDefaults, toCategory,
@@ -232,9 +232,14 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       "Vol d'instruction : il faut un instructeur et un autre membre avec compte.");
   }
 
-  // Spec §12.1 : un vol déjà technique garde sa case quand son créateur le modifie.
-  if (a.input.technical && !a.mayMarkTechnical && a.previousMode !== "technical") {
+  // Spec §12.1 : case réservée aux instructeurs et aux admins ; un vol
+  // technique a toujours un instructeur en tête (payeur), admin compris.
+  if (a.input.technical && !a.mayMarkTechnical) {
     throw new HttpsError("permission-denied", "Vol technique : réservé aux instructeurs et aux admins.");
+  }
+  if (a.input.technical) {
+    const err = technicalPayerError(crew);
+    if (err) throw new HttpsError("failed-precondition", err);
   }
 
   const pricingMode: PricingMode = a.input.technical ? "technical" : a.input.baptism ? "baptism" : (a.forcedMode ?? resolvePricingMode({

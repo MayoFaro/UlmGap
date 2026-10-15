@@ -12,6 +12,15 @@ export function isInstructionEligible(crew: Person[]): boolean {
   return crew.length === 2 && crew.filter((p) => p.profile === "instructeur").length === 1;
 }
 
+/** Spec §12.1 : message unique (serveur et app) du vol technique sans instructeur payeur. */
+export const TECHNICAL_PAYER_MESSAGE =
+  "Impossible de modifier car vol technique sélectionné. Pour modifier, décochez l'option vol technique.";
+
+/** Spec §12.1 : un vol technique exige un instructeur en tête (payeur) ; null si respecté. */
+export function technicalPayerError(crew: Person[]): string | null {
+  return crew[0]?.profile === "instructeur" ? null : TECHNICAL_PAYER_MESSAGE;
+}
+
 export interface AmphibiousPerson { profile: Profile | null; amphibiousCleared: boolean }
 /** Spec §3.6 : équipage d'un appareil amphibie ; null si la règle est respectée. */
 export function amphibiousError(crew: AmphibiousPerson[]): string | null {

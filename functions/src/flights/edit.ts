@@ -79,14 +79,11 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
       throw new HttpsError("permission-denied", "Seul le créateur peut modifier ce vol.");
     }
     assertNotStarted(f, now);
-    const previousMode = f.get("pricingMode") as PricingMode;
     const p = await planFlight(tx, db, {
       id: ref.id, input, mayChoose: mayChoose(me), mayMarkTechnical: mayChoose(me),
-      // Mode conservé seulement si aucun passager ne l'imposait (décision 2b) ;
-      // toujours pour un vol technique, qui garde sa case (spec §12.1).
-      previousMode: previousMode === "technical" ||
-        ((f.get("passengers") as string[] | undefined) ?? []).length === 0
-        ? previousMode
+      // Mode conservé seulement si aucun passager ne l'imposait (décision 2b).
+      previousMode: ((f.get("passengers") as string[] | undefined) ?? []).length === 0
+        ? (f.get("pricingMode") as PricingMode)
         : undefined,
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
       previousStatus: f.get("status") as string,

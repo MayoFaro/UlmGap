@@ -38,33 +38,50 @@ test("lâché : cocher Vol technique est refusé", async () => {
       (e as Error).message === "Vol technique : réservé aux instructeurs et aux admins.");
 });
 
-test("vol devenu technique à la validation : le créateur lâché le modifie sans perdre la case", async () => {
-  const instr = await seedUser({ profile: "instructeur" });
-  const ac = await seedAircraft();
-  // Demande d'un lâché avec un instructeur dans l'équipage.
-  const lacheRich = await seedUser({ profile: "lache_toute_mission" });
-  const r = await createFlight(lacheRich, draft(ac, [lacheRich.uid, instr.uid]));
-  assert.equal(r.status, "demande");
-  await validateFlight(instr, { flightId: r.id, changes: TECH });
-  assert.equal((await flight(r.id)).pricingMode, "technical");
-  await updateFlight(lacheRich, { flightId: r.id, ...draft(ac, [lacheRich.uid, instr.uid], { ...TECH, destination: "Port-Gentil" }) });
-  const f = await flight(r.id);
-  assert.equal(f.pricingMode, "technical");
-  assert.equal(f.destination, "Port-Gentil"); // redevenue demande (§3.3), toujours technique
-});
+const MSG = "Impossible de modifier car vol technique sélectionné. Pour modifier, décochez l'option vol technique.";
+const payerRefused = (e: unknown) => code(e) === "failed-precondition" && (e as Error).message === MSG;
 
-test("vol technique avec un passager, rendu technique par un admin : le créateur lâché le modifie sans perdre la case", async () => {
-  const admin1 = await seedUser({ profile: null, isAdmin: true });
+test("validation en technique de la demande d'un lâché (lâché en tête) : refus, instructeur payeur exigé", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
   const lache = await seedUser({ profile: "lache_toute_mission" });
   const ac = await seedAircraft();
-  const r = await createFlight(lache, draft(ac, [lache.uid], { passengers: ["Mécano"] }));
+  const r = await createFlight(lache, draft(ac, [lache.uid, instr.uid]));
+  assert.equal(r.status, "demande");
+  await assert.rejects(validateFlight(instr, { flightId: r.id, changes: TECH }), payerRefused);
+  assert.equal((await flight(r.id)).status, "demande");
+});
+
+test("admin : vol technique créé avec un lâché en tête : refus", async () => {
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  const instr = await seedUser({ profile: "instructeur" });
+  const lache = await seedUser({ profile: "lache_toute_mission" });
+  const ac = await seedAircraft();
+  await assert.rejects(createFlight(admin1, draft(ac, [lache.uid, instr.uid], TECH)), payerRefused);
+});
+
+test("instructeur en tête et lâché second : vol technique accepté", async () => {
+  const instr = await seedUser({ profile: "instructeur", balance: 0 });
+  const lache = await seedUser({ profile: "lache_toute_mission", balance: 0 });
+  const ac = await seedAircraft();
+  const r = await createFlight(instr, draft(ac, [instr.uid, lache.uid], TECH));
   assert.equal(r.status, "valide");
-  await adminUpdateFlight(admin1, { flightId: r.id, ...draft(ac, [lache.uid], { ...TECH, passengers: ["Mécano"] }) });
   assert.equal((await flight(r.id)).pricingMode, "technical");
-  await updateFlight(lache, { flightId: r.id, ...draft(ac, [lache.uid], { ...TECH, passengers: ["Mécano"], destination: "Port-Gentil" }) });
-  const f = await flight(r.id);
-  assert.equal(f.pricingMode, "technical");
-  assert.equal(f.destination, "Port-Gentil");
+});
+
+test("correction admin d'un vol technique plaçant un non-instructeur en tête : refus", async () => {
+  const admin1 = await seedUser({ profile: null, isAdmin: true });
+  const instr = await seedUser({ profile: "instructeur" });
+  const lache = await seedUser({ profile: "lache_toute_mission" });
+  const ac = await seedAircraft();
+  const start = Date.now() - 3 * H;
+  const id = await seedFlight({
+    start, end: start + H, crew: [instr.uid, lache.uid], aircraftId: ac,
+    pricingMode: "technical", technical: true, technicalReason: "Essai",
+  });
+  await assert.rejects(adminUpdateFlight(admin1, {
+    flightId: id, start, end: start + H, destination: "Lomé", aircraftId: ac, crew: [lache.uid, instr.uid], ...TECH,
+  }), payerRefused);
+  assert.deepEqual((await flight(id)).crew, [instr.uid, lache.uid]);
 });
 
 test("validation en vol technique sans motif : refus", async () => {
@@ -88,7 +105,7 @@ test("vol technique avec un passager sans compte : accepté", async () => {
 });
 
 test("clôture d'un vol technique : 0, association, aucun mouvement de compte ni de caisse", async () => {
-  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 50_000 });
+  const pilot = await seedUser({ profile: "instructeur", balance: 50_000 });
   const ac = await seedAircraft();
   const id = await seedFlight({
     start: Date.now() - 2 * H, end: Date.now() - H, crew: [pilot.uid], aircraftId: ac,
@@ -109,7 +126,7 @@ test("clôture d'un vol technique marqué instruction (donnée incohérente) : a
   const eleve = await seedUser({ profile: "eleve", balance: 0 });
   const ac = await seedAircraft();
   const id = await seedFlight({
-    start: Date.now() - 2 * H, end: Date.now() - H, crew: [eleve.uid, instr.uid], aircraftId: ac,
+    start: Date.now() - 2 * H, end: Date.now() - H, crew: [instr.uid, eleve.uid], aircraftId: ac,
     pricingMode: "technical", technical: true, technicalReason: "Essai", instruction: true,
   });
   await closeFlight(instr, { ...FUEL, flightId: id, actualMinutes: 60, landings: 1 });
@@ -120,7 +137,7 @@ test("clôture d'un vol technique marqué instruction (donnée incohérente) : a
 });
 
 test("clôture d'un vol technique avec un montant : refus", async () => {
-  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const pilot = await seedUser({ profile: "instructeur" });
   const ac = await seedAircraft();
   const id = await seedFlight({
     start: Date.now() - 2 * H, end: Date.now() - H, crew: [pilot.uid], aircraftId: ac,
@@ -133,7 +150,7 @@ test("clôture d'un vol technique avec un montant : refus", async () => {
 
 test("correction admin : vol clôturé standard → technique rembourse le payeur ; l'inverse le débite", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
-  const pilot = await seedUser({ profile: "lache_toute_mission", category: "GAP", balance: 100_000 });
+  const pilot = await seedUser({ profile: "instructeur", category: "GAP", balance: 100_000 });
   const ac = await seedAircraft();
   const start = Date.now() - 3 * H;
   const id = await seedFlight({ start, end: start + H, crew: [pilot.uid], aircraftId: ac, pricingMode: "standard" });
@@ -159,7 +176,7 @@ test("correction admin : vol clôturé standard → technique rembourse le payeu
 
 test("correction admin en technique avec un mode ou un montant explicite : refus", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
-  const pilot = await seedUser({ profile: "lache_toute_mission" });
+  const pilot = await seedUser({ profile: "instructeur" });
   const ac = await seedAircraft();
   const start = Date.now() - 3 * H;
   const id = await seedFlight({
@@ -178,7 +195,7 @@ test("correction admin en technique avec un mode ou un montant explicite : refus
 
 test("correction admin : vol clôturé « montant différent » → technique efface le montant", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
-  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 100_000 });
+  const pilot = await seedUser({ profile: "instructeur", balance: 100_000 });
   const ac = await seedAircraft();
   const start = Date.now() - 3 * H;
   const id = await seedFlight({
@@ -200,7 +217,7 @@ test("correction admin : vol clôturé « montant différent » → technique ef
 
 test("recette « ww » : vol passé non clôturé corrigé en technique par un admin, puis clôturé", async () => {
   const admin1 = await seedUser({ profile: null, isAdmin: true });
-  const pilot = await seedUser({ profile: "lache_toute_mission", balance: 0 });
+  const pilot = await seedUser({ profile: "instructeur", balance: 0 });
   const ac = await seedAircraft();
   const start = Date.now() - 5 * H;
   const id = await seedFlight({ start, end: start + 2 * H, crew: [pilot.uid], aircraftId: ac, pricingMode: "standard" });
