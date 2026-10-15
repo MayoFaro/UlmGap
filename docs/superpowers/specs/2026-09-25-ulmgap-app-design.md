@@ -1006,8 +1006,17 @@ comptés en consommation de l'association au plan « suivi de cuve ».
   « Convoyage Wonga-Wongué », « Essai moteur »).
 - Le serveur refuse `technical: true` posé par un autre qu'un instructeur
   ou un admin : « Vol technique : réservé aux instructeurs et aux admins. »
-  Le créateur non instructeur d'un vol déjà technique (case posée par
-  l'instructeur à la validation) peut le modifier sans perdre la case.
+- **Instructeur payeur obligatoire** (révision du 2026-10-15) : un vol ne
+  peut être technique que si le **premier membre de l'équipage** (le payeur)
+  est un **instructeur**. La règle vaut pour tout le monde, admin compris,
+  sur toutes les écritures (création, modification, validation, correction
+  admin). Refus serveur (`failed-precondition`) et message de l'app,
+  identiques : « Impossible de modifier car vol technique sélectionné. Pour
+  modifier, décochez l'option vol technique. »
+- Dans l'app, la case n'apparaît que si le payeur est un instructeur. Case
+  cochée, tout changement d'équipage qui laisserait un non-instructeur en
+  tête (retrait de l'instructeur, remplacement, changement d'ordre) est
+  refusé avec ce message : l'équipage reste inchangé.
 - **Incompatibilités** (refus serveur, case masquée dans l'app) : vol
   d'instruction (§10.1) et baptême de l'air (§10.2). Un **passager sans
   compte** reste possible (mécanicien), sans facturation.
@@ -1046,5 +1055,6 @@ comptés en consommation de l'association au plan « suivi de cuve ».
 
 Le vol « ww » (Wonga-Wongué), passé et non clôturé : un admin le corrige
 en « Vol technique » (motif « Convoyage Wonga-Wongué »), puis on le
-clôture. Attendu : aucun compte débité, aucune ligne de caisse,
+clôture. Son équipage doit commencer par un instructeur (sinon la
+correction est refusée, §12.1). Attendu : aucun compte débité, aucune ligne de caisse,
 `billedTo: "association"`.
