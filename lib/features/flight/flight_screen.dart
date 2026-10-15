@@ -256,13 +256,27 @@ class _FlightScreenState extends State<FlightScreen> {
   /// Case « Vol d'instruction » : exactement un instructeur et un autre
   /// équipier (miroir du serveur).
   bool get _instructionEligible =>
-      isInstructionEligible([for (final u in _crew) RulePerson(u, _profile(u)?.code)]);
+      isInstructionEligible(_rulePersons(_crew));
+
+  List<RulePerson> _rulePersons(List<String> crew) =>
+      [for (final u in crew) RulePerson(u, _profile(u)?.code)];
 
   /// Modifie l'équipage ; la case d'instruction se décoche quand il ne
-  /// qualifie plus (spec §10.1).
-  void _editCrew(void Function() change) {
+  /// qualifie plus (spec §10.1). Vol technique coché : un changement qui
+  /// laisserait un non-instructeur en tête (payeur) est refusé, équipage
+  /// inchangé (spec §12.1).
+  void _editCrew(void Function(List<String> crew) change) {
+    final next = [..._crew];
+    change(next);
+    final err = _technical ? technicalPayerError(_rulePersons(next)) : null;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+        ..removeCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
     setState(() {
-      change();
+      _crew = next;
       if (!_instructionEligible) _instruction = false;
     });
   }
@@ -271,8 +285,11 @@ class _FlightScreenState extends State<FlightScreen> {
   bool get _showFuelChoice => _mayChoose && _allGap && _passenger == null && !_technical;
 
   /// Plan 12 (spec §12.1) : case « Vol technique » réservée aux instructeurs
-  /// et aux admins ; le créateur d'un vol déjà technique la garde.
-  bool get _technicalVisible => _isStaff || (widget.flight?.isTechnical ?? false);
+  /// et aux admins (ou vol déjà technique), et seulement si le payeur (premier
+  /// de l'équipage) est un instructeur.
+  bool get _technicalVisible =>
+      (_isStaff || (widget.flight?.isTechnical ?? false)) &&
+      technicalPayerError(_rulePersons(_crew)) == null;
 
   /// Cocher « Vol technique » retire l'instruction, le carburant seulement et
   /// le baptême (incompatibles, refusés par le serveur).
@@ -655,7 +672,7 @@ class _FlightScreenState extends State<FlightScreen> {
         ],
       ),
     );
-    if (uid != null) _editCrew(() => _crew.add(uid));
+    if (uid != null) _editCrew((c) => c.add(uid));
   }
 
   Future<void> _addPassenger() async {
@@ -1223,13 +1240,13 @@ class _FlightScreenState extends State<FlightScreen> {
                         IconButton(
                           tooltip: 'Mettre en premier',
                           icon: const Icon(Icons.arrow_upward),
-                          onPressed: () => _editCrew(() => _crew.insert(0, _crew.removeAt(i))),
+                          onPressed: () => _editCrew((c) => c.insert(0, c.removeAt(i))),
                         ),
                       if (_crew.length > 1 && (_crew[i] != _me.uid || canReorder))
                         IconButton(
                           tooltip: 'Retirer',
                           icon: const Icon(Icons.close),
-                          onPressed: () => _editCrew(() => _crew.removeAt(i)),
+                          onPressed: () => _editCrew((c) => c.removeAt(i)),
                         ),
                     ]),
             ),

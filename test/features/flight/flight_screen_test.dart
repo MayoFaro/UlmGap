@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ulmgap/core/money.dart';
+import 'package:ulmgap/core/flight_rules.dart' show technicalPayerMessage;
 import 'package:ulmgap/core/pricing.dart';
 import 'package:ulmgap/core/profiles.dart';
 import 'package:ulmgap/data/aircraft.dart';
@@ -10,7 +11,7 @@ import 'package:ulmgap/data/flight.dart';
 import 'package:ulmgap/data/flight_api.dart';
 import 'package:ulmgap/data/services.dart';
 import 'package:ulmgap/features/flight/flight_screen.dart';
-import 'package:ulmgap/features/flight/flight_texts.dart' show uncertainMessage;
+import 'package:ulmgap/features/flight/flight_texts.dart' show debitedLabel, uncertainMessage;
 
 import '../../support/fakes.dart';
 
@@ -2008,22 +2009,94 @@ void main() {
     expect(find.byKey(const Key('technical')), findsNothing);
   });
 
-  testWidgets('vol technique : lâché créateur d\'un vol déjà technique, case cochée conservée',
-      (tester) async {
+  testWidgets('vol technique coché : un non-instructeur ne peut pas passer en tête ni '
+      'l\'instructeur être retiré (message, équipage inchangé)', (tester) async {
     _useTallView(tester);
     final a = api();
-    final f = testFlight(
-        id: 't1', start: DateTime(2026, 10, 13, 9), crew: ['lac'], createdBy: 'lac',
-        pricingMode: 'technical', technicalReason: 'Essai moteur');
-    await tester.pumpWidget(
-        host(a, testUser(uid: 'lac', profile: 'lache_toute_mission'), flight: f));
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
     await tester.pumpAndSettle();
-    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('technical'))).value, true);
-    expect(tester.widget<TextField>(find.byKey(const Key('technical-reason'))).controller!.text,
-        'Essai moteur');
+    await addMember(tester, 'lac');
+    await checkTechnical(tester);
+
+    // Mettre le lâché en tête : refusé.
+    await tester.tap(find.byTooltip('Mettre en premier'));
+    await tester.pumpAndSettle();
+    expect(find.text(technicalPayerMessage), findsOneWidget);
+    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, debitedLabel)).title,
+        isA<Text>().having((t) => t.data, 'data', 'JDU'));
+    ScaffoldMessenger.of(tester.element(find.byType(FlightScreen))).removeCurrentSnackBar();
+    await tester.pumpAndSettle();
+
+    // Retirer l'instructeur (en tête) : refusé.
+    await tester.tap(find.byTooltip('Retirer').first);
+    await tester.pumpAndSettle();
+    expect(find.text(technicalPayerMessage), findsOneWidget);
+    expect(find.text('LAC'), findsOneWidget);
+    expect(find.text('JDU'), findsWidgets);
+
+    await tester.enterText(find.byKey(const Key('technical-reason')), 'Convoyage');
+    await fillCreation(tester);
     await save(tester);
-    expect(a.updated['t1']!['technical'], true);
-    expect(a.updated['t1']!['technicalReason'], 'Essai moteur');
+    expect(a.created.single['crew'], ['u1', 'lac']);
+    expect(a.created.single['technical'], true);
+  });
+
+  testWidgets('vol technique coché : un autre instructeur peut passer en tête ; '
+      'case décochée, l\'équipage redevient libre', (tester) async {
+    _useTallView(tester);
+    final a = api();
+    await tester.pumpWidget(host(a, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'ins');
+    await checkTechnical(tester);
+    await tester.tap(find.byTooltip('Mettre en premier'));
+    await tester.pumpAndSettle();
+    expect(find.text(technicalPayerMessage), findsNothing);
+    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, debitedLabel)).title,
+        isA<Text>().having((t) => t.data, 'data', 'INS'));
+
+    await tester.pumpWidget(const SizedBox());
+    final b = api();
+    await tester.pumpWidget(host(b, testUser(uid: 'u1', profile: 'instructeur')));
+    await tester.pumpAndSettle();
+    await addMember(tester, 'lac');
+    await checkTechnical(tester);
+    await checkTechnical(tester); // décochée
+    await tester.tap(find.byTooltip('Mettre en premier'));
+    await tester.pumpAndSettle();
+    expect(find.text(technicalPayerMessage), findsNothing);
+    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, debitedLabel)).title,
+        isA<Text>().having((t) => t.data, 'data', 'LAC'));
+    // Lâché en tête : la case disparaît.
+    expect(find.byKey(const Key('technical')), findsNothing);
+  });
+
+  testWidgets('vue admin : lâché en tête, pas de case Vol technique ; '
+      'instructeur mis en tête, la case apparaît', (tester) async {
+    _useTallView(tester);
+    final start = DateTime(2026, 10, 12, 5);
+    final f = testFlight(
+        id: 'cl', start: start, end: start.add(const Duration(minutes: 90)),
+        crew: ['lac', 'ins'], createdBy: 'lac', status: 'valide',
+        isClosed: true, actualFlightMinutes: 60, billedAmount: 12000, billedTo: 'account');
+    await openCorrection(tester, api(), f, FakeFinanceApi());
+    expect(find.byKey(const Key('technical')), findsNothing);
+    await tester.tap(find.byTooltip('Mettre en premier'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('technical')), findsOneWidget);
+  });
+
+  testWidgets('admin créateur (non pilote) : case absente tant qu\'un instructeur n\'est pas en tête',
+      (tester) async {
+    _useTallView(tester);
+    await tester.pumpWidget(host(api(), testUser(uid: 'adm', isAdmin: true, profile: null)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('technical')), findsNothing);
+    await addMember(tester, 'ins');
+    expect(find.byKey(const Key('technical')), findsNothing);
+    await tester.tap(find.byTooltip('Mettre en premier'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('technical')), findsOneWidget);
   });
 
   testWidgets('fiche d\'un vol technique : « Vol technique — Essai moteur » à la place de la '
@@ -2082,12 +2155,25 @@ void main() {
     expect(finance.closed.single['shortFlightAmount'], isNull);
   });
 
+  testWidgets('validation d\'une demande dont le payeur n\'est pas instructeur : pas de case',
+      (tester) async {
+    _useTallView(tester);
+    final f = testFlight(
+        id: 'tw', start: DateTime(2026, 10, 13, 9), status: 'demande',
+        crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins');
+    await tester.pumpWidget(
+        host(instructionApi(), testUser(uid: 'ins', profile: 'instructeur'), flight: f));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Valider'), findsOneWidget);
+    expect(find.byKey(const Key('technical')), findsNothing);
+  });
+
   testWidgets('validation : l\'instructeur rend le vol technique, motif envoyé', (tester) async {
     _useTallView(tester);
     final a = instructionApi();
     final f = testFlight(
         id: 'tv', start: DateTime(2026, 10, 13, 9), status: 'demande',
-        crew: ['stu', 'ins'], createdBy: 'stu', instructorUid: 'ins');
+        crew: ['ins', 'stu'], createdBy: 'stu', instructorUid: 'ins');
     await tester.pumpWidget(host(a, testUser(uid: 'ins', profile: 'instructeur'), flight: f));
     await tester.pumpAndSettle();
     await checkTechnical(tester);
@@ -2109,7 +2195,7 @@ void main() {
     final start = DateTime(2026, 10, 12, 5);
     final f = testFlight(
         id: 'ct', start: start, end: start.add(const Duration(minutes: 90)),
-        crew: ['u1'], createdBy: 'u1', status: 'valide', passengers: const ['Paul'],
+        crew: ['ins'], createdBy: 'ins', status: 'valide', passengers: const ['Paul'],
         isClosed: true, actualFlightMinutes: 30, billedAmount: 25000, billedTo: 'off_app',
         pricingMode: 'custom');
     final finance = FakeFinanceApi();
@@ -2140,7 +2226,7 @@ void main() {
     final start = DateTime(2026, 10, 12, 5);
     final f = testFlight(
         id: 'ct2', start: start, end: start.add(const Duration(minutes: 90)),
-        crew: ['u1'], createdBy: 'u1', status: 'valide', passengers: const ['Paul'],
+        crew: ['ins'], createdBy: 'ins', status: 'valide', passengers: const ['Paul'],
         isClosed: true, actualFlightMinutes: 90, billedAmount: 0, billedTo: 'association',
         pricingMode: 'technical', technicalReason: 'Convoyage');
     final finance = FakeFinanceApi();
