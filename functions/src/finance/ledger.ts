@@ -8,7 +8,7 @@ import * as admin from "firebase-admin";
 type Db = FirebaseFirestore.Firestore;
 type Tx = FirebaseFirestore.Transaction;
 
-export type MovementType = "credit" | "correction" | "flight" | "flight_adjustment" | "instruction";
+export type MovementType = "credit" | "correction" | "flight" | "flight_adjustment" | "instruction" | "fuel_supply";
 
 /**
  * Écrit `users/{uid}.balance = currentBalance + amount` et une ligne

@@ -290,6 +290,9 @@ export function validateClosing(data: unknown): {
   };
 }
 
+export const SUPPLIER_NOT_IN_CREW = "Le pilote qui a fourni le carburant doit faire partie de l'équipage.";
+export const FUEL_PROVENANCE_REQUIRED = "Carburant ajouté : donnez la provenance (cuve, bidon perso).";
+
 export interface AdminUpdate {
   flightId: string;
   input: FlightInput;
@@ -303,7 +306,7 @@ export interface AdminUpdate {
   fuelFromTank?: number;
   fuelFromPersonal?: number;
   fuelSupplierUid?: string | null;
-  /** Somme calculée, présente seulement avec la provenance. */
+  /** Somme calculée avec la provenance ; sans elle, valeur saisie (vol d'avant le plan 13). */
   fuelAdded?: number;
   fuelEnd?: number;
 }
@@ -331,7 +334,9 @@ export function validateAdminUpdate(data: unknown): AdminUpdate {
   if (hasProvenance) {
     Object.assign(out, fuelProvenance(d));
   } else if (d.fuelAdded !== undefined) {
-    throw new ValidationError("Carburant ajouté : donnez la provenance (cuve, bidon perso).");
+    // Sans provenance : réservé à un vol clôturé avant le plan 13, vérifié
+    // par adminUpdateFlight (FUEL_PROVENANCE_REQUIRED sinon).
+    out.fuelAdded = liters(d.fuelAdded, "Carburant ajouté");
   }
   if (d.fuelEnd !== undefined) out.fuelEnd = liters(d.fuelEnd, "Carburant rangé");
   if (d.shortFlightAmount !== undefined) {

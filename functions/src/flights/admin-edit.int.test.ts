@@ -1,12 +1,16 @@
 // Lancé par `npm run test:int` (émulateurs Auth + Firestore).
 // Correction et suppression admin (adminUpdateFlight, adminDeleteFlight),
 // avec régularisation automatique des soldes sur un vol clôturé (spec §4.5).
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as admin from "firebase-admin";
-import { at, code, db, details, FUEL, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, details, FUEL, H, resetCashbox, resetTank, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { adminDeleteFlight, adminUpdateFlight } from "./admin-edit";
 import { closeFlight } from "./close";
+
+// La cuve (plan 13) est un document global : remise à zéro autour de chaque test.
+beforeEach(async () => { await resetTank(); await resetCashbox(); });
+afterEach(async () => { await resetTank(); await resetCashbox(); });
 
 const getFlight = async (id: string) => (await db.collection("flights").doc(id).get()).data()!;
 const balance = async (uid: string) => (await db.collection("users").doc(uid).get()).get("balance") as number;

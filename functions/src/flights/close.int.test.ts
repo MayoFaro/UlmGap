@@ -3,14 +3,18 @@
 // historique. Les tests qui modifient settings/pricing la restaurent dans un
 // `finally` (fichiers d'intégration exécutés l'un après l'autre, cf.
 // run-tests.js).
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { at, code, db, FUEL, H, seedAircraft, seedFlight, seedUser } from "./testkit";
+import { at, code, db, FUEL, H, resetCashbox, resetTank, seedAircraft, seedFlight, seedUser } from "./testkit";
 import { closeFlight } from "./close";
 import { createFlight } from "./edit";
 import { DEFAULT_PRICING } from "../rules/pricing";
 import { updatePricing } from "../finance/pricing-store";
 import { CLUB_UTC_OFFSET_MS, clubDay } from "../rules/club-day";
+
+// La cuve (plan 13) est un document global : remise à zéro autour de chaque test.
+beforeEach(async () => { await resetTank(); await resetCashbox(); });
+afterEach(async () => { await resetTank(); await resetCashbox(); });
 
 const getFlight = async (id: string) => (await db.collection("flights").doc(id).get()).data()!;
 const getUser = async (uid: string) => (await db.collection("users").doc(uid).get()).data()!;

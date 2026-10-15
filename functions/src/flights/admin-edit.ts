@@ -7,6 +7,10 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Caller, requireAdmin } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
+import { readPricing } from "../finance/pricing-store";
+import { postTankMovement, readTank } from "../finance/tank-ledger";
+import { clubDayString } from "../rules/cash";
+import { supplyAdjustments, supplyCredit } from "../rules/tank";
 import { designatedInstructor, PricingMode } from "../rules/flights";
 import {
   adjustments, BilledTo, closingBill, computedCost, instructionAdjustments, instructionCreditDue, Pricing,
@@ -14,7 +18,10 @@ import {
 } from "../rules/pricing";
 import type { Profile } from "../admin/validation";
 import { planFlight, touchLocks } from "./core";
-import { checkHorizon, checkLandingsTotal, validateAdminUpdate, validateFlightId } from "./validation";
+import {
+  checkHorizon, checkLandingsTotal, FUEL_PROVENANCE_REQUIRED, SUPPLIER_NOT_IN_CREW, validateAdminUpdate,
+  validateFlightId,
+} from "./validation";
 import { closingEnd } from "../rules/closing";
 import { notifyFlight } from "../notify/flight-info";
 import { notifyMovements, WrittenMovement } from "../notify/movements";
@@ -168,8 +175,36 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       },
       credit ?? { uid: null, amount: 0 },
     );
+    // Plan 13 (spec §13.4) : provenance du carburant. Fournie : écarts de
+    // cuve et de crédit « carburant fourni » (prix figé du vol, sinon
+    // courant). Absente : rien ne bouge, et `fuelAdded` seul n'est admis que
+    // pour un vol clôturé avant le plan 13.
+    const hasProvenance = v.fuelFromTank !== undefined;
+    const oldTank = (f.get("fuelFromTankLiters") as number | undefined) ?? 0;
+    const oldPersonal = (f.get("fuelFromPersonalLiters") as number | undefined) ?? 0;
+    const oldSupplier = (f.get("fuelSupplierUid") as string | null | undefined) ?? null;
+    const oldSupply = (f.get("fuelSupplyCredit") as number | undefined) ?? 0;
+    if (!hasProvenance && v.fuelAdded !== undefined && f.get("fuelFromTankLiters") !== undefined) {
+      throw new HttpsError("invalid-argument", FUEL_PROVENANCE_REQUIRED);
+    }
+    const supplier = hasProvenance ? v.fuelSupplierUid ?? null : oldSupplier;
+    if (supplier !== null && !input.crew.includes(supplier)) {
+      throw new HttpsError("invalid-argument", SUPPLIER_NOT_IN_CREW);
+    }
+    let newSupply = oldSupply;
+    if (hasProvenance && v.fuelFromPersonal! > 0) {
+      const price = oldPersonal > 0 ? oldSupply / oldPersonal : (await readPricing(tx, db)).fuelLiterPrice;
+      newSupply = supplyCredit(v.fuelFromPersonal!, price);
+    } else if (hasProvenance) {
+      newSupply = 0;
+    }
+    const supplyMoves = hasProvenance
+      ? supplyAdjustments({ uid: oldSupplier, amount: oldSupply }, { uid: supplier, amount: newSupply }) : [];
+    const tankDelta = hasProvenance ? oldTank - v.fuelFromTank! : 0;
+    const tank = tankDelta !== 0 ? await readTank(tx, db) : null;
     const accounts = await readAccounts(tx, db, [
       ...(oldPayer ? [oldPayer] : []), newPayer, ...instructionMoves.map((m) => m.uid),
+      ...supplyMoves.map((m) => m.uid),
     ]);
     const customAmount = mode === "custom"
       ? (v.customAmount !== undefined ? v.customAmount : (f.get("customAmount") as number | null) ?? null)
@@ -229,6 +264,21 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       balances.set(m.uid, balanceAfter);
       posted.push({ uid: m.uid, amount: m.amount, balanceAfter, type: "instruction" });
     }
+    for (const m of supplyMoves) {
+      const balanceAfter = postMovement(tx, db, {
+        uid: m.uid, amount: m.amount, type: "fuel_supply", reason: "Régularisation carburant fourni",
+        flightId: ref.id, by, currentBalance: balances.get(m.uid)!,
+      });
+      balances.set(m.uid, balanceAfter);
+      posted.push({ uid: m.uid, amount: m.amount, balanceAfter, type: "fuel_supply" });
+    }
+    if (tank) {
+      postTankMovement(tx, db, {
+        kind: "flight_adjustment", liters: tankDelta, date: clubDayString(input.start), flightId: ref.id,
+        aircraftId: input.aircraftId, cashMovementId: null, measuredLiters: null,
+        technical: billMode === "technical", note: null, by, currentLiters: tank.liters,
+      });
+    }
     touchLocks(tx, [...p.locks, ...accounts.locks.filter((l) => !p.locks.some((k) => k.path === l.path))]);
     tx.update(ref, {
       ...p.fields,
@@ -247,6 +297,12 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       instructionCreditAmount: credit?.amount ?? null,
       ...(v.fuelStart !== undefined ? { fuelStartLiters: v.fuelStart } : {}),
       ...(v.fuelAdded !== undefined ? { fuelAddedLiters: v.fuelAdded } : {}),
+      ...(hasProvenance ? {
+        fuelFromTankLiters: v.fuelFromTank,
+        fuelFromPersonalLiters: v.fuelFromPersonal,
+        fuelSupplierUid: supplier,
+        fuelSupplyCredit: newSupply,
+      } : {}),
       ...(v.fuelEnd !== undefined ? { fuelEndLiters: v.fuelEnd } : {}),
     });
     if (fuelAircraftRef) {
@@ -276,7 +332,15 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
     const creditAmount = (f.get("instructionCreditAmount") as number | null | undefined) ?? 0;
     const creditUid = closed && creditAmount > 0
       ? (f.get("instructionCreditUid") as string | null | undefined) ?? null : null;
-    const uids = [...(refundPayer ? [refundPayer] : []), ...(creditUid ? [creditUid] : [])];
+    // Plan 13 (spec §13.4) : litres de la cuve remis, crédit « carburant
+    // fourni » repris.
+    const tankLiters = closed ? (f.get("fuelFromTankLiters") as number | undefined) ?? 0 : 0;
+    const supplyAmount = closed ? (f.get("fuelSupplyCredit") as number | undefined) ?? 0 : 0;
+    const supplierUid = supplyAmount > 0 ? (f.get("fuelSupplierUid") as string | null | undefined) ?? null : null;
+    const tank = tankLiters > 0 ? await readTank(tx, db) : null;
+    const uids = [
+      ...(refundPayer ? [refundPayer] : []), ...(creditUid ? [creditUid] : []), ...(supplierUid ? [supplierUid] : []),
+    ];
     if (uids.length > 0) {
       const accounts = await readAccounts(tx, db, uids);
       const balances = new Map([...accounts.users].map(([uid, snap]) => [uid, balanceOf(snap)]));
@@ -297,9 +361,27 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
           reason: "Régularisation crédit instruction", flightId: ref.id, by,
           currentBalance: balances.get(creditUid)!,
         });
+        balances.set(creditUid, balanceAfter);
         written.push({ uid: creditUid, amount, balanceAfter, type: "instruction" });
       }
+      if (supplierUid) {
+        const amount = -supplyAmount;
+        const balanceAfter = postMovement(tx, db, {
+          uid: supplierUid, amount, type: "fuel_supply",
+          reason: "Régularisation carburant fourni", flightId: ref.id, by,
+          currentBalance: balances.get(supplierUid)!,
+        });
+        written.push({ uid: supplierUid, amount, balanceAfter, type: "fuel_supply" });
+      }
       touchLocks(tx, accounts.locks);
+    }
+    if (tank) {
+      postTankMovement(tx, db, {
+        kind: "flight_adjustment", liters: tankLiters,
+        date: clubDayString((f.get("start") as FirebaseFirestore.Timestamp).toMillis()), flightId: ref.id,
+        aircraftId: (f.get("aircraftId") as string | undefined) ?? null, cashMovementId: null, measuredLiters: null,
+        technical: f.get("pricingMode") === "technical", note: null, by, currentLiters: tank.liters,
+      });
     }
     // Suppression logique uniquement (contrat AppGAP).
     tx.update(ref, { deleted: true, updatedAt: FieldValue.serverTimestamp() });

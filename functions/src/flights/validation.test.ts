@@ -418,15 +418,17 @@ test("validateClosing : provenance refusée si incomplète ou incohérente", () 
   assert.throws(() => validateClosing({ ...old, fuelAdded: 20, fuelFromTank: 0 }), ValidationError);
 });
 
-test("validateAdminUpdate : provenance facultative, fuelAdded seul refusé", () => {
+test("validateAdminUpdate : provenance facultative, fuelAdded seul transmis (vol d'avant le plan 13)", () => {
   const base = { flightId: "f1", ...ok };
   const v = validateAdminUpdate({ ...base, fuelFromTank: 5, fuelFromPersonal: 10, fuelSupplierUid: "p1" });
   assert.deepEqual([v.fuelFromTank, v.fuelFromPersonal, v.fuelSupplierUid, v.fuelAdded], [5, 10, "p1", 15]);
   const none = validateAdminUpdate(base);
   assert.equal(none.fuelAdded, undefined);
   assert.equal(none.fuelFromTank, undefined);
-  assert.throws(() => validateAdminUpdate({ ...base, fuelAdded: 20 }),
-    (e) => e instanceof ValidationError && e.message === "Carburant ajouté : donnez la provenance (cuve, bidon perso).");
+  // Accepté ici : la Function le refuse si le vol a déjà une provenance (plan 13, Task 3).
+  const legacy = validateAdminUpdate({ ...base, fuelAdded: 20 });
+  assert.deepEqual([legacy.fuelAdded, legacy.fuelFromTank], [20, undefined]);
+  assert.throws(() => validateAdminUpdate({ ...base, fuelAdded: 101 }), ValidationError);
   assert.throws(() => validateAdminUpdate({ ...base, fuelFromTank: 5 }), ValidationError);
   assert.throws(() => validateAdminUpdate({ ...base, fuelFromTank: 5, fuelFromPersonal: 1 }),
     (e) => e instanceof ValidationError && e.message === "Choisissez le pilote qui a fourni le carburant.");
