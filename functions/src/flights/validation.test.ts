@@ -227,7 +227,7 @@ test("validateAdminUpdate : mêmes rejets que la saisie et la clôture", () => {
 });
 
 const C = { flightId: "f1", actualMinutes: 60 };
-const F = { fuelStart: 40, fuelAdded: 0, fuelEnd: 30 };
+const F = { fuelStart: 40, fuelFromTank: 0, fuelFromPersonal: 0, fuelEnd: 30 };
 const isErr = (msg: string) => (e: unknown) => e instanceof ValidationError && e.message === msg;
 
 test("validateClosing : atterrissages obligatoires, amerrissages 0 par défaut", () => {
@@ -265,13 +265,16 @@ test("validateAdminUpdate : nombres absents inchangés, hors plage refusés", ()
 });
 
 const closing = { flightId: "f1", actualMinutes: 60, landings: 1,
-  fuelStartExpected: 40, fuelStart: 40, fuelAdded: 0, fuelEnd: 30 };
+  fuelStartExpected: 40, fuelStart: 40, fuelFromTank: 0, fuelFromPersonal: 0, fuelEnd: 30 };
 
 test("validateClosing : carburant rendu tel quel, prévu null accepté", () => {
   const v = validateClosing(closing);
   assert.equal(v.fuelStartExpected, 40);
   assert.equal(v.fuelStart, 40);
   assert.equal(v.fuelAdded, 0);
+  assert.equal(v.fuelFromTank, 0);
+  assert.equal(v.fuelFromPersonal, 0);
+  assert.equal(v.fuelSupplierUid, null);
   assert.equal(v.fuelEnd, 30);
   assert.equal(validateClosing({ ...closing, fuelStartExpected: null }).fuelStartExpected, null);
   assert.equal(validateClosing({ ...closing, fuelStartExpected: undefined }).fuelStartExpected, null);
@@ -281,7 +284,7 @@ test("validateClosing : carburant obligatoire, entier de 0 à 100", () => {
   const msg = (m: string) => (e: unknown) => e instanceof ValidationError && e.message === m;
   assert.throws(() => validateClosing({ ...closing, fuelStart: undefined }),
     msg("Carburant au départ invalide (0 à 100 L)."));
-  assert.throws(() => validateClosing({ ...closing, fuelAdded: -1 }),
+  assert.throws(() => validateClosing({ ...closing, fuelFromTank: -1 }),
     msg("Carburant ajouté invalide (0 à 100 L)."));
   assert.throws(() => validateClosing({ ...closing, fuelEnd: 101 }),
     msg("Carburant rangé invalide (0 à 100 L)."));
@@ -289,7 +292,7 @@ test("validateClosing : carburant obligatoire, entier de 0 à 100", () => {
     msg("Carburant rangé invalide (0 à 100 L)."));
   assert.throws(() => validateClosing({ ...closing, fuelStartExpected: "40" }),
     msg("Carburant prévu invalide (0 à 100 L)."));
-  assert.equal(validateClosing({ ...closing, fuelAdded: 100 }).fuelAdded, 100);
+  assert.equal(validateClosing({ ...closing, fuelFromTank: 100 }).fuelAdded, 100);
 });
 
 test("validateAdminUpdate : carburant facultatif, mêmes bornes", () => {
@@ -297,7 +300,7 @@ test("validateAdminUpdate : carburant facultatif, mêmes bornes", () => {
   const none = validateAdminUpdate(base);
   assert.equal(none.fuelStart, undefined);
   assert.equal(none.fuelEnd, undefined);
-  const v = validateAdminUpdate({ ...base, fuelStart: 10, fuelAdded: 20, fuelEnd: 5 });
+  const v = validateAdminUpdate({ ...base, fuelStart: 10, fuelFromTank: 20, fuelFromPersonal: 0, fuelEnd: 5 });
   assert.deepEqual([v.fuelStart, v.fuelAdded, v.fuelEnd], [10, 20, 5]);
   assert.throws(() => validateAdminUpdate({ ...base, fuelEnd: 150 }), ValidationError);
 });
@@ -388,4 +391,45 @@ test("validateReviewChanges : technical et technicalReason facultatifs", () => {
   assert.equal(r.changes.technical, true);
   assert.equal(r.changes.technicalReason, "Convoyage");
   assert.equal(validateReviewChanges({ flightId: "f1" }).changes.technical, undefined);
+});
+
+test("validateClosing : provenance du carburant (cuve, bidon perso, les deux)", () => {
+  const none = validateClosing(closing);
+  assert.deepEqual([none.fuelFromTank, none.fuelFromPersonal, none.fuelAdded, none.fuelSupplierUid], [0, 0, 0, null]);
+  const tank = validateClosing({ ...closing, fuelFromTank: 20, fuelSupplierUid: "x" });
+  assert.deepEqual([tank.fuelFromTank, tank.fuelAdded, tank.fuelSupplierUid], [20, 20, null]);
+  const own = validateClosing({ ...closing, fuelFromPersonal: 20, fuelSupplierUid: "p1" });
+  assert.deepEqual([own.fuelFromPersonal, own.fuelAdded, own.fuelSupplierUid], [20, 20, "p1"]);
+  const both = validateClosing({ ...closing, fuelFromTank: 10, fuelFromPersonal: 15, fuelSupplierUid: "p1" });
+  assert.deepEqual([both.fuelAdded, both.fuelSupplierUid], [25, "p1"]);
+  assert.equal(validateClosing({ ...closing, fuelFromTank: 50, fuelFromPersonal: 50, fuelSupplierUid: "p1" }).fuelAdded, 100);
+});
+
+test("validateClosing : provenance refusée si incomplète ou incohérente", () => {
+  const msg = (m: string) => (e: unknown) => e instanceof ValidationError && e.message === m;
+  assert.throws(() => validateClosing({ ...closing, fuelFromPersonal: 20 }),
+    msg("Choisissez le pilote qui a fourni le carburant."));
+  assert.throws(() => validateClosing({ ...closing, fuelFromTank: 50, fuelFromPersonal: 51, fuelSupplierUid: "p1" }),
+    msg("Carburant ajouté : 100 L au maximum au total."));
+  assert.throws(() => validateClosing({ ...closing, fuelFromPersonal: -1, fuelSupplierUid: "p1" }),
+    msg("Carburant ajouté invalide (0 à 100 L)."));
+  const { fuelFromTank: _t, fuelFromPersonal: _p, ...old } = closing;
+  assert.throws(() => validateClosing({ ...old, fuelAdded: 20 }), ValidationError);
+  assert.throws(() => validateClosing({ ...old, fuelAdded: 20, fuelFromTank: 0 }), ValidationError);
+});
+
+test("validateAdminUpdate : provenance facultative, fuelAdded seul refusé", () => {
+  const base = { flightId: "f1", ...ok };
+  const v = validateAdminUpdate({ ...base, fuelFromTank: 5, fuelFromPersonal: 10, fuelSupplierUid: "p1" });
+  assert.deepEqual([v.fuelFromTank, v.fuelFromPersonal, v.fuelSupplierUid, v.fuelAdded], [5, 10, "p1", 15]);
+  const none = validateAdminUpdate(base);
+  assert.equal(none.fuelAdded, undefined);
+  assert.equal(none.fuelFromTank, undefined);
+  assert.throws(() => validateAdminUpdate({ ...base, fuelAdded: 20 }),
+    (e) => e instanceof ValidationError && e.message === "Carburant ajouté : donnez la provenance (cuve, bidon perso).");
+  assert.throws(() => validateAdminUpdate({ ...base, fuelFromTank: 5 }), ValidationError);
+  assert.throws(() => validateAdminUpdate({ ...base, fuelFromTank: 5, fuelFromPersonal: 1 }),
+    (e) => e instanceof ValidationError && e.message === "Choisissez le pilote qui a fourni le carburant.");
+  assert.throws(() => validateAdminUpdate({ ...base, fuelFromTank: 60, fuelFromPersonal: 60, fuelSupplierUid: "p1" }),
+    (e) => e instanceof ValidationError && e.message === "Carburant ajouté : 100 L au maximum au total.");
 });

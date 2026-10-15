@@ -11,6 +11,7 @@ const ok = {
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
   instructionCredit: 20_000,
+  fuelLiterPrice: 600,
   baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
 };
 
@@ -32,6 +33,10 @@ test("validatePricing : champ manquant", () => {
     { ...ok, baptismFees: undefined },
     { ...ok, baptismFees: { local: 70_000, nyonye: 90_000 } }, // awagne manquant
     { ...ok, instructionCredit: -1 },
+    { ...ok, fuelLiterPrice: undefined },
+    { ...ok, fuelLiterPrice: 10_001 },
+    { ...ok, fuelLiterPrice: -1 },
+    { ...ok, fuelLiterPrice: 600.5 },
     { ...ok, baptismFees: { ...ok.baptismFees, nyonye: -1 } },
     { ...ok, baptismFees: { ...ok.baptismFees, awagne: 1_000_001 } },
     { ...ok, flatFee: { GAP: 12_000, GR: 30_000, MIL: 50_000 } }, // EXT manquant

@@ -3,7 +3,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
-  adjustments, closingBill, computedCost, DEFAULT_PRICING, formatFcfa, instructionAdjustments,
+  adjustments, closingBill, computedCost, creditAdjustments, DEFAULT_PRICING, formatFcfa, instructionAdjustments,
   instructionCreditDue, Pricing, pricingWithDefaults, toCategory,
 } from "./pricing";
 
@@ -19,6 +19,7 @@ test("DEFAULT_PRICING reproduit la spec §2.4", () => {
     overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
     fuelHourlyRate: 12_000,
     instructionCredit: 20_000,
+    fuelLiterPrice: 600,
     baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
   });
 });
@@ -128,4 +129,11 @@ test("instructionAdjustments : retrait, ajout, changement d'instructeur, inchang
   assert.deepEqual(instructionAdjustments({ uid: "i", amount: 20_000 }, { uid: "j", amount: 20_000 }),
     [{ uid: "i", amount: -20_000 }, { uid: "j", amount: 20_000 }]);
   assert.deepEqual(instructionAdjustments({ uid: "i", amount: 20_000 }, { uid: "i", amount: 20_000 }), []);
+});
+
+test("creditAdjustments : même algorithme que instructionAdjustments (alias)", () => {
+  assert.equal(instructionAdjustments, creditAdjustments);
+  assert.equal(DEFAULT_PRICING.fuelLiterPrice, 600);
+  assert.equal(pricingWithDefaults({}).fuelLiterPrice, 600);
+  assert.equal(pricingWithDefaults({ fuelLiterPrice: 650 }).fuelLiterPrice, 650);
 });

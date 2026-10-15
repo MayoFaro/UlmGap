@@ -233,6 +233,28 @@ function manualAmount(v: unknown, field: string): number | null {
   return v;
 }
 
+/**
+ * Provenance du carburant ajouté (spec §13.7) : litres pris à la cuve et au
+ * bidon perso (entiers ≥ 0, total ≤ 100), pilote fournisseur obligatoire
+ * si bidon perso (appartenance à l'équipage vérifiée par la Function).
+ */
+function fuelProvenance(d: Record<string, unknown>): {
+  fuelFromTank: number; fuelFromPersonal: number; fuelSupplierUid: string | null; fuelAdded: number;
+} {
+  const fuelFromTank = liters(d.fuelFromTank, "Carburant ajouté");
+  const fuelFromPersonal = liters(d.fuelFromPersonal, "Carburant ajouté");
+  if (fuelFromTank + fuelFromPersonal > MAX_FUEL_LITERS) {
+    throw new ValidationError(`Carburant ajouté : ${MAX_FUEL_LITERS} L au maximum au total.`);
+  }
+  let fuelSupplierUid: string | null = null;
+  if (fuelFromPersonal > 0) {
+    const s = typeof d.fuelSupplierUid === "string" ? d.fuelSupplierUid.trim() : "";
+    if (!s || s.includes("/")) throw new ValidationError("Choisissez le pilote qui a fourni le carburant.");
+    fuelSupplierUid = s;
+  }
+  return { fuelFromTank, fuelFromPersonal, fuelSupplierUid, fuelAdded: fuelFromTank + fuelFromPersonal };
+}
+
 export function validateClosing(data: unknown): {
   flightId: string;
   actualMinutes: number;
@@ -242,6 +264,10 @@ export function validateClosing(data: unknown): {
   waterLandings: number;
   fuelStartExpected: number | null;
   fuelStart: number;
+  fuelFromTank: number;
+  fuelFromPersonal: number;
+  fuelSupplierUid: string | null;
+  /** Somme calculée (cuve + bidon perso), jamais lue dans la requête. */
   fuelAdded: number;
   fuelEnd: number;
 } {
@@ -259,7 +285,7 @@ export function validateClosing(data: unknown): {
     waterLandings,
     fuelStartExpected: d.fuelStartExpected == null ? null : liters(d.fuelStartExpected, "Carburant prévu"),
     fuelStart: liters(d.fuelStart, "Carburant au départ"),
-    fuelAdded: liters(d.fuelAdded, "Carburant ajouté"),
+    ...fuelProvenance(d),
     fuelEnd: liters(d.fuelEnd, "Carburant rangé"),
   };
 }
@@ -274,6 +300,10 @@ export interface AdminUpdate {
   landings?: number;
   waterLandings?: number;
   fuelStart?: number;
+  fuelFromTank?: number;
+  fuelFromPersonal?: number;
+  fuelSupplierUid?: string | null;
+  /** Somme calculée, présente seulement avec la provenance. */
   fuelAdded?: number;
   fuelEnd?: number;
 }
@@ -296,7 +326,13 @@ export function validateAdminUpdate(data: unknown): AdminUpdate {
   if (d.landings !== undefined) out.landings = count(d.landings, "d'atterrissages");
   if (d.waterLandings !== undefined) out.waterLandings = count(d.waterLandings, "d'amerrissages");
   if (d.fuelStart !== undefined) out.fuelStart = liters(d.fuelStart, "Carburant au départ");
-  if (d.fuelAdded !== undefined) out.fuelAdded = liters(d.fuelAdded, "Carburant ajouté");
+  const hasProvenance = d.fuelFromTank !== undefined || d.fuelFromPersonal !== undefined ||
+    d.fuelSupplierUid !== undefined;
+  if (hasProvenance) {
+    Object.assign(out, fuelProvenance(d));
+  } else if (d.fuelAdded !== undefined) {
+    throw new ValidationError("Carburant ajouté : donnez la provenance (cuve, bidon perso).");
+  }
   if (d.fuelEnd !== undefined) out.fuelEnd = liters(d.fuelEnd, "Carburant rangé");
   if (d.shortFlightAmount !== undefined) {
     out.shortFlightAmount = manualAmount(d.shortFlightAmount, "Montant à facturer");

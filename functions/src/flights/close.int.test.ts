@@ -253,7 +253,7 @@ test("carburant : valeurs enregistrées sur le vol, recopiées sur l'appareil", 
   const start = Date.now() - 3 * H;
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a, start, end: start + H });
   await closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1,
-    fuelStartExpected: null, fuelStart: 35, fuelAdded: 20, fuelEnd: 41 });
+    fuelStartExpected: null, fuelStart: 35, fuelFromTank: 20, fuelFromPersonal: 0, fuelSupplierUid: null, fuelEnd: 41 });
   const f = await getFlight(id);
   assert.equal(f.fuelStartExpectedLiters, null);
   assert.equal(f.fuelStartLiters, 35);
@@ -285,7 +285,7 @@ test("carburant manquant : invalid-argument, vol non clôturé", async () => {
   const a = await seedAircraft();
   const id = await seedPastFlight({ crew: [pilot.uid], aircraftId: a });
   await assert.rejects(
-    closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1, fuelStart: 40, fuelAdded: 0 }),
+    closeFlight(pilot, { flightId: id, actualMinutes: 60, landings: 1, fuelStart: 40, fuelFromTank: 0, fuelFromPersonal: 0 }),
     (e) => code(e) === "invalid-argument" && (e as Error).message === "Carburant rangé invalide (0 à 100 L).",
   );
   assert.equal((await getFlight(id)).isClosed, false);

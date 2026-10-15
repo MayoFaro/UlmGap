@@ -27,18 +27,30 @@ function missingNote(kind: CashKind): string | null {
   return null;
 }
 
+/** Litres de l'achat de carburant (spec §13) : facultatifs, entiers de 1 à 100 000. */
+function fuelLiters(v: unknown, kind: CashKind): number | null {
+  if (v === undefined || v === null) return null;
+  if (kind !== "fuel_purchase") throw new ValidationError("Litres réservés à un achat de carburant.");
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 100_000) {
+    throw new ValidationError("Litres invalides (1 à 100 000).");
+  }
+  return v;
+}
+
 /** Achat carburant, maintenance, recette hors app, écart de caisse (montant signé en sortie). */
 export function validateAddCashMovement(data: unknown, nowMs: number):
-  { kind: CashKind; amount: number; date: string; note: string | null } {
+  { kind: CashKind; amount: number; date: string; note: string | null; liters: number | null } {
   const d = obj(data);
   const kind = d.kind as CashKind;
   if (!ADDABLE.includes(kind)) throw new ValidationError("Type d'opération invalide.");
   if (typeof d.amount !== "number") throw new ValidationError("Montant invalide.");
+  const liters = fuelLiters(d.liters, kind);
   return {
     kind,
     amount: signedCashAmount(kind, d.amount, false),
     date: cashDay(d.date, nowMs),
     note: note(d.note, missingNote(kind)),
+    liters,
   };
 }
 

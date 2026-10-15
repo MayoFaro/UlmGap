@@ -16,7 +16,7 @@ test("cashDay : défaut aujourd'hui, jour passé accepté, futur refusé", () =>
 test("validateAddCashMovement : achat carburant, note facultative, montant débité", () => {
   assert.deepEqual(
     validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000 }, NOW),
-    { kind: "fuel_purchase", amount: -220_000, date: "2026-10-14", note: null },
+    { kind: "fuel_purchase", amount: -220_000, date: "2026-10-14", note: null, liters: null },
   );
 });
 
@@ -27,7 +27,7 @@ test("validateAddCashMovement : maintenance et recette exigent un objet", () => 
     (e) => e instanceof ValidationError && e.message === "Objet obligatoire.");
   assert.deepEqual(
     validateAddCashMovement({ kind: "maintenance", amount: 10_000, note: " Nettoyage ", date: "2026-10-09" }, NOW),
-    { kind: "maintenance", amount: -10_000, date: "2026-10-09", note: "Nettoyage" },
+    { kind: "maintenance", amount: -10_000, date: "2026-10-09", note: "Nettoyage", liters: null },
   );
 });
 
@@ -35,8 +35,8 @@ test("validateAddCashMovement : écart de caisse signé, motif obligatoire", () 
   assert.throws(() => validateAddCashMovement({ kind: "cash_gap", amount: -5_000 }, NOW),
     (e) => e instanceof ValidationError && e.message === "Motif obligatoire pour un écart de caisse.");
   assert.deepEqual(
-    validateAddCashMovement({ kind: "cash_gap", amount: -5_000, note: "Comptage" }, NOW),
-    { kind: "cash_gap", amount: -5_000, date: "2026-10-14", note: "Comptage" },
+    validateAddCashMovement({ kind: "cash_gap", amount: -5_000, note: "Comptage", liters: null }, NOW),
+    { kind: "cash_gap", amount: -5_000, date: "2026-10-14", note: "Comptage", liters: null },
   );
 });
 
@@ -66,4 +66,17 @@ test("validateCashCorrection : identifiant, montant entier (zéro accepté), not
   for (const bad of [{ amount: 1 }, { movementId: "a/b", amount: 1 }, { movementId: "m1", amount: 1.5 }]) {
     assert.throws(() => validateCashCorrection(bad), ValidationError, JSON.stringify(bad));
   }
+});
+
+test("validateAddCashMovement : litres facultatifs, réservés à l'achat de carburant", () => {
+  const r = validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, liters: 200 }, NOW);
+  assert.equal(r.liters, 200);
+  assert.equal(validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, liters: null }, NOW).liters, null);
+  assert.throws(() => validateAddCashMovement({ kind: "maintenance", amount: 10_000, note: "x", liters: 5 }, NOW),
+    (e) => e instanceof ValidationError && e.message === "Litres réservés à un achat de carburant.");
+  for (const liters of [0, 100_001, 1.5, "20", -3]) {
+    assert.throws(() => validateAddCashMovement({ kind: "fuel_purchase", amount: 1_000, liters }, NOW),
+      ValidationError, String(liters));
+  }
+  assert.equal(validateAddCashMovement({ kind: "fuel_purchase", amount: 1_000, liters: 100_000 }, NOW).liters, 100_000);
 });

@@ -417,7 +417,7 @@ test("carburant corrigé sur le vol source : le vol et l'appareil suivent", asyn
   const a = await seedAircraft();
   const { id } = await closedFlight(boss, { crew: [pilot.uid], aircraftId: a }, { actualMinutes: 90 });
   assert.equal(await fuelOf(a), 30);
-  await adminUpdateFlight(boss, await correction(id, { fuelStart: 12, fuelAdded: 30, fuelEnd: 22 }));
+  await adminUpdateFlight(boss, await correction(id, { fuelStart: 12, fuelFromTank: 30, fuelFromPersonal: 0, fuelEnd: 22 }));
   const f = await getFlight(id);
   assert.deepEqual([f.fuelStartLiters, f.fuelAddedLiters, f.fuelEndLiters], [12, 30, 22]);
   assert.equal(await fuelOf(a), 22);
