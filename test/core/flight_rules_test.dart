@@ -119,4 +119,15 @@ void main() {
     expect(isPlanning(start: 1000, now: 2000, closed: false), isFalse); // conduite
     expect(isPlanning(start: 1000, now: 999, closed: true), isFalse); // clôturé
   });
+
+  test('technicalPayerError : vol technique seulement avec un instructeur en tête (payeur)', () {
+    expect(technicalPayerMessage,
+        "Impossible de modifier car vol technique sélectionné. Pour modifier, décochez l'option vol technique.");
+    const i = RulePerson('i', 'instructeur');
+    const l = RulePerson('l', 'lache_toute_mission');
+    expect(technicalPayerError([i, l]), isNull);
+    expect(technicalPayerError([l, i]), technicalPayerMessage);
+    expect(technicalPayerError([i]), isNull);
+    expect(technicalPayerError([const RulePerson('a', null)]), technicalPayerMessage);
+  });
 }

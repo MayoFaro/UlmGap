@@ -13,6 +13,16 @@ class RulePerson {
   final String? profile; // code de profil, null = non pilote
 }
 
+/// Message unique (serveur et app) du vol technique sans instructeur payeur
+/// (spec §12.1).
+const technicalPayerMessage =
+    "Impossible de modifier car vol technique sélectionné. Pour modifier, décochez l'option vol technique.";
+
+/// Un vol technique exige un instructeur en tête de l'équipage (le payeur,
+/// spec §12.1) ; null si la règle est respectée.
+String? technicalPayerError(List<RulePerson> crew) =>
+    crew.isNotEmpty && crew.first.profile == 'instructeur' ? null : technicalPayerMessage;
+
 class AmphibiousPerson {
   const AmphibiousPerson(this.profile, this.amphibiousCleared);
   final String? profile; // code de profil, null = non pilote

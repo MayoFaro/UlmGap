@@ -22,6 +22,10 @@ export interface FlightInput {
   baptism: boolean;
   /** Obligatoire si `baptism`, sinon null. */
   baptismTier: BaptismTier | null;
+  /** Spec §12 : vol au profit de l'association. */
+  technical: boolean;
+  /** Obligatoire si `technical`, sinon null. */
+  technicalReason: string | null;
 }
 
 export interface ReviewChanges {
@@ -33,6 +37,8 @@ export interface ReviewChanges {
   instruction?: boolean;
   baptism?: boolean;
   baptismTier?: BaptismTier;
+  technical?: boolean;
+  technicalReason?: string;
 }
 
 function time(v: unknown, field: string): number {
@@ -47,6 +53,13 @@ export function baptismTier(v: unknown): BaptismTier {
     throw new ValidationError("Choisissez le forfait du baptême (Local, Nyonye ou Awagne).");
   }
   return v as BaptismTier;
+}
+
+export function technicalReason(v: unknown): string {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) throw new ValidationError("Motif du vol technique obligatoire.");
+  if (s.length > 80) throw new ValidationError("Motif du vol technique trop long (80 caractères au maximum).");
+  return s;
 }
 
 function mode(v: unknown): ChosenMode {
@@ -104,6 +117,13 @@ export function checkHorizon(start: number, now: number): void {
   }
 }
 
+/** Spec §12 : un vol technique n'est ni un vol d'instruction ni un baptême. */
+export function checkTechnical(input: FlightInput): void {
+  if (!input.technical) return;
+  if (input.instruction) throw new ValidationError("Vol technique : incompatible avec un vol d'instruction.");
+  if (input.baptism) throw new ValidationError("Vol technique : incompatible avec un baptême de l'air.");
+}
+
 export function validateFlightInput(data: unknown): FlightInput {
   const d = obj(data);
   const start = time(d.start, "Départ");
@@ -122,11 +142,15 @@ export function validateFlightInput(data: unknown): FlightInput {
     instruction: bool(d.instruction, "Vol d'instruction", false),
     baptism: bool(d.baptism, "Baptême de l'air", false),
     baptismTier: null,
+    technical: bool(d.technical, "Vol technique", false),
+    technicalReason: null,
   };
   if (out.baptism && passengers.length === 0) {
     throw new ValidationError("Baptême de l'air réservé à un vol avec un passager sans compte.");
   }
   if (out.baptism) out.baptismTier = baptismTier(d.baptismTier);
+  if (out.technical) out.technicalReason = technicalReason(d.technicalReason);
+  checkTechnical(out);
   if (d.pricingMode !== undefined) out.pricingMode = mode(d.pricingMode);
   return out;
 }
@@ -154,6 +178,8 @@ export function validateReviewChanges(data: unknown): { flightId: string; change
   if (c.baptism !== undefined) changes.baptism = bool(c.baptism, "Baptême de l'air", false);
   // null = absent (l'app l'envoie toujours) : validateFlight reprend alors le forfait enregistré.
   if (c.baptismTier != null) changes.baptismTier = baptismTier(c.baptismTier);
+  if (c.technical !== undefined) changes.technical = bool(c.technical, "Vol technique", false);
+  if (c.technicalReason != null) changes.technicalReason = technicalReason(c.technicalReason);
   return { flightId, changes };
 }
 

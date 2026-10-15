@@ -158,4 +158,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<FlightScreen>(find.byType(FlightScreen)).flight!.id, 'old');
   });
+
+  testWidgets('vol technique : marque « T » avec bulle « Vol technique », rien sur un vol standard',
+      (tester) async {
+    final api = seeded()
+      ..flights = [
+        testFlight(id: 'tech', start: DateTime(2026, 10, 6, 9), isClosed: true,
+            actualFlightMinutes: 60, pricingMode: 'technical', technicalReason: 'Convoyage',
+            billedAmount: 0, billedTo: 'association',
+            fuelStartExpected: 40, fuelStart: 40, fuelAdded: 0, fuelEnd: 28, landings: 1),
+        testFlight(id: 'std', start: DateTime(2026, 10, 5, 9), isClosed: true,
+            actualFlightMinutes: 60, fuelStartExpected: 40, fuelStart: 40, fuelAdded: 0,
+            fuelEnd: 28, landings: 1),
+      ];
+    await tester.pumpWidget(host(api));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Vol technique'), findsOneWidget);
+    expect(find.byKey(const Key('fuel-tech-technical')), findsOneWidget);
+    expect(find.byKey(const Key('fuel-std-technical')), findsNothing);
+    expect(
+        find.descendant(of: find.byKey(const Key('fuel-tech-technical')), matching: find.text('T')),
+        findsOneWidget);
+  });
 }
+

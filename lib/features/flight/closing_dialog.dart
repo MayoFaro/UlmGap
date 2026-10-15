@@ -7,6 +7,7 @@ import '../../core/fuel.dart';
 import '../../core/money.dart';
 import '../../core/pricing.dart';
 import '../../core/profiles.dart';
+import 'flight_texts.dart' show technicalUnbilledText;
 
 /// Saisie validée du dialogue de clôture, prête pour FinanceApi.closeFlight.
 class ClosingResult {
@@ -70,7 +71,7 @@ class ClosingDialog extends StatefulWidget {
   });
 
   final int plannedMinutes;
-  final String mode; // 'standard' | 'fuel_only' | 'baptism'
+  final String mode; // 'standard' | 'fuel_only' | 'baptism' | 'technical'
   final UserCategory? category;
   final Pricing pricing;
   final bool hasPassenger;
@@ -117,6 +118,9 @@ class _ClosingDialogState extends State<ClosingDialog> {
   int? get _actualMinutes => int.tryParse(_minutes.text.trim());
 
   bool get _baptism => widget.mode == 'baptism';
+
+  /// Plan 12 : vol technique, non facturé : aucun montant saisi ni envoyé.
+  bool get _technical => widget.mode == 'technical';
 
   /// Mode standard et durée réelle sous le minimum tarifaire (spec §4.3) :
   /// un vol carburant seulement est toujours calculé à la minute. Ne dépend
@@ -203,7 +207,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
       }
     }
     int? customAmount;
-    if (_customChecked && !_baptism) {
+    if (_customChecked && !_baptism && !_technical) {
       customAmount = parseAmount(_customAmount.text);
       if (customAmount == null) {
         setState(() => _error = 'Indiquez le montant.');
@@ -321,7 +325,7 @@ class _ClosingDialogState extends State<ClosingDialog> {
                 onChanged: (_) => setState(() {}),
               ),
             ],
-            if (widget.hasPassenger && !_baptism) ...[
+            if (widget.hasPassenger && !_baptism && !_technical) ...[
               CheckboxListTile(
                 key: const Key('closing-custom-check'),
                 contentPadding: EdgeInsets.zero,
@@ -340,7 +344,9 @@ class _ClosingDialogState extends State<ClosingDialog> {
                 ),
             ],
             const SizedBox(height: 12),
-            if (_baptism)
+            if (_technical)
+              const Text(technicalUnbilledText)
+            else if (_baptism)
               Text('Montant : ${formatFcfa(preview ?? widget.pricing.baptismFees[widget.baptismTier ?? 'local']!)} facturé hors app')
             else if (widget.category == null)
               const Text('Montant calculé par le serveur à la clôture.')

@@ -4,7 +4,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   checkPayer, conflictCause, decideStatus, designatedInstructor, findConflict, payerOf,
-  resolvePricingMode, isPlanning, isInstructionEligible, amphibiousError } from "./flights";
+  resolvePricingMode, isPlanning, isInstructionEligible, amphibiousError,
+  technicalPayerError, TECHNICAL_PAYER_MESSAGE } from "./flights";
 
 const fx = JSON.parse(fs.readFileSync(
   path.resolve(__dirname, "../../../test/fixtures/flight_rules.json"), "utf8"));
@@ -95,4 +96,14 @@ test("isInstructionEligible : exactement un instructeur et un autre membre avec 
   assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }]), false);
   assert.equal(isInstructionEligible([{ uid: "i", profile: "instructeur" }, { uid: "j", profile: "instructeur" }]), false);
   assert.equal(isInstructionEligible([{ uid: "s", profile: "eleve" }, { uid: "l", profile: "lache_solo" }]), false);
+});
+
+test("technicalPayerError : vol technique seulement si le payeur (premier de l'équipage) est instructeur", () => {
+  assert.equal(TECHNICAL_PAYER_MESSAGE,
+    "Impossible de modifier car vol technique sélectionné. Pour modifier, décochez l'option vol technique.");
+  assert.equal(technicalPayerError([{ uid: "i", profile: "instructeur" }, { uid: "l", profile: "lache_toute_mission" }]), null);
+  assert.equal(technicalPayerError([{ uid: "l", profile: "lache_toute_mission" }, { uid: "i", profile: "instructeur" }]),
+    TECHNICAL_PAYER_MESSAGE);
+  assert.equal(technicalPayerError([{ uid: "i", profile: "instructeur" }]), null);
+  assert.equal(technicalPayerError([{ uid: "a", profile: null }]), TECHNICAL_PAYER_MESSAGE);
 });

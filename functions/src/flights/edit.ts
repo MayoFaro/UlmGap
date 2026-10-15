@@ -32,7 +32,7 @@ export async function createFlight(
 
   const status = await db.runTransaction(async (tx) => {
     const p = await planFlight(tx, db, {
-      id: ref.id, input, mayChoose: mayChoose(me),
+      id: ref.id, input, mayChoose: mayChoose(me), mayMarkTechnical: mayChoose(me),
       decide: (crew) => decideStatus(me, crew, input.passengers.length),
       skipAmphibious: me.isAdmin,
     });
@@ -80,7 +80,7 @@ export async function updateFlight(caller: Caller | undefined, data: unknown): P
     }
     assertNotStarted(f, now);
     const p = await planFlight(tx, db, {
-      id: ref.id, input, mayChoose: mayChoose(me),
+      id: ref.id, input, mayChoose: mayChoose(me), mayMarkTechnical: mayChoose(me),
       // Mode conservé seulement si aucun passager ne l'imposait (décision 2b).
       previousMode: ((f.get("passengers") as string[] | undefined) ?? []).length === 0
         ? (f.get("pricingMode") as PricingMode)

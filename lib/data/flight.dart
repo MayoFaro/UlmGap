@@ -34,6 +34,8 @@ class Flight {
     required this.createdBy,
     required this.pricingMode,
     this.baptismTier,
+    this.technical = false,
+    this.technicalReason,
     required this.isClosed,
     required this.deleted,
     this.payerUidField,
@@ -72,6 +74,10 @@ class Flight {
 
   /// Plan 9 : forfait du baptême (`local`, `nyonye`, `awagne`) ; null hors baptême.
   final String? baptismTier;
+
+  /// Plan 12 : vol technique (non facturé, association) et son motif.
+  final bool technical;
+  final String? technicalReason;
   final bool isClosed;
   final bool deleted;
 
@@ -101,6 +107,7 @@ class Flight {
   final int? instructionCreditAmount;
 
   bool get isBaptism => pricingMode == 'baptism';
+  bool get isTechnical => pricingMode == 'technical';
 
   /// Plan 7 : carburant (spec §9), saisi à la clôture ; null avant.
   final int? fuelStartExpectedLiters;
@@ -128,6 +135,8 @@ class Flight {
         createdBy: (m['createdBy'] as String?) ?? '',
         pricingMode: (m['pricingMode'] as String?) ?? 'standard',
         baptismTier: m['baptismTier'] as String?,
+        technical: m['technical'] == true || m['pricingMode'] == 'technical',
+        technicalReason: m['technicalReason'] as String?,
         isClosed: m['isClosed'] == true,
         deleted: m['deleted'] == true,
         payerUidField: m['payerUid'] as String?,
@@ -189,6 +198,8 @@ class FlightDraft {
     this.instruction = false,
     this.baptism = false,
     this.baptismTier,
+    this.technical = false,
+    this.technicalReason,
   });
 
   final DateTime start;
@@ -206,6 +217,10 @@ class FlightDraft {
   /// Plan 9 : obligatoire avec [baptism] ; toujours envoyé (`null` sinon).
   final String? baptismTier;
 
+  /// Plan 12 : toujours envoyés ; le motif est ignoré hors vol technique.
+  final bool technical;
+  final String? technicalReason;
+
   Map<String, dynamic> toPayload() => {
         'start': start.millisecondsSinceEpoch,
         'end': end.millisecondsSinceEpoch,
@@ -217,5 +232,7 @@ class FlightDraft {
         'instruction': instruction,
         'baptism': baptism,
         'baptismTier': baptism ? baptismTier : null,
+        'technical': technical,
+        'technicalReason': technical ? technicalReason?.trim() : null,
       };
 }

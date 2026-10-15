@@ -247,4 +247,22 @@ void main() {
     await open(tester, out);
     expect(find.textContaining('nstruction'), findsNothing);
   });
+
+  testWidgets('vol technique de 30 min avec passager : aucun montant, non facturé (association)',
+      (tester) async {
+    final out = <ClosingResult?>[];
+    await open(tester, out, mode: 'technical', hasPassenger: true);
+    await tester.enterText(find.byKey(const Key('closing-minutes')), '30');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('closing-short-amount')), findsNothing);
+    expect(find.text('Montant à facturer'), findsNothing);
+    expect(find.byKey(const Key('closing-custom-check')), findsNothing);
+    expect(find.text('Montant différent (facturé hors app)'), findsNothing);
+    expect(find.text('Vol technique : non facturé (association)'), findsOneWidget);
+    await fillFuel(tester, end: '35'); // 5 L en 30 min : 10 L/h, pas d'alerte
+    await submit(tester);
+    expect(out.single!.actualMinutes, 30);
+    expect(out.single!.shortFlightAmount, isNull);
+    expect(out.single!.customAmount, isNull);
+  });
 }

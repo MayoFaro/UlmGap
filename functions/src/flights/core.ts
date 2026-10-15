@@ -7,7 +7,7 @@ import { asInvalid } from "../common/errors";
 import { readPricing } from "../finance/pricing-store";
 import {
   Decision, ExistingFlight, amphibiousError, FLIGHT_BUFFER_MINUTES, FlightStatus, PricingMode, conflictCause, findConflict, isInstructionEligible,
-  isPlanning, payerOf, resolvePricingMode,
+  isPlanning, payerOf, resolvePricingMode, technicalPayerError,
 } from "../rules/flights";
 import {
   availableCredit, DEFAULT_FLIGHT_MINUTES, estimatedCost, formatFcfa, Pricing, pricingWithDefaults, toCategory,
@@ -35,6 +35,8 @@ export interface PlanArgs {
   input: FlightInput;
   decide: (crew: CrewInfo[]) => Decision;
   mayChoose: boolean;
+  /** Spec §12 : cocher « Vol technique » (instructeur, admin, validateur). */
+  mayMarkTechnical: boolean;
   previousMode?: PricingMode;
   /** Snapshot existant du vol (édition/validation), pour la décision de gel (spec, ctrl.). */
   existingSnapshot?: Pricing | null;
@@ -230,7 +232,17 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       "Vol d'instruction : il faut un instructeur et un autre membre avec compte.");
   }
 
-  const pricingMode: PricingMode = a.input.baptism ? "baptism" : (a.forcedMode ?? resolvePricingMode({
+  // Spec §12.1 : case réservée aux instructeurs et aux admins ; un vol
+  // technique a toujours un instructeur en tête (payeur), admin compris.
+  if (a.input.technical && !a.mayMarkTechnical) {
+    throw new HttpsError("permission-denied", "Vol technique : réservé aux instructeurs et aux admins.");
+  }
+  if (a.input.technical) {
+    const err = technicalPayerError(crew);
+    if (err) throw new HttpsError("failed-precondition", err);
+  }
+
+  const pricingMode: PricingMode = a.input.technical ? "technical" : a.input.baptism ? "baptism" : (a.forcedMode ?? resolvePricingMode({
     allGap: crew.every((c) => c.category === "GAP"),
     hasPassenger: a.input.passengers.length > 0,
     mayChoose: a.mayChoose,
@@ -260,12 +272,13 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
     ? (a.existingSnapshot && a.previousStatus === "valide" ? pricingWithDefaults(a.existingSnapshot) : pricing)
     : null;
 
-  // Décision 1 : crédit contrôlé dès la demande, sauf baptême (spec §10.2).
-  // `pricingMode` vaut "standard", "fuel_only" ou "baptism" à ce stade (le mode
+  // Décision 1 : crédit contrôlé dès la demande, sauf baptême (spec §10.2) et
+  // vol technique (spec §12.2). `pricingMode` vaut "standard", "fuel_only",
+  // "baptism" ou "technical" à ce stade (le mode
   // "custom" ne se décide qu'à la clôture, spec §4.1).
   const payerUid = payerOf(a.input.crew);
   const payer = crew.find((c) => c.uid === payerUid)!;
-  if (!a.skipCredit && pricingMode !== "baptism") {
+  if (!a.skipCredit && pricingMode !== "baptism" && pricingMode !== "technical") {
     locks = await checkCredit(tx, db, locks, {
       id: a.id, payerUid, category: payer.category, pricingMode, balance: payer.balance,
       shortName: payer.shortName,
@@ -289,6 +302,8 @@ export async function planFlight(tx: Tx, db: Db, a: PlanArgs): Promise<Planned> 
       pricingMode,
       baptismTier: a.input.baptism ? a.input.baptismTier : null,
       instruction: a.input.instruction,
+      technical: a.input.technical,
+      technicalReason: a.input.technical ? a.input.technicalReason : null,
       payerUid,
       pricingSnapshot,
       updatedAt: FieldValue.serverTimestamp(),

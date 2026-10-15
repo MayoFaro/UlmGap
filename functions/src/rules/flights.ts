@@ -4,12 +4,21 @@
 import type { Profile } from "../admin/validation";
 
 export type FlightStatus = "demande" | "valide" | "refuse";
-export type PricingMode = "standard" | "fuel_only" | "custom" | "baptism";
+export type PricingMode = "standard" | "fuel_only" | "custom" | "baptism" | "technical";
 
 export interface Person { uid: string; profile: Profile | null }
 /** Spec §10.1 : exactement un instructeur et un autre membre avec compte. */
 export function isInstructionEligible(crew: Person[]): boolean {
   return crew.length === 2 && crew.filter((p) => p.profile === "instructeur").length === 1;
+}
+
+/** Spec §12.1 : message unique (serveur et app) du vol technique sans instructeur payeur. */
+export const TECHNICAL_PAYER_MESSAGE =
+  "Impossible de modifier car vol technique sélectionné. Pour modifier, décochez l'option vol technique.";
+
+/** Spec §12.1 : un vol technique exige un instructeur en tête (payeur) ; null si respecté. */
+export function technicalPayerError(crew: Person[]): string | null {
+  return crew[0]?.profile === "instructeur" ? null : TECHNICAL_PAYER_MESSAGE;
 }
 
 export interface AmphibiousPerson { profile: Profile | null; amphibiousCleared: boolean }

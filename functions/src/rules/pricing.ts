@@ -3,10 +3,12 @@
 // Cas partagés : test/fixtures/pricing_cases.json.
 
 import { isInstructionEligible } from "./flights";
-import type { Person } from "./flights";
+import type { Person, PricingMode } from "./flights";
 
 // Temps de vol avant clôture, indépendant du créneau réservé.
 export const DEFAULT_FLIGHT_MINUTES = 60;
+
+export type BilledTo = "account" | "off_app" | "association";
 
 export type Category = "GAP" | "GR" | "MIL" | "EXT";
 const CATEGORIES: readonly Category[] = ["GAP", "GR", "MIL", "EXT"];
@@ -91,10 +93,17 @@ export function availableCredit(balance: number, otherEstimatedCosts: number[]):
 
 /** Montant facturé à la clôture. Lève Error("…") si un montant requis manque. */
 export function closingBill(a: {
-  mode: "standard" | "fuel_only" | "baptism"; actualMinutes: number; category: Category; pricing: Pricing;
+  mode: "standard" | "fuel_only" | "baptism" | "technical"; actualMinutes: number; category: Category; pricing: Pricing;
   shortFlightAmount?: number | null; customAmount?: number | null; hasPassenger: boolean;
   baptismTier?: BaptismTier | null;
-}): { billedAmount: number; billedTo: "account" | "off_app"; pricingMode: "standard" | "fuel_only" | "custom" | "baptism" } {
+}): { billedAmount: number; billedTo: BilledTo; pricingMode: PricingMode } {
+  // Spec §12.2 : vol technique, à la charge de l'association, jamais de montant saisi.
+  if (a.mode === "technical") {
+    if (a.shortFlightAmount != null || a.customAmount != null) {
+      throw new Error("Aucun montant pour un vol technique.");
+    }
+    return { billedAmount: 0, billedTo: "association", pricingMode: "technical" };
+  }
   if (a.mode === "baptism") {
     return { billedAmount: a.pricing.baptismFees[a.baptismTier ?? "local"], billedTo: "off_app", pricingMode: "baptism" };
   }
@@ -123,8 +132,8 @@ export function closingBill(a: {
  * apparition, et on omet les totaux nuls.
  */
 export function adjustments(
-  before: { billedTo: "account" | "off_app" | null; payerUid: string | null; amount: number },
-  after: { billedTo: "account" | "off_app" | null; payerUid: string | null; amount: number },
+  before: { billedTo: BilledTo | null; payerUid: string | null; amount: number },
+  after: { billedTo: BilledTo | null; payerUid: string | null; amount: number },
 ): { uid: string; amount: number }[] {
   const totals = new Map<string, number>();
   const order: string[] = [];

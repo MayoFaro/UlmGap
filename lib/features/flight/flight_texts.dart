@@ -24,6 +24,7 @@ String pricingModeLabel(String mode) => switch (mode) {
       'fuel_only' => 'Carburant seulement',
       'custom' => 'Facturé hors app',
       'baptism' => 'Baptême de l\'air',
+      'technical' => 'Vol technique',
       _ => 'Standard',
     };
 
@@ -36,6 +37,13 @@ String baptismTierLabel(String? tier) => switch (tier) {
 
 /// Message de refus d'un baptême sans forfait (identique au serveur).
 const baptismTierMissingMessage = 'Choisissez le forfait du baptême (Local, Nyonye ou Awagne).';
+
+/// Spec §12.2 : aperçu et résumé de clôture d'un vol technique.
+const technicalUnbilledText = 'Vol technique : non facturé (association)';
+
+/// Spec §12.3 : fiche d'un vol technique, avec son motif.
+String technicalTitle(String? reason) =>
+    reason == null || reason.isEmpty ? 'Vol technique' : 'Vol technique — $reason';
 
 /// Mode de tarification d'un vol, avec le forfait en cas de baptême.
 String flightPricingLabel(String mode, String? baptismTier) =>
@@ -98,9 +106,12 @@ String closedSummary({
 }) {
   final duration = formatDurationHm(actualMinutes);
   final amount = formatFcfa(billedAmount);
-  final base = billedTo == 'off_app'
-      ? 'Clôturé : $duration, $amount facturé hors app'
-      : 'Clôturé : $duration, $amount débité sur le compte de $debitedShortName';
+  final base = switch (billedTo) {
+    'off_app' => 'Clôturé : $duration, $amount facturé hors app',
+    // Plan 12 : vol technique, à la charge de l'association.
+    'association' => 'Clôturé : $duration, $technicalUnbilledText',
+    _ => 'Clôturé : $duration, $amount débité sur le compte de $debitedShortName',
+  };
   final counts = landingsText(landings, waterLandings, separator: ', ');
   return counts.isEmpty ? base : '$base, $counts';
 }

@@ -6,7 +6,7 @@ import type { PricingMode } from "../rules/flights";
 import type { Pricing } from "../rules/pricing";
 import { assertNotStarted, loadFlight, planFlight, touchLocks } from "./core";
 import {
-  FlightInput, baptismTier, checkDuration, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
+  FlightInput, baptismTier, checkDuration, checkTechnical, checkHorizon, validateFlightId, validateRefusal, validateReviewChanges,
 } from "./validation";
 import { notifyFlight } from "../notify/flight-info";
 import { cancelledPush, refusedPush, validatedPush } from "../rules/notifications";
@@ -50,6 +50,9 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       instruction: changes.instruction ?? (f.get("instruction") === true),
       baptism: false,
       baptismTier: null,
+      technical: changes.technical ?? (f.get("pricingMode") === "technical"),
+      technicalReason: changes.technicalReason ??
+        (f.get("technicalReason") as string | null | undefined) ?? null,
     };
     // Le baptême se lit dans le mode du vol ; sans passager il n'existe pas.
     input.baptism = input.passengers.length > 0 &&
@@ -63,12 +66,17 @@ export async function validateFlight(caller: Caller | undefined, data: unknown):
       throw new HttpsError("invalid-argument",
         "Baptême de l'air réservé à un vol avec un passager sans compte.");
     }
+    // Spec §12 : le validateur peut rendre le vol technique, motif exigé.
+    if (input.technical && input.technicalReason == null) {
+      throw new HttpsError("invalid-argument", "Motif du vol technique obligatoire.");
+    }
+    asInvalid(() => checkTechnical(input));
     asInvalid(() => checkDuration(input.start, input.end));
     asInvalid(() => checkHorizon(input.start, now));
     if (input.start <= now) throw new HttpsError("failed-precondition", "L'heure de départ est passée.");
     const instructorUid = (f.get("instructorUid") as string | null | undefined) ?? null;
     const p = await planFlight(tx, db, {
-      id: ref.id, input, mayChoose: true,
+      id: ref.id, input, mayChoose: true, mayMarkTechnical: true,
       previousMode: f.get("pricingMode") as PricingMode,
       existingSnapshot: (f.get("pricingSnapshot") as Pricing | null | undefined) ?? null,
       previousStatus: f.get("status") as string,

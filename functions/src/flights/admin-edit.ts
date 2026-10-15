@@ -9,7 +9,7 @@ import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { designatedInstructor, PricingMode } from "../rules/flights";
 import {
-  adjustments, closingBill, computedCost, instructionAdjustments, instructionCreditDue, Pricing,
+  adjustments, BilledTo, closingBill, computedCost, instructionAdjustments, instructionCreditDue, Pricing,
   pricingWithDefaults, toCategory,
 } from "../rules/pricing";
 import type { Profile } from "../admin/validation";
@@ -24,7 +24,6 @@ type Db = FirebaseFirestore.Firestore;
 type Tx = FirebaseFirestore.Transaction;
 type Ref = FirebaseFirestore.DocumentReference;
 type Snap = FirebaseFirestore.DocumentSnapshot;
-type BilledTo = "account" | "off_app" | null;
 const { FieldValue } = admin.firestore;
 
 /** Vol existant et non supprimé, qu'il soit clôturé ou non. */
@@ -65,6 +64,10 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
   const by = caller!.uid;
   const v = asInvalid(() => validateAdminUpdate(data));
   asInvalid(() => checkHorizon(v.input.start, Date.now()));
+  // Spec §12.2 : un vol technique n'a ni mode imposé ni montant.
+  if (v.input.technical && (v.pricingMode !== undefined || v.customAmount != null)) {
+    throw new HttpsError("invalid-argument", "Aucun montant pour un vol technique.");
+  }
   const ref = db.collection("flights").doc(v.flightId);
 
   const written = await db.runTransaction(async (tx): Promise<WrittenMovement[]> => {
@@ -85,9 +88,9 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     // vaut « custom » ; un vol « custom » le reste. Sinon, le mode est
     // recalculé (spec §4.1) : un vol carburant dont l'équipage n'est plus
     // tout GAP repasse en standard. Plan 8 : un baptême l'emporte (mode
-    // imposé par planFlight).
+    // imposé par planFlight) ; plan 12 : un vol technique aussi.
     const previousMode = f.get("pricingMode") as PricingMode;
-    const mode: PricingMode | undefined = v.input.baptism ? undefined : v.pricingMode ??
+    const mode: PricingMode | undefined = v.input.technical || v.input.baptism ? undefined : v.pricingMode ??
       (v.customAmount != null || previousMode === "custom" ? "custom" : undefined);
     // Plan 4b : sur un vol clôturé, nombres fusionnés avec les valeurs
     // stockées (1 atterrissage pour un vol clôturé avant le plan 4b),
@@ -120,7 +123,7 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
 
     const createdBy = (f.get("createdBy") as string | undefined) ?? "";
     const p = await planFlight(tx, db, {
-      id: ref.id, input, mayChoose: true,
+      id: ref.id, input, mayChoose: true, mayMarkTechnical: true,
       previousMode,
       forcedMode: mode === "custom" ? "standard" : mode,
       skipActiveChecks: true,
@@ -174,10 +177,11 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
     if (mode === "custom" && customAmount == null) {
       throw new HttpsError("invalid-argument", "Montant différent obligatoire en mode « montant différent ».");
     }
-    const shortFlightAmount = v.shortFlightAmount !== undefined
+    const billMode = p.fields.pricingMode as "standard" | "fuel_only" | "baptism" | "technical";
+    // Vol technique : aucun montant, un ancien montant ne survit pas (spec §12.2).
+    const shortFlightAmount = billMode === "technical" ? null : v.shortFlightAmount !== undefined
       ? v.shortFlightAmount
       : (f.get("shortFlightAmount") as number | null | undefined) ?? null;
-    const billMode = p.fields.pricingMode as "standard" | "fuel_only" | "baptism";
     const category = toCategory(accounts.users.get(newPayer)!.get("category"));
     let bill;
     try {
@@ -236,8 +240,8 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
       pricingMode: bill.pricingMode,
       customAmount,
       // Montant à facturer conservé seulement s'il sert (vol standard sous la
-      // durée minimale), jamais périmé ; jamais pour un baptême.
-      shortFlightAmount: billMode !== "baptism" && bill.pricingMode !== "custom" &&
+      // durée minimale), jamais périmé ; jamais pour un baptême ni un vol technique.
+      shortFlightAmount: billMode !== "baptism" && billMode !== "technical" && bill.pricingMode !== "custom" &&
         computedCost(billMode, actualMinutes, category, pricing) === null ? shortFlightAmount : null,
       instructionCreditUid: credit?.uid ?? null,
       instructionCreditAmount: credit?.amount ?? null,
