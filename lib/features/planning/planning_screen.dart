@@ -201,8 +201,10 @@ class _PlanningScreenState extends State<PlanningScreen> {
       List<Aircraft> aircraft) {
     final now = widget.now();
     final me = widget.me;
+    // Un vol clôturé quitte le planning : il ne reste visible que dans les
+    // écrans de récapitulatif (carnet de vol, relevé…).
     final flights = (snap.data ?? const <Flight>[])
-        .where((f) => !f.deleted && f.isVisibleTo(me.uid)).toList();
+        .where((f) => !f.deleted && !f.isClosed && f.isVisibleTo(me.uid)).toList();
     final state = asyncState(snap, isEmpty: flights.isEmpty, empty: 'Aucun vol à venir.');
 
     Widget header(String text) => Padding(

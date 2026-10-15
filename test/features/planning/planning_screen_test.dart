@@ -118,6 +118,19 @@ void main() {
     expect(find.textContaining('F-DEL'), findsNothing);
   });
 
+  testWidgets('vol clôturé : absent du planning (carnet de vol seulement)', (tester) async {
+    final a = api()
+      ..flights = [
+        testFlight(id: 'open', start: DateTime(2026, 10, 12, 9), crew: ['u1'], destination: 'Ouvert'),
+        testFlight(id: 'closed', start: DateTime(2026, 10, 12, 11), crew: ['u1'],
+            destination: 'Clos', isClosed: true),
+      ];
+    await tester.pumpWidget(host(a, testUser(uid: 'u1')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Ouvert'), findsWidgets);
+    expect(find.textContaining('Clos'), findsNothing);
+  });
+
   testWidgets('rubriques « À valider » (instructeur désigné) et « Mes demandes »', (tester) async {
     final a = api()
       ..flights = [
