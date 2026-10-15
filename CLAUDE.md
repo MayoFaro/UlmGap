@@ -90,9 +90,12 @@ d'où le JDK d'Android Studio.
   **L'app installée en dev doit être reconstruite** : un ancien build ne peut
   plus clôturer un vol ni enregistrer les tarifs (`adminUpdatePricing` exige
   désormais le prix du litre). Ensuite, dans Administration → Tarifs, régler
-  « Prix du litre (bidon perso) » à 600, puis faire un **relevé de jauge
+  « Prix du litre de carburant » à 595, puis faire un **relevé de jauge
   initial** depuis l'écran « Suivi cuve » (Caisse, ligne « Cuve : X L ») :
-  sans lui, la jauge n'a pas de point de départ.
+  sans lui, la jauge n'a pas de point de départ. Achat carburant : litres
+  obligatoires sauf « Hors cuve », litres calculés d'après le prix du litre
+  (595) et confirmation au-delà de ±5 % ; **`addCashMovement` est à
+  redéployer** (en dev comme en prod, avec l'app).
 - Plan 12 (vol technique) fusionné dans `main` et déployé en dev, avec la
   règle du pilote payeur (un instructeur doit payer le vol technique). Recette
   « vol ww » (Wonga-Wongué, spec §12.4) : validée par l'utilisateur le
@@ -195,7 +198,7 @@ d'où le JDK d'Android Studio.
   `adminDeleteFlight`, `adminUpdatePricing`, `addCashMovement`,
   `addAircraftFill` et `addGaugeReading`. **Tout build installé antérieur au
   plan 13 ne peut plus clôturer un vol ni enregistrer les tarifs.** Ensuite,
-  comme en dev : régler « Prix du litre (bidon perso) » à 600 dans
+  comme en dev : régler « Prix du litre de carburant » à 595 dans
   Administration → Tarifs, et faire un relevé de jauge initial depuis l'écran
   « Suivi cuve » (Caisse, ligne « Cuve : X L »).
 - Functions en **Node 22** (`firebase-functions` 7, `firebase-admin` 13 :

@@ -79,7 +79,7 @@ class ClosingDialog extends StatefulWidget {
     this.baptismTier,
     this.crewNames = const {},
     this.closerUid,
-    this.fuelLiterPrice = 600,
+    this.fuelLiterPrice = 595,
   });
 
   final int plannedMinutes;

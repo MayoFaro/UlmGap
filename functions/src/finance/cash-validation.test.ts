@@ -15,9 +15,33 @@ test("cashDay : défaut aujourd'hui, jour passé accepté, futur refusé", () =>
 
 test("validateAddCashMovement : achat carburant, note facultative, montant débité", () => {
   assert.deepEqual(
-    validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000 }, NOW),
+    validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, liters: 370 }, NOW),
+    { kind: "fuel_purchase", amount: -220_000, date: "2026-10-14", note: null, liters: 370 },
+  );
+});
+
+test("validateAddCashMovement : achat sans litres ni « Hors cuve » refusé", () => {
+  for (const extra of [{}, { liters: null }, { outsideTank: false }]) {
+    assert.throws(() => validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, ...extra }, NOW),
+      (e) => e instanceof ValidationError &&
+        e.message === "Litres obligatoires pour un achat de carburant (ou cochez « Hors cuve »).");
+  }
+});
+
+test("validateAddCashMovement : achat hors cuve sans litres accepté, avec litres refusé", () => {
+  assert.deepEqual(
+    validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, outsideTank: true }, NOW),
     { kind: "fuel_purchase", amount: -220_000, date: "2026-10-14", note: null, liters: null },
   );
+  assert.equal(
+    validateAddCashMovement({ kind: "fuel_purchase", amount: 1_000, outsideTank: true, liters: null }, NOW).liters, null);
+  assert.throws(() => validateAddCashMovement({ kind: "fuel_purchase", amount: 1_000, outsideTank: true, liters: 5 }, NOW),
+    (e) => e instanceof ValidationError && e.message === "Litres inutiles pour un achat hors cuve.");
+});
+
+test("validateAddCashMovement : « Hors cuve » réservé à l'achat de carburant", () => {
+  assert.throws(() => validateAddCashMovement({ kind: "maintenance", amount: 10_000, note: "x", outsideTank: true }, NOW),
+    (e) => e instanceof ValidationError && e.message === "Hors cuve réservé à un achat de carburant.");
 });
 
 test("validateAddCashMovement : maintenance et recette exigent un objet", () => {
@@ -68,10 +92,9 @@ test("validateCashCorrection : identifiant, montant entier (zéro accepté), not
   }
 });
 
-test("validateAddCashMovement : litres facultatifs, réservés à l'achat de carburant", () => {
+test("validateAddCashMovement : litres entiers, réservés à l'achat de carburant", () => {
   const r = validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, liters: 200 }, NOW);
   assert.equal(r.liters, 200);
-  assert.equal(validateAddCashMovement({ kind: "fuel_purchase", amount: 220_000, liters: null }, NOW).liters, null);
   assert.throws(() => validateAddCashMovement({ kind: "maintenance", amount: 10_000, note: "x", liters: 5 }, NOW),
     (e) => e instanceof ValidationError && e.message === "Litres réservés à un achat de carburant.");
   for (const liters of [0, 100_001, 1.5, "20", -3]) {

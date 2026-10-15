@@ -117,11 +117,11 @@ void main() {
     expect(q.baptismFees, {'local': 70000, 'nyonye': 95000, 'awagne': 110000});
   });
 
-  test('plan 13 : prix du litre (bidon perso), défaut 600 et toMap', () {
-    expect(defaultPricing.fuelLiterPrice, 600);
+  test('plan 13 : prix du litre de carburant, défaut 595 et toMap', () {
+    expect(defaultPricing.fuelLiterPrice, 595);
     final p = Pricing.fromMap({});
-    expect(p.fuelLiterPrice, 600);
-    expect(p.toMap()['fuelLiterPrice'], 600);
+    expect(p.fuelLiterPrice, 595);
+    expect(p.toMap()["fuelLiterPrice"], 595);
     final q = Pricing.fromMap({'fuelLiterPrice': 650});
     expect(q.fuelLiterPrice, 650);
     expect(q.toMap()['fuelLiterPrice'], 650);

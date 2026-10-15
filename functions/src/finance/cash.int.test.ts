@@ -19,7 +19,7 @@ const fuelCreditLine = async (uid: string) =>
 test("achat carburant par un instructeur : sortie de caisse, ligne non modifiable", async () => {
   const instr = await seedUser({ profile: "instructeur" });
   await addCashMovement(instr, { kind: "off_app_income", amount: 100_000, note: "Baptême" });
-  const r = await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, date: "2026-10-12" });
+  const r = await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, date: "2026-10-12", outsideTank: true });
   assert.equal(r.balance, 70_000);
   assert.equal(await balance(), 70_000);
   const l = await line(r.id);
@@ -86,7 +86,7 @@ test("correction d'un Crédit carburant : caisse et compte régularisés, sur le
   const instr = await seedUser({ profile: "instructeur" });
   const pilot = await seedUser({ profile: "eleve", balance: 0 });
   await creditAccount(instr, { userUid: pilot.uid, amount: 50_000, date: "2026-10-12" });
-  await addCashMovement(instr, { kind: "fuel_purchase", amount: 10_000 });
+  await addCashMovement(instr, { kind: "fuel_purchase", amount: 10_000, outsideTank: true });
   await db.collection("users").doc(pilot.uid).update({ balance: 38_000 }); // un vol entre-temps
   const original = await fuelCreditLine(pilot.uid);
 
@@ -160,9 +160,20 @@ test("achat carburant avec 500 L : caisse -montant, cuve +500, lignes jumelles",
   assert.equal(m[0].get("by"), instr.uid);
 });
 
-test("achat carburant sans litres : cuve inchangée", async () => {
+test("achat carburant sans litres ni « Hors cuve » : refusé, rien d'écrit", async () => {
   const instr = await seedUser({ profile: "instructeur" });
-  await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000 });
+  await assert.rejects(addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000 }),
+    (e) => code(e) === "invalid-argument");
+  assert.equal(await balance(), 0);
+  assert.equal((await db.collection("tankMovements").get()).size, 0);
+});
+
+test("achat carburant hors cuve : caisse seulement, cuve inchangée ; litres + hors cuve refusé", async () => {
+  const instr = await seedUser({ profile: "instructeur" });
+  await assert.rejects(addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, liters: 50, outsideTank: true }),
+    (e) => code(e) === "invalid-argument");
+  await addCashMovement(instr, { kind: "fuel_purchase", amount: 30_000, outsideTank: true });
+  assert.equal(await balance(), -30_000);
   assert.equal((await db.collection("tankMovements").get()).size, 0);
   assert.equal((await db.collection("tank").doc("main").get()).exists, false);
 });

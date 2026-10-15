@@ -26,7 +26,7 @@ export interface Pricing {
   overtimeHourly: Record<Category, number>;
   fuelHourlyRate: number;
   instructionCredit: number;
-  /** Spec §13 : prix du litre de carburant crédité pour un bidon perso (FCFA). */
+  /** Spec §13 : prix du litre de carburant (FCFA) : crédit du bidon perso et estimation des litres d'un achat. */
   fuelLiterPrice: number;
   /** Forfait du baptême de l'air selon le tier choisi. */
   baptismFees: Record<BaptismTier, number>;
@@ -40,7 +40,7 @@ export const DEFAULT_PRICING: Pricing = {
   overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
   fuelHourlyRate: 12_000,
   instructionCredit: 20_000,
-  fuelLiterPrice: 600,
+  fuelLiterPrice: 595,
   baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
 };
 

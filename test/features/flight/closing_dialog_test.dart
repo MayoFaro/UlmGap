@@ -15,7 +15,7 @@ Future<void> open(WidgetTester tester, List<ClosingResult?> out,
     bool hasPassenger = false,
     Map<String, String> crewNames = const {'u1': 'JDU', 'ins': 'INS'},
     String closerUid = 'ins',
-    int fuelLiterPrice = 600}) async {
+    int fuelLiterPrice = 595}) async {
   await tester.pumpWidget(MaterialApp(
     home: Builder(
       builder: (context) => TextButton(
@@ -225,7 +225,7 @@ void main() {
         .initialValue, 'ins');
     await tester.enterText(find.byKey(const Key('fuel-personal')), '20');
     await tester.pump();
-    expect(find.text('Crédit : 20 L × 600 = 12\u00a0000\u00a0FCFA pour INS'), findsOneWidget);
+    expect(find.text('Crédit : 20 L × 595 = 11\u00a0900\u00a0FCFA pour INS'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('closing-fuel-end')), '45');
     await submit(tester);
     final r = out.single!;

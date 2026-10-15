@@ -190,14 +190,14 @@ void main() {
         {'local': 65000, 'nyonye': 91000, 'awagne': 112000});
   });
 
-  testWidgets('prix du litre (bidon perso) : prérempli, modifié, borné et enregistré',
+  testWidgets('prix du litre de carburant : prérempli, modifié, borné et enregistré',
       (tester) async {
     _useTallView(tester);
     final api = FakeFinanceApi()
       ..pricing = Pricing.fromMap({...defaultPricing.toMap(), 'fuelLiterPrice': 650});
     await tester.pumpWidget(host(api));
     await tester.pump();
-    expect(find.widgetWithText(TextFormField, 'Prix du litre (bidon perso)'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Prix du litre de carburant'), findsOneWidget);
     expect(fieldText(tester, 'fuelLiterPrice'), '650');
 
     await tester.enterText(find.byKey(const Key('fuelLiterPrice')), '10001');

@@ -859,7 +859,7 @@ index nouveau : l'app filtre par `kind`.
 | Function | Qui | Règle |
 |---|---|---|
 | `creditAccount` (élargie) | Instructeurs et admins | **Crédit carburant** : montant > 0, date, note facultative. Caisse + et compte + (§11.2), notification habituelle à l'adhérent |
-| `addCashMovement` | Instructeurs et admins ; `cash_gap` : **admins seulement** | `fuel_purchase` (montant > 0, débité), `maintenance` et `off_app_income` (montant > 0, note obligatoire), `cash_gap` (montant ≠ 0 signé, note obligatoire). `fuel_credit` et `opening` refusés ici |
+| `addCashMovement` | Instructeurs et admins ; `cash_gap` : **admins seulement** | `fuel_purchase` (montant > 0, débité ; **litres obligatoires** (entier 1 à 100 000) sauf case « Hors cuve » (`outsideTank: true`), où ils doivent être absents : voir §13.5), `maintenance` et `off_app_income` (montant > 0, note obligatoire), `cash_gap` (montant ≠ 0 signé, note obligatoire). `fuel_credit` et `opening` refusés ici |
 | `correctCashMovement` | Instructeurs et admins ; correction d'un `cash_gap` : **admins seulement** | Voir §11.4 |
 | `closeMigration` | **Admins seulement** | « Reprise terminée » : `migrationClosedAt` = maintenant. Irréversible ; refusée si déjà faite |
 | `correctAccount` (existante) | Instructeurs et admins | Inchangée **tant que la reprise est en cours**. Ensuite refusée : « La reprise est terminée : corrigez le crédit carburant concerné. » |
@@ -1107,7 +1107,7 @@ carburant ajouté :
 3. Le **carburant ajouté total** (`fuelAddedLiters`, §9) = litres cuve +
    litres bidon, affiché ; total ≤ 100 L. Les autres champs carburant
    (départ, rangé) et l'alerte de consommation sont inchangés.
-4. Avec un bidon perso, l'app affiche « Crédit : 20 L × 600 = 12 000 FCFA
+4. Avec un bidon perso, l'app affiche « Crédit : 20 L × 595 = 11 900 FCFA
    pour XXX ».
 
 `closeFlight` reçoit `fuelFromTank` et `fuelFromPersonal` (entiers ≥ 0,
@@ -1130,10 +1130,12 @@ Historique du compte : « Carburant fourni (bidon perso) — vol du 12 oct. ».
 
 ### 13.3 Tarif
 
-`settings/pricing.fuelLiterPrice` : « Prix du litre (bidon perso) » dans
-Administration → Tarifs, **600** par défaut, 0 à 10 000. Il est lu au
-moment de la clôture (tarifs courants, pas `pricingSnapshot`) ; le montant
-crédité est figé sur le vol (`fuelSupplyCredit`).
+`settings/pricing.fuelLiterPrice` : « Prix du litre de carburant » dans
+Administration → Tarifs, **595** par défaut, 0 à 10 000. Double usage : le
+crédit du bidon perso (§13.2) et l'estimation des litres d'un achat
+(§13.5). Il est lu au moment de la clôture (tarifs courants, pas
+`pricingSnapshot`) ; le montant crédité est figé sur le vol
+(`fuelSupplyCredit`).
 
 ### 13.4 Correction et suppression admin
 
@@ -1157,7 +1159,7 @@ cuve : sa correction ne crée de mouvement que pour l'écart avec « 0 L pris
 
 | Opération | Qui | Effet |
 |---|---|---|
-| **Remplissage** | Instructeurs et admins | Champ facultatif **« Litres »** de l'Achat carburant (§11.3) : s'il est rempli, la même transaction écrit la sortie de caisse et le mouvement `refill` (+litres, `cashMovementId`). La correction de l'achat (§11.4) ne touche pas les litres ; une erreur de litres se corrige par un relevé de jauge |
+| **Remplissage** | Instructeurs et admins | Champ **« Litres »** de l'Achat carburant (§11.3), obligatoire sauf case **« Hors cuve »** (achat de caisse seul, cuve inchangée, litres refusés) : la même transaction écrit la sortie de caisse et le mouvement `refill` (+litres, `cashMovementId`). La correction de l'achat (§11.4) ne touche pas les litres ; une erreur de litres se corrige par un relevé de jauge |
 | **Plein d'un appareil** (hors vol) | Instructeurs et admins | Appareil, litres (1 à 100), date, note : mouvement `aircraft_fill` (−litres) ; carburant actuel de l'appareil augmenté d'autant, plafonné à 100 L, `fuelFlightStart` = maintenant (un vol plus ancien clôturé ensuite ne l'écrase pas, §9.2) |
 | **Relevé de jauge** | Instructeurs et admins | Niveau mesuré (entier ≥ 0), date, note : mouvement `gauge` de l'écart, `measuredLiters` ; le niveau devient la mesure. Le premier relevé fixe le niveau de départ |
 
@@ -1172,12 +1174,19 @@ cuve : sa correction ne crée de mouvement que pour l'écart avec « 0 L pris
   niveau après), totaux de la période : remplissages, sorties vers les vols
   (dont vols techniques), pleins hors vol, écarts de jauge. Un appui sur une
   ligne de vol ouvre la fiche du vol.
-- **Achat carburant** (dialogue d'opération de caisse) : champ « Litres
-  (facultatif) ».
+- **Achat carburant** (dialogue d'opération de caisse) : case « Hors cuve »
+  (décochée par défaut, masque le champ litres) et champ « Litres »
+  obligatoire. **Calcul automatique** : tant que l'utilisateur n'a pas saisi
+  les litres, chaque changement du montant les recalcule (montant / prix du
+  litre de carburant, arrondi) ; sa saisie arrête le calcul pour ce
+  dialogue. Ligne « Prix au litre : 790 FCFA/L » sous les champs. **Contrôle
+  ±5 %** : si le prix au litre saisi s'écarte de plus de 5 % (strictement)
+  du prix du litre de carburant, fenêtre « Prix au litre inhabituel »
+  (« Corriger » / « Confirmer »). Aucun contrôle en « Hors cuve ».
 - **Fiche d'un vol clôturé** : « Carburant : départ 40 L · ajouté 20 L
   (cuve 10 L, bidon 10 L — XXX) · rangé 35 L ».
 - **Suivi carburant** (§9.5) : la colonne « Ajouté » reste le total.
-- **Tarifs** : « Prix du litre (bidon perso) ».
+- **Tarifs** : « Prix du litre de carburant ».
 
 ### 13.7 Déploiement et recette
 

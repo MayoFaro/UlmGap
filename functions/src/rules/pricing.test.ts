@@ -19,7 +19,7 @@ test("DEFAULT_PRICING reproduit la spec §2.4", () => {
     overtimeHourly: { GAP: 12_000, GR: 30_000, MIL: 30_000, EXT: 30_000 },
     fuelHourlyRate: 12_000,
     instructionCredit: 20_000,
-    fuelLiterPrice: 600,
+    fuelLiterPrice: 595,
     baptismFees: { local: 70_000, nyonye: 90_000, awagne: 110_000 },
   });
 });
@@ -133,7 +133,7 @@ test("instructionAdjustments : retrait, ajout, changement d'instructeur, inchang
 
 test("creditAdjustments : même algorithme que instructionAdjustments (alias)", () => {
   assert.equal(instructionAdjustments, creditAdjustments);
-  assert.equal(DEFAULT_PRICING.fuelLiterPrice, 600);
-  assert.equal(pricingWithDefaults({}).fuelLiterPrice, 600);
+  assert.equal(DEFAULT_PRICING.fuelLiterPrice, 595);
+  assert.equal(pricingWithDefaults({}).fuelLiterPrice, 595);
   assert.equal(pricingWithDefaults({ fuelLiterPrice: 650 }).fuelLiterPrice, 650);
 });

@@ -81,7 +81,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
     return null;
   }
 
-  /// Plan 13 : prix du litre du bidon perso, 0 à 10 000.
+  /// Plan 13 : prix du litre de carburant, 0 à 10 000.
   String? _validateLiterPrice(String? v) {
     final n = parseAmount(v ?? '');
     if (n == null) return 'Nombre entier requis.';
@@ -231,7 +231,7 @@ class _PricingAdminScreenState extends State<PricingAdminScreen> {
                   controller: _fuelLiterPrice,
                   keyboardType: TextInputType.number,
                   inputFormatters: const [AmountInputFormatter()],
-                  decoration: const InputDecoration(labelText: 'Prix du litre (bidon perso)'),
+                  decoration: const InputDecoration(labelText: 'Prix du litre de carburant'),
                   validator: _validateLiterPrice,
                 ),
                 for (final t in baptismTiers) ...[

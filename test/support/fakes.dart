@@ -509,9 +509,17 @@ class FakeCashApi implements CashApi {
 
   @override
   Future<void> add(
-      {required CashKind kind, required int amount, required DateTime date, String? note, int? liters}) async {
+      {required CashKind kind,
+      required int amount,
+      required DateTime date,
+      String? note,
+      int? liters,
+      bool outsideTank = false}) async {
     _fail();
-    added.add({'kind': kind, 'amount': amount, 'date': date, 'note': note, 'liters': liters});
+    added.add({
+      'kind': kind, 'amount': amount, 'date': date, 'note': note, 'liters': liters,
+      'outsideTank': outsideTank,
+    });
   }
 
   @override

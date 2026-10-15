@@ -1,15 +1,20 @@
 // Dialogues de la caisse (spec §11.6) : nouvelle opération, détail et
 // correction d'une opération (montant juste).
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/cash.dart';
 import '../../core/formats.dart';
 import '../../core/money.dart';
+import '../../core/pricing.dart' show defaultPricing;
 import '../../core/profiles.dart';
 import '../../data/app_user.dart';
 import '../../data/cash_movement.dart';
 import '../../data/flight_api.dart' show FlightFailure;
 import '../../data/services.dart';
+
+const _litersMissing = 'Litres obligatoires pour un achat de carburant (ou cochez « Hors cuve »).';
 
 const _uncertain = 'Opération incertaine : vérifiez la caisse avant de réessayer.';
 
@@ -39,9 +44,28 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
   final _liters = TextEditingController(); // plan 13 : Achat carburant seulement
   String? _error;
   bool _submitting = false;
+  bool _outsideTank = false; // « Hors cuve » : achat sans entrée en cuve
+  bool _litersEdited = false; // l'utilisateur a saisi les litres : fin du calcul automatique
+  int _literPrice = defaultPricing.fuelLiterPrice; // prix du litre de carburant courant (§13.3)
+  StreamSubscription<dynamic>? _pricingSub;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_pricingSub != null) return;
+    final finance = AppServices.of(context).finance;
+    _pricingSub = finance?.watchPricing().listen((p) {
+      if (!mounted) return;
+      setState(() {
+        _literPrice = p.fuelLiterPrice;
+        _autoLiters();
+      });
+    });
+  }
 
   @override
   void dispose() {
+    _pricingSub?.cancel();
     _amount.dispose();
     _note.dispose();
     _liters.dispose();
@@ -49,10 +73,31 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
   }
 
   /// Litres de l'Achat carburant : null si non proposés ou vides.
-  int? get _litersValue =>
-      _kind == CashKind.fuelPurchase ? int.tryParse(_liters.text.trim()) : null;
+  bool get _hasLitersField => _kind == CashKind.fuelPurchase && !_outsideTank;
 
-  bool get _litersFilled => _kind == CashKind.fuelPurchase && _liters.text.trim().isNotEmpty;
+  int? get _litersValue => _hasLitersField ? int.tryParse(_liters.text.trim()) : null;
+
+  bool get _litersFilled => _hasLitersField && _liters.text.trim().isNotEmpty;
+
+  /// Calcul automatique des litres d'après le montant, tant que l'utilisateur
+  /// n'a pas saisi les litres lui-même.
+  void _autoLiters() {
+    if (!_hasLitersField || _litersEdited || _literPrice <= 0) return;
+    final amount = parseAmount(_amount.text);
+    _liters.text = amount != null && amount > 0 ? '${(amount / _literPrice).round()}' : '';
+  }
+
+  /// Prix au litre saisi (arrondi au franc) ; null sans montant ni litres valides.
+  int? _pricePerLiter() {
+    final amount = parseAmount(_amount.text);
+    final liters = _litersValue;
+    if (amount == null || amount <= 0 || liters == null || liters < 1 || liters > 100000) return null;
+    return (amount / liters).round();
+  }
+
+  /// Écart strictement supérieur à 5 % de la référence (calcul entier exact).
+  bool _unusualPrice(int amount, int liters) =>
+      _literPrice > 0 && (amount - _literPrice * liters).abs() * 100 > 5 * _literPrice * liters;
 
   String get _noteLabel => switch (_kind) {
         CashKind.cashGap => 'Motif (obligatoire)',
@@ -69,6 +114,7 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
     if ((_kind == CashKind.maintenance || _kind == CashKind.offAppIncome) && note.isEmpty) {
       return 'Objet obligatoire.';
     }
+    if (_hasLitersField && !_litersFilled) return _litersMissing;
     final liters = _litersValue;
     if (_litersFilled && (liters == null || liters < 1 || liters > 100000)) {
       return 'Litres invalides (1 à 100 000).'; // message du serveur
@@ -83,6 +129,21 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
     if (error != null) {
       setState(() => _error = error);
       return;
+    }
+    if (_hasLitersField && _unusualPrice(amount!, _litersValue!)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Prix au litre inhabituel'),
+          content: Text('Prix au litre : ${_pricePerLiter()} FCFA/L '
+              '(référence : $_literPrice FCFA/L). Confirmer l\'opération ?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Corriger')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirmer')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
     }
     final services = AppServices.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -99,7 +160,8 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
             amount: amount!,
             date: _date,
             note: note.isEmpty ? null : note,
-            liters: _litersFilled ? _litersValue : null);
+            liters: _litersFilled ? _litersValue : null,
+            outsideTank: _kind == CashKind.fuelPurchase && _outsideTank);
       }
       if (!mounted) return;
       Navigator.pop(context);
@@ -137,7 +199,10 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
                 avatar: Icon(k.icon, size: 18),
                 label: Text(k.label),
                 selected: _kind == k,
-                onSelected: (_) => setState(() => _kind = k),
+                onSelected: (_) => setState(() {
+                  _kind = k;
+                  _autoLiters();
+                }),
               ),
           ]),
           if (_kind == CashKind.fuelCredit)
@@ -156,16 +221,32 @@ class _CashOperationDialogState extends State<CashOperationDialog> {
             controller: _amount,
             keyboardType: TextInputType.numberWithOptions(signed: _kind == CashKind.cashGap),
             inputFormatters: const [AmountInputFormatter()],
+            onChanged: (_) => setState(_autoLiters),
             decoration: InputDecoration(
                 labelText: _kind == CashKind.cashGap ? 'Montant (signé)' : 'Montant'),
           ),
           if (_kind == CashKind.fuelPurchase)
+            CheckboxListTile(
+              key: const Key('cash-outside-tank'),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Hors cuve'),
+              value: _outsideTank,
+              onChanged: (v) => setState(() {
+                _outsideTank = v ?? false;
+                _autoLiters();
+              }),
+            ),
+          if (_hasLitersField) ...[
             TextField(
               key: const Key('cash-liters'),
               controller: _liters,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Litres (facultatif)'),
+              onChanged: (_) => setState(() => _litersEdited = true),
+              decoration: const InputDecoration(labelText: 'Litres'),
             ),
+            if (_pricePerLiter() case final price?) Text('Prix au litre : $price FCFA/L'),
+          ],
           TextButton.icon(
             key: const Key('cash-date'),
             icon: const Icon(Icons.event),

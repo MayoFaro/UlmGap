@@ -13,7 +13,8 @@ import { clubDayString } from "../rules/cash";
 beforeEach(async () => {
   await resetTank();
   await resetCashbox();
-  await db.doc("settings/pricing").delete();
+  // Prix du litre fixé à 600 pour des montants ronds (le défaut est 595) ; les autres tarifs gardent leur défaut.
+  await db.doc("settings/pricing").set({ fuelLiterPrice: 600 });
 });
 afterEach(async () => { await resetTank(); await resetCashbox(); });
 

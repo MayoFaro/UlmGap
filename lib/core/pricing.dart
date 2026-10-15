@@ -18,7 +18,7 @@ class Pricing {
     required this.overtimeHourly,
     required this.fuelHourlyRate,
     this.instructionCredit = 20000,
-    this.fuelLiterPrice = 600,
+    this.fuelLiterPrice = 595,
     this.baptismFees = const {'local': 70000, 'nyonye': 90000, 'awagne': 110000},
   });
 
@@ -36,7 +36,7 @@ class Pricing {
   /// Plan 8 : crédit versé à l'instructeur par vol d'instruction clôturé.
   final int instructionCredit;
 
-  /// Plan 13 : prix du litre crédité au pilote qui fournit un bidon perso.
+  /// Plan 13 : prix du litre de carburant : crédit du bidon perso (§13.2) et estimation des litres d'un achat (§13.5).
   final int fuelLiterPrice;
 
   /// Plan 9 : prix d'un baptême de l'air par forfait (facturé hors app).
@@ -106,7 +106,7 @@ final Pricing defaultPricing = Pricing(
   },
   fuelHourlyRate: 12000,
   instructionCredit: 20000,
-  fuelLiterPrice: 600,
+  fuelLiterPrice: 595,
   baptismFees: {'local': 70000, 'nyonye': 90000, 'awagne': 110000},
 );
 
