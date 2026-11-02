@@ -4,7 +4,7 @@
 // Firestore que la mise à jour du vol (règle absolue).
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { Caller, requireAdmin } from "../auth/guards";
+import { Caller, requireActiveUser, requireAdmin } from "../auth/guards";
 import { asInvalid } from "../common/errors";
 import { postMovement } from "../finance/ledger";
 import { readPricing } from "../finance/pricing-store";
@@ -315,8 +315,8 @@ export async function adminUpdateFlight(caller: Caller | undefined, data: unknow
 
 export async function adminDeleteFlight(caller: Caller | undefined, data: unknown): Promise<void> {
   const db = admin.firestore();
-  await requireAdmin(db, caller);
-  const by = caller!.uid;
+  const me = await requireActiveUser(db, caller);
+  const by = me.uid;
   const flightId = asInvalid(() => validateFlightId(data));
   const ref = db.collection("flights").doc(flightId);
 
@@ -326,6 +326,15 @@ export async function adminDeleteFlight(caller: Caller | undefined, data: unknow
     const closed = f.get("isClosed") === true;
     // Remboursement d'un vol clôturé débité sur un compte ; plan 8 : reprise
     // du crédit d'instruction versé (comptes lus ensemble, avant écriture).
+    // Les admins peuvent supprimer tout vol. Un instructeur ne peut retirer
+    // qu'un vol déjà passé et non clôturé : c'est le cas d'un vol non effectué.
+    const start = (f.get("start") as admin.firestore.Timestamp).toMillis();
+    if (!me.isAdmin && (me.profile !== "instructeur" || f.get("isClosed") === true || start > Date.now())) {
+      throw new HttpsError(
+        "permission-denied",
+        "Un instructeur ne peut supprimer qu'un vol passé non clôturé.",
+      );
+    }
     const payer = payerUidOf(f);
     const refundPayer = closed && f.get("billedTo") === "account" && payer ? payer : null;
     // Crédit nul ou absent (crédit désactivé dans Tarifs) : rien à reprendre.

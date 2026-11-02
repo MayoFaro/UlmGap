@@ -154,12 +154,33 @@ test("vol clôturé : correction sans effet sur le montant → aucun mouvement",
   await assertInvariant(id);
 });
 
-test("non-admin : permission-denied (correction et suppression)", async () => {
+test("instructeur : pas de correction, ni de suppression d'un vol à venir", async () => {
   const pilot = await seedUser({ profile: "instructeur" });
   const a = await seedAircraft();
   const id = await seedFlight({ start: at(10), end: at(11), crew: [pilot.uid], aircraftId: a, createdBy: pilot.uid });
   await assert.rejects(adminUpdateFlight(pilot, await correction(id)), (e) => code(e) === "permission-denied");
   await assert.rejects(adminDeleteFlight(pilot, { flightId: id }), (e) => code(e) === "permission-denied");
+});
+
+test("instructeur : peut supprimer un vol passé non clôturé", async () => {
+  const instructor = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  const id = await seedFlight({
+    start: Date.now() - 2 * H, end: Date.now() - H, crew: [], aircraftId: a,
+  });
+
+  await adminDeleteFlight(instructor, { flightId: id });
+
+  assert.equal((await getFlight(id)).deleted, true);
+});
+
+test("instructeur : ne peut pas supprimer un vol clôturé", async () => {
+  const boss = await seedUser({ profile: null, isAdmin: true });
+  const instructor = await seedUser({ profile: "instructeur" });
+  const a = await seedAircraft();
+  const { id } = await closedFlight(boss, { crew: [instructor.uid], aircraftId: a }, { actualMinutes: 90 });
+
+  await assert.rejects(adminDeleteFlight(instructor, { flightId: id }), (e) => code(e) === "permission-denied");
 });
 
 test("vol non clôturé : créneau en conflit refusé ; champs de clôture refusés ; demande conservée", async () => {

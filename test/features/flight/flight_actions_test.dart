@@ -6,27 +6,42 @@ import '../../support/fakes.dart';
 void main() {
   final now = DateTime(2026, 10, 12, 8);
   final request = testFlight(
-      start: DateTime(2026, 10, 13, 9), status: 'demande',
-      crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
+    start: DateTime(2026, 10, 13, 9),
+    status: 'demande',
+    crew: ['u1', 'ins'],
+    createdBy: 'u1',
+    instructorUid: 'ins',
+  );
 
   test('instructeur désigné : valider, refuser, annuler', () {
-    expect(flightActions(request, testUser(uid: 'ins', profile: 'instructeur'), now),
-        {FlightAction.validate, FlightAction.refuse, FlightAction.cancel});
+    expect(
+      flightActions(request, testUser(uid: 'ins', profile: 'instructeur'), now),
+      {FlightAction.validate, FlightAction.refuse, FlightAction.cancel},
+    );
   });
 
   test('créateur : modifier, annuler (pas valider)', () {
-    expect(flightActions(request, testUser(uid: 'u1'), now),
-        {FlightAction.edit, FlightAction.cancel});
+    expect(flightActions(request, testUser(uid: 'u1'), now), {
+      FlightAction.edit,
+      FlightAction.cancel,
+    });
   });
 
   test('admin : valider, refuser, annuler, corriger, supprimer', () {
-    expect(flightActions(request, testUser(uid: 'adm', isAdmin: true, profile: null), now), {
-      FlightAction.validate,
-      FlightAction.refuse,
-      FlightAction.cancel,
-      FlightAction.adminEdit,
-      FlightAction.adminDelete,
-    });
+    expect(
+      flightActions(
+        request,
+        testUser(uid: 'adm', isAdmin: true, profile: null),
+        now,
+      ),
+      {
+        FlightAction.validate,
+        FlightAction.refuse,
+        FlightAction.cancel,
+        FlightAction.adminEdit,
+        FlightAction.adminDelete,
+      },
+    );
   });
 
   test('autre utilisateur : rien', () {
@@ -34,90 +49,212 @@ void main() {
   });
 
   test('vol annulé (supprimé) : rien, même après le départ', () {
-    final deleted = testFlight(start: DateTime(2026, 10, 13, 9), createdBy: 'u1', deleted: true);
+    final deleted = testFlight(
+      start: DateTime(2026, 10, 13, 9),
+      createdBy: 'u1',
+      deleted: true,
+    );
     expect(flightActions(deleted, testUser(uid: 'u1'), now), isEmpty);
   });
 
   // --- Task 9 (plan 3) : clôture après le départ ---
 
-  test('vol validé, départ passé : clôturer pour un membre de l\'équipage ou un admin', () {
-    final started = testFlight(start: DateTime(2026, 10, 12, 7), crew: ['u1'], createdBy: 'u1');
-    expect(flightActions(started, testUser(uid: 'u1'), now), {FlightAction.close});
-    expect(flightActions(started, testUser(uid: 'adm', isAdmin: true, profile: null), now),
-        {FlightAction.close, FlightAction.adminEdit, FlightAction.adminDelete});
-  });
+  test(
+    'vol validé, départ passé : clôturer pour un membre de l\'équipage ou un admin',
+    () {
+      final started = testFlight(
+        start: DateTime(2026, 10, 12, 7),
+        crew: ['u1'],
+        createdBy: 'u1',
+      );
+      expect(flightActions(started, testUser(uid: 'u1'), now), {
+        FlightAction.close,
+      });
+      expect(
+        flightActions(
+          started,
+          testUser(uid: 'adm', isAdmin: true, profile: null),
+          now,
+        ),
+        {FlightAction.close, FlightAction.adminEdit, FlightAction.adminDelete},
+      );
+    },
+  );
 
   test('vol validé, départ passé : pas de clôture pour un tiers', () {
-    final started = testFlight(start: DateTime(2026, 10, 12, 7), crew: ['u1'], createdBy: 'u1');
+    final started = testFlight(
+      start: DateTime(2026, 10, 12, 7),
+      crew: ['u1'],
+      createdBy: 'u1',
+    );
     expect(flightActions(started, testUser(uid: 'x'), now), isEmpty);
   });
 
-  test('vol validé du jour, départ non passé : clôturer en plus de modifier et annuler', () {
-    final today = testFlight(start: DateTime(2026, 10, 12, 15), crew: ['u1'], createdBy: 'u1');
-    expect(flightActions(today, testUser(uid: 'u1'), now),
-        {FlightAction.edit, FlightAction.cancel, FlightAction.close});
-    expect(flightActions(today, testUser(uid: 'x'), now), isEmpty);
-  });
+  test(
+    'vol validé du jour, départ non passé : clôturer en plus de modifier et annuler',
+    () {
+      final today = testFlight(
+        start: DateTime(2026, 10, 12, 15),
+        crew: ['u1'],
+        createdBy: 'u1',
+      );
+      expect(flightActions(today, testUser(uid: 'u1'), now), {
+        FlightAction.edit,
+        FlightAction.cancel,
+        FlightAction.close,
+      });
+      expect(flightActions(today, testUser(uid: 'x'), now), isEmpty);
+    },
+  );
 
   test('vol validé de demain : pas de clôture même pour l\'équipage', () {
-    final tomorrow = testFlight(start: DateTime(2026, 10, 13, 9), crew: ['u1'], createdBy: 'u1');
-    expect(flightActions(tomorrow, testUser(uid: 'u1'), now).contains(FlightAction.close), isFalse);
+    final tomorrow = testFlight(
+      start: DateTime(2026, 10, 13, 9),
+      crew: ['u1'],
+      createdBy: 'u1',
+    );
+    expect(
+      flightActions(
+        tomorrow,
+        testUser(uid: 'u1'),
+        now,
+      ).contains(FlightAction.close),
+      isFalse,
+    );
   });
 
   test('demande du jour pas encore partie : pas de clôture', () {
     final req = testFlight(
-        start: DateTime(2026, 10, 12, 15), status: 'demande',
-        crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
-    expect(flightActions(req, testUser(uid: 'ins', profile: 'instructeur'), now),
-        {FlightAction.validate, FlightAction.refuse, FlightAction.cancel});
+      start: DateTime(2026, 10, 12, 15),
+      status: 'demande',
+      crew: ['u1', 'ins'],
+      createdBy: 'u1',
+      instructorUid: 'ins',
+    );
+    expect(
+      flightActions(req, testUser(uid: 'ins', profile: 'instructeur'), now),
+      {FlightAction.validate, FlightAction.refuse, FlightAction.cancel},
+    );
   });
 
   test('demande dont le départ est passé (expirée) : pas de clôture', () {
     final pastDemande = testFlight(
-        start: DateTime(2026, 10, 12, 7), status: 'demande', crew: ['u1'], createdBy: 'u1');
+      start: DateTime(2026, 10, 12, 7),
+      status: 'demande',
+      crew: ['u1'],
+      createdBy: 'u1',
+    );
     expect(flightActions(pastDemande, testUser(uid: 'u1'), now), isEmpty);
   });
 
   test('vol déjà clôturé : rien', () {
     final closed = testFlight(
-        start: DateTime(2026, 10, 12, 7), crew: ['u1'], createdBy: 'u1', isClosed: true);
+      start: DateTime(2026, 10, 12, 7),
+      crew: ['u1'],
+      createdBy: 'u1',
+      isClosed: true,
+    );
     expect(flightActions(closed, testUser(uid: 'u1'), now), isEmpty);
   });
 
   test('vol validé : pas de validation', () {
     final valid = testFlight(
-        start: DateTime(2026, 10, 13, 9), crew: ['u1', 'ins'], createdBy: 'u1', instructorUid: 'ins');
-    expect(flightActions(valid, testUser(uid: 'ins', profile: 'instructeur'), now),
-        {FlightAction.cancel});
+      start: DateTime(2026, 10, 13, 9),
+      crew: ['u1', 'ins'],
+      createdBy: 'u1',
+      instructorUid: 'ins',
+    );
+    expect(
+      flightActions(valid, testUser(uid: 'ins', profile: 'instructeur'), now),
+      {FlightAction.cancel},
+    );
   });
 
   // --- Task 10 (plan 3) : correction et suppression admin ---
 
   test('admin : vol clôturé → seulement corriger et supprimer', () {
     final closed = testFlight(
-        start: DateTime(2026, 10, 12, 7), crew: ['u1'], createdBy: 'u1', isClosed: true);
-    expect(flightActions(closed, testUser(uid: 'adm', isAdmin: true, profile: null), now),
-        {FlightAction.adminEdit, FlightAction.adminDelete});
+      start: DateTime(2026, 10, 12, 7),
+      crew: ['u1'],
+      createdBy: 'u1',
+      isClosed: true,
+    );
+    expect(
+      flightActions(
+        closed,
+        testUser(uid: 'adm', isAdmin: true, profile: null),
+        now,
+      ),
+      {FlightAction.adminEdit, FlightAction.adminDelete},
+    );
   });
 
   test('admin : vol refusé → annuler et supprimer, mais pas corriger', () {
     final refused = testFlight(
-        start: DateTime(2026, 10, 13, 9), status: 'refuse', crew: ['u1'], createdBy: 'u1');
-    expect(flightActions(refused, testUser(uid: 'adm', isAdmin: true, profile: null), now),
-        {FlightAction.cancel, FlightAction.adminDelete});
+      start: DateTime(2026, 10, 13, 9),
+      status: 'refuse',
+      crew: ['u1'],
+      createdBy: 'u1',
+    );
+    expect(
+      flightActions(
+        refused,
+        testUser(uid: 'adm', isAdmin: true, profile: null),
+        now,
+      ),
+      {FlightAction.cancel, FlightAction.adminDelete},
+    );
   });
 
-  test('admin : vol validé futur d\'un autre → annuler, corriger, supprimer', () {
-    final other = testFlight(
-        start: DateTime(2026, 10, 13, 9), crew: ['x'], createdBy: 'x', status: 'valide');
-    expect(flightActions(other, testUser(uid: 'adm', isAdmin: true, profile: null), now),
-        {FlightAction.cancel, FlightAction.adminEdit, FlightAction.adminDelete});
-  });
+  test(
+    'admin : vol validé futur d\'un autre → annuler, corriger, supprimer',
+    () {
+      final other = testFlight(
+        start: DateTime(2026, 10, 13, 9),
+        crew: ['x'],
+        createdBy: 'x',
+        status: 'valide',
+      );
+      expect(
+        flightActions(
+          other,
+          testUser(uid: 'adm', isAdmin: true, profile: null),
+          now,
+        ),
+        {FlightAction.cancel, FlightAction.adminEdit, FlightAction.adminDelete},
+      );
+    },
+  );
 
-  test('admin : vol validé passé, non clôturé → clôturer, corriger, supprimer', () {
-    final started = testFlight(start: DateTime(2026, 10, 12, 7), crew: ['x'], createdBy: 'x');
-    expect(flightActions(started, testUser(uid: 'adm', isAdmin: true, profile: null), now),
-        {FlightAction.close, FlightAction.adminEdit, FlightAction.adminDelete});
+  test(
+    'admin : vol validé passé, non clôturé → clôturer, corriger, supprimer',
+    () {
+      final started = testFlight(
+        start: DateTime(2026, 10, 12, 7),
+        crew: ['x'],
+        createdBy: 'x',
+      );
+      expect(
+        flightActions(
+          started,
+          testUser(uid: 'adm', isAdmin: true, profile: null),
+          now,
+        ),
+        {FlightAction.close, FlightAction.adminEdit, FlightAction.adminDelete},
+      );
+    },
+  );
+
+  test('instructeur : peut supprimer un vol passé non clôturé', () {
+    final started = testFlight(
+      start: DateTime(2026, 10, 12, 7),
+      crew: ['x'],
+      createdBy: 'x',
+    );
+    expect(
+      flightActions(started, testUser(uid: 'ins', profile: 'instructeur'), now),
+      {FlightAction.adminDelete},
+    );
   });
 
   test('non-admin : jamais corriger ni supprimer', () {
